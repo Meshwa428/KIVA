@@ -1,4 +1,5 @@
 ![Visitor Badge](https://visitorbadge.io/status?path=https%3A%2F%2Fgithub.com%2FMeshwa428%2FKIVA)
+![Visitor Count](https://hits.sh/Meshwa428/KIVA.svg)
 # KIVA: Handheld AI Assistant
 
 ## Introduction
