@@ -1,4 +1,13 @@
 ![Visitor Count](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https://github.com/Meshwa428/KIVA&count_bg=%2379C83D&title_bg=%23555555&icon=github.svg&icon_color=%23E7E7E7&title=Visitors&edge_flat=false)
+![GitHub Stats](https://github-readme-stats.vercel.app/api?username=Meshwa428&show_icons=true&theme=dark)
+![Last Commit](https://img.shields.io/github/last-commit/Meshwa428/KIVA)
+![Repo Size](https://img.shields.io/github/repo-size/Meshwa428/KIVA)
+![GitHub stars](https://img.shields.io/github/stars/Meshwa428/KIVA?style=social)
+![GitHub forks](https://img.shields.io/github/forks/Meshwa428/KIVA?style=social)
+![Issues](https://img.shields.io/github/issues/Meshwa428/KIVA)
+![Pull Requests](https://img.shields.io/github/issues-pr/Meshwa428/KIVA)
+![GitHub license](https://img.shields.io/github/license/Meshwa428/KIVA)
+
 # KIVA: Handheld AI Assistant
 
 ## Introduction
