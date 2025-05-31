@@ -34,6 +34,9 @@
 #define BTN_AI 3       // Example, adjust if used
 #define BTN_RIGHT1 4
 #define BTN_RIGHT2 5
+#define LASER_PIN_PCF0 6
+#define MOTOR_PIN_PCF0 7
+
 
 // === Navigation Buttons (PCF1) ===
 #define NAV_OK 0
@@ -56,8 +59,10 @@ enum MenuState {
   GAMES_MENU,
   TOOLS_MENU,
   SETTINGS_MENU,
+  UTILITIES_MENU, // <--- NEW
   TOOL_CATEGORY_GRID,
-  WIFI_SETUP_MENU
+  WIFI_SETUP_MENU,
+  FLASHLIGHT_MODE // <--- NEW
   // Add more states for actual game/tool screens later
 };
 
@@ -70,6 +75,11 @@ extern int toolsCategoryIndex;
 extern int gridCols;
 extern int targetGridScrollOffset_Y;
 extern float currentGridScrollOffset_Y_anim;
+extern bool isCharging;
+
+
+extern bool vibrationOn; // <--- NEW
+extern bool laserOn;     // <--- NEW
 
 extern uint8_t pcf0Output; // For controlling outputs on PCF0
 

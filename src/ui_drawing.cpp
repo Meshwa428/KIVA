@@ -284,11 +284,28 @@ void drawWifiSetupScreen() {
 }
 
 void drawUI() {
-  unsigned long currentTime = millis(); 
+  unsigned long currentTime = millis();
   
+  if (currentMenu == FLASHLIGHT_MODE) { // <--- NEW: Flashlight Mode
+      // Main Display Full White
+      selectMux(MUX_CHANNEL_MAIN_DISPLAY);
+      u8g2.clearBuffer();
+      u8g2.setDrawColor(1); // White
+      u8g2.drawBox(0, 0, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
+      u8g2.sendBuffer();
+
+      // Second Display Full White
+      selectMux(MUX_CHANNEL_SECOND_DISPLAY);
+      u8g2_small.clearBuffer();
+      u8g2_small.setDrawColor(1); // White
+      u8g2_small.drawBox(0, 0, u8g2_small.getDisplayWidth(), u8g2_small.getDisplayHeight());
+      u8g2_small.sendBuffer();
+      return; // Skip normal UI drawing
+  }
+
   // --- Draw Passive Display (CH2) ---
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
-  drawPassiveDisplay(); // Call the new function
+  drawPassiveDisplay(); 
 
   // --- Draw Main Display (CH4) ---
   selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
@@ -350,11 +367,24 @@ void drawUI() {
 // Modify drawPassiveDisplay for correct context title
 void drawPassiveDisplay() {
     u8g2_small.clearBuffer();
-    u8g2_small.setFont(u8g2_font_5x7_tf); 
 
-    u8g2_small.drawStr(0, 7, "W: ---"); 
-    u8g2_small.drawStr(u8g2_small.getDisplayWidth() / 2, 7, "B: ---");
+    // --- Top Row: Wi-Fi / Bluetooth Placeholders (Optional - can be removed if not used) ---
+    u8g2_small.setFont(u8g2_font_5x7_tf); // Small font for these indicators
+    u8g2_small.setDrawColor(1); // White
+    // Example: u8g2_small.drawStr(0, 7, "W:---"); 
+    // Example: u8g2_small.drawStr(u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth("B:---") -1, 7, "B:---");
+    // For now, let's keep them minimal or comment out if not actively used yet
+    // String currentSsidName = getCurrentSsid(); // From wifi_manager.h
+    // if (currentSsidName.length() > 0) {
+    //    char truncatedSsid[5]; // "W:XXX"
+    //    snprintf(truncatedSsid, sizeof(truncatedSsid), "W:%.3s", currentSsidName.c_str());
+    //    u8g2_small.drawStr(0,7, truncatedSsid);
+    // } else {
+    //    u8g2_small.drawStr(0,7, "W: Off");
+    // }
 
+
+    // --- Middle Row: Uptime Clock ---
     unsigned long now = millis();
     unsigned long allSeconds = now / 1000;
     int runHours = allSeconds / 3600;
@@ -364,52 +394,75 @@ void drawPassiveDisplay() {
     char timeStr[9]; 
     sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
     
-    u8g2_small.setFont(u8g2_font_helvB08_tf); 
+    u8g2_small.setFont(u8g2_font_helvB08_tr); // Using a clear, slightly larger font for time
+                                          // _tr is transparent, _tf is solid background (choose one)
     int timeStrWidth = u8g2_small.getStrWidth(timeStr);
-    u8g2_small.drawStr((u8g2_small.getDisplayWidth() - timeStrWidth) / 2, 19, timeStr); 
+    // Vertically center the time in the available space, or position it nicely
+    // Display height is 32. Top placeholders might take ~8px. Bottom mode text might take ~10-12px.
+    // Let's try to place uptime clock around Y=16 (baseline) for its vertical center.
+    // Ascent for helvB08 is ~8. For a 32px high display, if top area is 8px, y=16 is good baseline.
+    int time_y_baseline = 17; // Adjust for best vertical centering
+    u8g2_small.drawStr((u8g2_small.getDisplayWidth() - timeStrWidth) / 2, time_y_baseline, timeStr); 
 
-    u8g2_small.setFont(u8g2_font_5x7_tf); 
-    uint8_t battPercentage = batPerc(getSmoothV());
-    char battStr[12];
-    sprintf(battStr, "[");
-    int bars = battPercentage / 25; 
-    for(int b=0; b<4; ++b) {
-        if(b < bars) strcat(battStr, "|");
-        else strcat(battStr, " ");
-    }
-    strcat(battStr, "]");
-    sprintf(battStr + strlen(battStr), " %d%%", battPercentage); 
-    u8g2_small.drawStr(0, 31, battStr);
 
-    // --- Corrected Mode Text Logic ---
-    const char* modeText = "---";
-    if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) {
-         modeText = mainMenuItems[menuIndex]; // Show selected main menu item
-    } else if (currentMenu == TOOLS_MENU) { // Carousel active
-         modeText = "Tools"; // Show the title of the carousel
-    } else if (currentMenu == GAMES_MENU) { // Carousel active
-         modeText = "Games"; // Show the title of the carousel
-    } else if (currentMenu == SETTINGS_MENU) { // Carousel active
-         modeText = "Settings"; // Show the title of the carousel
+    // --- Bottom Row: Current Mode/Context Text ---
+    const char* modeText = "---"; // Default
+    // Logic to determine modeText based on currentMenu and sub-states
+    if (currentMenu == FLASHLIGHT_MODE) {
+        modeText = "Torch";
+    } else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) {
+        modeText = mainMenuItems[menuIndex]; // Show selected main menu item name
+    } else if (currentMenu == UTILITIES_MENU) {
+        if (menuIndex < getUtilitiesMenuItemsCount() && utilitiesMenuItems[menuIndex] != NULL) {
+            // Show selected utility item, or just "Utilities" if preferred
+            modeText = utilitiesMenuItems[menuIndex]; 
+            // If you want to show "Utilities > Vibration" then more complex string construction needed.
+            // For simplicity on small display, showing the current utility item name is good.
+        } else {
+            modeText = "Utilities";
+        }
+    } else if (currentMenu == GAMES_MENU) {
+         modeText = "Games"; // Or gamesMenuItems[menuIndex] if space and desired
+    } else if (currentMenu == TOOLS_MENU) {
+         modeText = "Tools"; // Or toolsMenuItems[menuIndex]
+    } else if (currentMenu == SETTINGS_MENU) {
+         modeText = "Settings"; // Or settingsMenuItems[menuIndex]
     } else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) {
          modeText = toolsMenuItems[toolsCategoryIndex]; // Show the category name from Tools Menu
     } else if (currentMenu == WIFI_SETUP_MENU) {
-        modeText = "Wi-Fi";
+        if (wifiIsScanning) modeText = "Scanning WiFi";
+        else modeText = "Wi-Fi Setup";
     }
     // Add other specific screen titles here if needed
 
-    char truncatedModeText[10]; 
+    // Font for mode text - can be same as time or slightly smaller if long
+    // u8g2_font_6x10_tf could also work well here for clarity.
+    u8g2_small.setFont(u8g2_font_6x12_tr); // Trying a slightly taller font for modeText
+    // u8g2_font_profont11_tr is also a nice clear, slightly condensed font.
+
+    char truncatedModeText[22]; // Max chars for typical 128px display width with small font
     strncpy(truncatedModeText, modeText, sizeof(truncatedModeText)-1);
     truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
 
-    // Use a temporary buffer for truncateText if SBUF might be used elsewhere concurrently (not an issue here)
-    char tempTruncBuf[10]; // Must be SBUF's size or handled carefully
-    strcpy(tempTruncBuf, truncateText(modeText, 38, u8g2_small)); // Max width for mode text area
-                                                                  // Pass u8g2_small for correct font metrics
+    // If text is still too wide for display, truncate with "..."
+    // Max width available for mode text, e.g., display_width - 4px padding
+    int max_mode_text_width = u8g2_small.getDisplayWidth() - 4; 
+    if (u8g2_small.getStrWidth(truncatedModeText) > max_mode_text_width) {
+        // SBUF is extern char SBUF[32];
+        // Need to pass u8g2_small to truncateText if it relies on display.getUTF8Width
+        strcpy(SBUF, truncatedModeText); // Copy to SBUF for truncateText
+        truncateText(SBUF, max_mode_text_width, u8g2_small); // Pass u8g2_small
+        strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText)-1);
+        truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
+    }
     
-    int modeTextWidth = u8g2_small.getStrWidth(tempTruncBuf);
-    u8g2_small.drawStr(u8g2_small.getDisplayWidth() - modeTextWidth - 1, 31, tempTruncBuf); // Right aligned a bit
+    int modeTextWidth = u8g2_small.getStrWidth(truncatedModeText);
+    // Position mode text at the bottom of the display
+    // Ascent for 6x12 is ~9. For 32px high, bottom baseline could be 32-1 = 31, or 32- (12-9) = 29
+    int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2; // Baseline near bottom edge
+    u8g2_small.drawStr((u8g2_small.getDisplayWidth() - modeTextWidth) / 2, mode_text_y_baseline, truncatedModeText);
 
+    u8g2_small.setDrawColor(1); // Ensure draw color is reset if changed
     u8g2_small.sendBuffer();
 }
 
@@ -493,42 +546,47 @@ void updateMarquee(int cardInnerW, const char* text) {
 }
 
 char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display) {
-  // SBUF is extern char SBUF[32]; defined in KivaMain.ino, declared in config.h
-  int len = strlen(originalText);
-  if (len == 0) {
+  // SBUF is used here. Ensure it's large enough.
+  int originalLen = strlen(originalText);
+  if (originalLen == 0) {
     SBUF[0] = '\0';
     return SBUF;
   }
-  strncpy(SBUF, originalText, sizeof(SBUF) - 1);
-  SBUF[sizeof(SBUF) - 1] = '\0';
 
-  if (display.getUTF8Width(SBUF) <= maxWidthPixels) return SBUF;
-
-  if (strlen(SBUF) < 3) { 
-      while(display.getUTF8Width(SBUF) > maxWidthPixels && strlen(SBUF) > 0) {
-          SBUF[strlen(SBUF)-1] = '\0';
-      }
+  // Copy original to SBUF, ensuring space for "..." and null terminator
+  // Max text part length = sizeof(SBUF) - 1 (for null) - 3 (for "...")
+  int maxTextPartLen = sizeof(SBUF) - 4;
+  if (maxTextPartLen < 1) { // Not enough space in SBUF even for one char + "..."
+      SBUF[0] = '\0';
       return SBUF;
   }
-  
-  // Place "..." at the end, ensure enough space by shortening first
-  // Example: "LongText" -> "Long..."
-  // Max length for SBUF is 31 + null. "..." is 3 chars. So text can be up to 28.
-  int sbufMaxTextLen = sizeof(SBUF) - 1 - 3; // -1 for null, -3 for "..."
-  if (len > sbufMaxTextLen) {
-      SBUF[sbufMaxTextLen] = '\0'; // Truncate SBUF to make space for "..."
-  }
-  strcat(SBUF, "..."); // This might now go past sizeof(SBUF) if not careful above.
-                      // Corrected:
-  strncpy(SBUF, originalText, sbufMaxTextLen); // Copy max possible text part
-  SBUF[sbufMaxTextLen] = '\0'; // Null terminate text part
-  strcat(SBUF, "...");         // Append "..."
 
-  while (display.getUTF8Width(SBUF) > maxWidthPixels && strlen(SBUF) > 3) {
-    SBUF[strlen(SBUF) - 4] = '\0'; 
+  strncpy(SBUF, originalText, maxTextPartLen);
+  SBUF[maxTextPartLen] = '\0'; // Null-terminate the (potentially) shortened text part
+
+  if (display.getUTF8Width(SBUF) <= maxWidthPixels) {
+    // If the (possibly already shortened to fit SBUF) text fits, return it.
+    // We need to ensure the original full string wasn't too long for SBUF initially.
+    if (originalLen <= maxTextPartLen) {
+        // Original string fit SBUF entirely, and it also fits maxWidthPixels
+        strncpy(SBUF, originalText, sizeof(SBUF)-1); // Recopy full original
+        SBUF[sizeof(SBUF)-1] = '\0';
+        return SBUF;
+    }
+    // else, SBUF already contains the maxTextPartLen portion, which fits.
+    return SBUF;
+  }
+
+  // If it doesn't fit, append "..." and shorten until it does
+  // SBUF currently holds up to maxTextPartLen of originalText
+  strcat(SBUF, "..."); // This is safe because we reserved space
+
+  while (display.getUTF8Width(SBUF) > maxWidthPixels && strlen(SBUF) > 3) { // Ensure "..." itself isn't removed
+    SBUF[strlen(SBUF) - 4] = '\0'; // Remove char before "..."
     strcat(SBUF, "...");
   }
 
+  // Final check if even "..." or parts of it are too wide
   if (display.getUTF8Width(SBUF) > maxWidthPixels) { 
     if (maxWidthPixels >= display.getUTF8Width("..")) {
         strcpy(SBUF, "..");
@@ -637,7 +695,7 @@ void drawStatusBar() {
 
 void drawMainMenu() {
   mainMenuAnim.update();
-  const char** itms = mainMenuItems; // From menu_logic.cpp via extern in menu_logic.h
+  const char** itms = mainMenuItems; 
   const int icon_h = 16; 
   const int icon_w = 16; 
   const int icon_padding_right = 4;  
@@ -659,7 +717,6 @@ void drawMainMenu() {
 
     int item_abs_center_y = list_center_y_abs + item_center_y_relative;
     
-    // Effective item height for culling is max of icon or scaled text box
     int effective_item_h = max(icon_h, text_box_h_scaled);
     if (item_abs_center_y - effective_item_h / 2 > 63 || item_abs_center_y + effective_item_h / 2 < list_start_y) {
         continue; 
@@ -678,29 +735,36 @@ void drawMainMenu() {
     bool is_selected_item = (i == menuIndex);
 
     u8g2.setDrawColor(1); 
-    drawCustomIcon(icon_x_pos, icon_y_pos, i, true); // Main menu uses iconType = index i, large
+    
+    // Determine icon type based on item text for main menu
+    int iconType = 0; // Default/fallback icon
+    if (strcmp(itms[i], "Tools") == 0) iconType = 0;
+    else if (strcmp(itms[i], "Games") == 0) iconType = 1;
+    else if (strcmp(itms[i], "Settings") == 0) iconType = 2;
+    else if (strcmp(itms[i], "Utilities") == 0) iconType = 21; // <--- NEW ICON TYPE FOR UTILITIES
+    else if (strcmp(itms[i], "Info") == 0) iconType = 3;
+    
+    drawCustomIcon(icon_x_pos, icon_y_pos, iconType, true); // Main menu uses large icons
 
-    u8g2.setFont(u8g2_font_6x10_tf); // Font for main menu text
+    u8g2.setFont(u8g2_font_6x10_tf); 
     int text_width_pixels = u8g2.getStrWidth(itms[i]);
-    // Center text inside its scaled text_box
     int text_x_render_pos = text_box_x_pos + (text_box_w_scaled - text_width_pixels) / 2;
-    // Approx vertical center for 6x10 font (ascent is ~7-8)
     int text_y_baseline_render_pos = item_abs_center_y + 4; 
 
     if (text_box_w_scaled > 0 && text_box_h_scaled > 0) {
       if (is_selected_item) {
-        u8g2.setDrawColor(1); // White box
-        drawRndBox(text_box_x_pos, text_box_y_pos, text_box_w_scaled, text_box_h_scaled, 2, true); // Filled
-        u8g2.setDrawColor(0); // Black text
+        u8g2.setDrawColor(1); 
+        drawRndBox(text_box_x_pos, text_box_y_pos, text_box_w_scaled, text_box_h_scaled, 2, true); 
+        u8g2.setDrawColor(0); 
         u8g2.drawStr(text_x_render_pos, text_y_baseline_render_pos, itms[i]);
       } else {
-        u8g2.setDrawColor(1); // White frame and text
-        drawRndBox(text_box_x_pos, text_box_y_pos, text_box_w_scaled, text_box_h_scaled, 2, false); // Frame only
+        u8g2.setDrawColor(1); 
+        drawRndBox(text_box_x_pos, text_box_y_pos, text_box_w_scaled, text_box_h_scaled, 2, false); 
         u8g2.drawStr(text_x_render_pos, text_y_baseline_render_pos, itms[i]);
       }
     }
   }
-  u8g2.setDrawColor(1); // Reset default draw color
+  u8g2.setDrawColor(1); 
   u8g2.setMaxClipWindow();
 }
 
@@ -710,7 +774,7 @@ void drawCarouselMenu() {
   const int carousel_center_y_abs = 44; 
   const int screen_center_x_abs = 64; 
   const int card_internal_padding = 3;
-  const int icon_render_size = 16; 
+  const int icon_render_size = 16; // For large icons in carousel cards
   const int icon_margin_top = 3; 
   const int text_margin_from_icon = 2; 
 
@@ -719,7 +783,7 @@ void drawCarouselMenu() {
   
   for (int i = 0; i < maxMenuItems; i++) {
     float current_item_scale = subMenuAnim.itemScale[i];
-    if (current_item_scale <= 0.05f) continue; 
+    if (current_item_scale <= 0.05f) continue; // Skip if too small to be visible
 
     float current_item_offset_x = subMenuAnim.itemOffsetX[i];
     int card_w_scaled = (int)(CarouselAnimation().cardBaseW * current_item_scale); // Access const from type
@@ -730,43 +794,73 @@ void drawCarouselMenu() {
 
     const char** current_item_list_ptr = nullptr;
     int icon_type_for_item = 0; 
+    
+    // Declare these variables here, before they are used in the UTILITIES_MENU case
+    char itemDisplayTextBuffer[25]; // Buffer for dynamic text like "Vibration: ON" (increased size)
+    const char* itemTextToDisplay = nullptr;
 
-    // Determine item list and icon type based on currentMenu
+
+    // Determine item list, text, and icon type based on currentMenu
     if (currentMenu == GAMES_MENU) {
       current_item_list_ptr = gamesMenuItems;
+      itemTextToDisplay = current_item_list_ptr[i]; // Standard item text
       if (i == 0) icon_type_for_item = 4; else if (i == 1) icon_type_for_item = 5; 
       else if (i == 2) icon_type_for_item = 6; else if (i == 3) icon_type_for_item = 7; 
-      else if (i == 4) icon_type_for_item = 8; else continue;
+      else if (i == 4 && i < getGamesMenuItemsCount()) icon_type_for_item = 8; // Back
+      else continue;
 
     } else if (currentMenu == TOOLS_MENU) {
       current_item_list_ptr = toolsMenuItems;
+      itemTextToDisplay = current_item_list_ptr[i];
       if (i == 0) icon_type_for_item = 12; else if (i == 1) icon_type_for_item = 9;  
       else if (i == 2) icon_type_for_item = 10; else if (i == 3) icon_type_for_item = 9;  
-      else if (i == 4) icon_type_for_item = 11; else if (i == 5) icon_type_for_item = 8;  
+      else if (i == 4) icon_type_for_item = 11; else if (i == 5 && i < getToolsMenuItemsCount()) icon_type_for_item = 8; // Back  
       else continue;
 
     } else if (currentMenu == SETTINGS_MENU) {
       current_item_list_ptr = settingsMenuItems; 
-      // settingsMenuItems[] = { "Wi-Fi Setup", "Display Opts", "Sound Setup", "System Info", "About Kiva", "Back" };
-      if (i == 0) icon_type_for_item = 9;   // "Wi-Fi Setup" (Wi-Fi Icon) << NEW
-      else if (i == 1) icon_type_for_item = 13;  // "Display Opts" (Monitor Icon)
-      else if (i == 2) icon_type_for_item = 14;  // "Sound Setup" (Speaker Icon)
-      else if (i == 3) icon_type_for_item = 15;  // "System Info" (Chip Icon)
-      else if (i == 4) icon_type_for_item = 3;   // "About Kiva" ('i' in circle Icon)
-      else if (i == 5) icon_type_for_item = 8;   // "Back" 
+      itemTextToDisplay = current_item_list_ptr[i];
+      if (i == 0) icon_type_for_item = 9;   
+      else if (i == 1) icon_type_for_item = 13; 
+      else if (i == 2) icon_type_for_item = 14;  
+      else if (i == 3) icon_type_for_item = 15;  
+      else if (i == 4) icon_type_for_item = 3;   
+      else if (i == 5 && i < getSettingsMenuItemsCount()) icon_type_for_item = 8; // Back   
       else continue;
 
+    } else if (currentMenu == UTILITIES_MENU) {
+        current_item_list_ptr = utilitiesMenuItems;
+        // Default to the static item name, will be overridden for dynamic items
+        itemTextToDisplay = current_item_list_ptr[i]; 
+
+        if (strcmp(itemTextToDisplay, "Vibration") == 0) {
+            icon_type_for_item = 18; // Vibration icon
+            snprintf(itemDisplayTextBuffer, sizeof(itemDisplayTextBuffer), "Vibration: %s", vibrationOn ? "ON" : "OFF");
+            itemTextToDisplay = itemDisplayTextBuffer;
+        } else if (strcmp(itemTextToDisplay, "Laser") == 0) {
+            icon_type_for_item = 19; // Laser icon
+            snprintf(itemDisplayTextBuffer, sizeof(itemDisplayTextBuffer), "Laser: %s", laserOn ? "ON" : "OFF");
+            itemTextToDisplay = itemDisplayTextBuffer;
+        } else if (strcmp(itemTextToDisplay, "Flashlight") == 0) {
+            icon_type_for_item = 20; // Flashlight icon
+            // No dynamic text needed, itemTextToDisplay remains "Flashlight"
+        } else if (strcmp(itemTextToDisplay, "Back") == 0) {
+            icon_type_for_item = 8; // Back icon
+            // No dynamic text needed
+        } else {
+            continue; // Should not happen with defined utilitiesMenuItems
+        }
     } else {
-      continue; 
+      continue; // Unknown menu type for carousel
     }
 
-    if (card_w_scaled <= 0 || card_h_scaled <= 0) continue;
+    if (card_w_scaled <= 0 || card_h_scaled <= 0) continue; // Skip if card is invisible
 
     if (is_selected_item) {
-      u8g2.setDrawColor(1); 
-      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true); 
+      u8g2.setDrawColor(1); // White background for selected card
+      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true); // Filled rounded box
 
-      u8g2.setDrawColor(0); 
+      u8g2.setDrawColor(0); // Black color for content (icon and text) on selected card
       int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
       int icon_y_pos = card_y_abs + icon_margin_top;
       drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true); // Carousel uses large icons
@@ -774,12 +868,11 @@ void drawCarouselMenu() {
       // Font for selected item text is already u8g2_font_6x10_tf (set before loop)
       int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
       int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
-      // Center baseline in available height
       int text_baseline_y_render = text_area_y_start_abs + (text_area_h_available - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent() -1;
 
 
       int card_inner_content_width = card_w_scaled - 2 * card_internal_padding;
-      updateMarquee(card_inner_content_width, current_item_list_ptr[i]); 
+      updateMarquee(card_inner_content_width, itemTextToDisplay); 
 
       // Clip window for text rendering inside the card
       int clip_x1 = card_x_abs + card_internal_padding;
@@ -787,7 +880,7 @@ void drawCarouselMenu() {
       int clip_x2 = card_x_abs + card_w_scaled - card_internal_padding;
       int clip_y2 = card_y_abs + card_h_scaled - card_internal_padding; 
 
-      clip_y1 = max(clip_y1, card_y_abs); // Ensure clip is within card bounds
+      clip_y1 = max(clip_y1, card_y_abs); 
       clip_y2 = min(clip_y2, card_y_abs + card_h_scaled);
 
       if (clip_x1 < clip_x2 && clip_y1 < clip_y2) { // Valid clip area
@@ -795,22 +888,23 @@ void drawCarouselMenu() {
         if (marqueeActive) {
           u8g2.drawStr(card_x_abs + card_internal_padding + (int)marqueeOffset, text_baseline_y_render, marqueeText);
         } else {
-          int text_width_pixels = u8g2.getStrWidth(current_item_list_ptr[i]);
-          u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, current_item_list_ptr[i]);
+          int text_width_pixels = u8g2.getStrWidth(itemTextToDisplay);
+          u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, itemTextToDisplay);
         }
         u8g2.setMaxClipWindow(); // Reset clip after drawing text
       }
     } else { // Not selected item
-      u8g2.setDrawColor(1); 
+      u8g2.setDrawColor(1); // White color for frame and text
       drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 2, false); // Frame only
 
       if (current_item_scale > 0.5) { // Only draw text if item is reasonably scaled
-        u8g2.setFont(u8g2_font_5x7_tf); // Smaller font for non-selected items
-        char* display_text_truncated = truncateText(current_item_list_ptr[i], card_w_scaled - 2 * card_internal_padding, u8g2);
+        u8g2.setFont(u8g2_font_5x7_tf); // Smaller font for non-selected items' text
+        char* display_text_truncated = truncateText(itemTextToDisplay, card_w_scaled - 2 * card_internal_padding, u8g2);
         int text_width_pixels = u8g2.getStrWidth(display_text_truncated);
         // Center baseline for 5x7 font
         int text_baseline_y_render = card_y_abs + (card_h_scaled - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
         u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, display_text_truncated);
+        u8g2.setFont(u8g2_font_6x10_tf); // Reset to main carousel font for next iteration (selected item)
       }
     }
   }
@@ -1222,6 +1316,64 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         // u8g2.drawLine(x + 3, y + 0, x + 0, y + 2); // Top part, slanted
         // u8g2.drawLine(x + 0, y + 2, x + 4, y + 4); // Middle part, slanted
         // u8g2.drawLine(x + 4, y + 4, x + 1, y + 6); // Bottom part, slanted
+      }
+      break;
+    
+    case 18: // UI Icon: Vibration Motor (e.g., eccentric rotating mass symbol)
+      if (isLarge) {
+        u8g2.drawCircle(x + 8, y + 8, 6); // Outer circle
+        u8g2.drawBox(x + 8 - 1, y + 8 - 4, 2, 3); // Offset mass part 1
+        u8g2.drawDisc(x+8, y+8, 1); // Center dot
+      } else { // Small
+        u8g2.drawCircle(x + 4, y + 4, 3);
+        u8g2.drawPixel(x + 4, y + 1); // Small indication of offset
+        u8g2.drawPixel(x+4, y+4);
+      }
+      break;
+    case 19: // UI Icon: Laser Beam (e.g., starburst or lines)
+      if (isLarge) {
+        u8g2.drawDisc(x + 8, y + 8, 2); // Center point
+        for (int k = 0; k < 8; k++) {
+          float angle = k * PI / 4.0;
+          u8g2.drawLine(x + 8 + round(cos(angle) * 3), y + 8 + round(sin(angle) * 3),
+                         x + 8 + round(cos(angle) * 7), y + 8 + round(sin(angle) * 7));
+        }
+      } else { // Small
+        u8g2.drawDisc(x + 4, y + 4, 1);
+        u8g2.drawLine(x + 4, y + 0, x + 4, y + 7);
+        u8g2.drawLine(x + 0, y + 4, x + 7, y + 4);
+        u8g2.drawLine(x + 1, y + 1, x + 6, y + 6);
+        u8g2.drawLine(x + 1, y + 6, x + 6, y + 1);
+      }
+      break;
+    case 20: // UI Icon: Flashlight (e.g., stylized light beam)
+      if (isLarge) {
+        u8g2.drawTriangle(x + 4, y + 2, x + 12, y + 2, x + 8, y + 0); // Top of lamp
+        u8g2.drawBox(x + 6, y + 2, 4, 5); // Lamp body
+        // Beams
+        u8g2.drawLine(x + 2, y + 8, x + 6, y + 14);
+        u8g2.drawLine(x + 8, y + 8, x + 8, y + 14);
+        u8g2.drawLine(x + 14, y + 8, x + 10, y + 14);
+      } else { // Small
+        u8g2.drawBox(x + 2, y + 0, 4, 3); // Lamp head
+        u8g2.drawLine(x+0,y+4, x+3,y+7);
+        u8g2.drawLine(x+4,y+4, x+4,y+7);
+        u8g2.drawLine(x+7,y+4, x+5,y+7);
+      }
+      break;
+    
+    case 21: // UI Icon: Utilities (e.g., simple toolbox or multi-tool)
+      if (isLarge) { // 16x16
+        // Simple toolbox
+        u8g2.drawRFrame(x + 2, y + 5, 12, 8, 1); // Main box
+        u8g2.drawBox(x + 1, y + 3, 14, 2);     // Lid / Top part
+        u8g2.drawRFrame(x + 6, y + 1, 4, 3, 1); // Handle
+        u8g2.drawPixel(x+4, y+8); // latch/dot
+        u8g2.drawPixel(x+11, y+8); // latch/dot
+      } else { // 8x8
+        u8g2.drawFrame(x + 1, y + 3, 6, 4); // Box
+        u8g2.drawHLine(x + 0, y + 2, 8);   // Lid
+        u8g2.drawFrame(x + 3, y + 0, 2, 2); // Handle
       }
       break;
 

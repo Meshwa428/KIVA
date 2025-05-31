@@ -13,12 +13,14 @@ extern const char* bleAttackToolItems[];
 extern const char* nrfReconToolItems[];
 extern const char* jammingToolItems[];
 extern const char* settingsMenuItems[];
+extern const char* utilitiesMenuItems[]; // <--- NEW
 
 // --- Getter Functions for Menu Item Counts ---
 int getMainMenuItemsCount();
 int getGamesMenuItemsCount();
 int getToolsMenuItemsCount();
 int getSettingsMenuItemsCount();
+int getUtilitiesMenuItemsCount(); // <--- NEW
 int getInjectionToolItemsCount();
 int getWifiAttackToolItemsCount();
 int getBleAttackToolItemsCount();

@@ -111,6 +111,10 @@ float currentBatteryVoltage = 4.0f;
 bool batteryNeedsUpdate = true;
 bool isCharging = false; // <--- NEW: Global for charging state
 
+// Utility modules
+bool vibrationOn = false; // <--- NEW
+bool laserOn = false;     // <--- NEW
+
 float gridItemScale[MAX_GRID_ITEMS];
 float gridItemTargetScale[MAX_GRID_ITEMS];
 unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];

@@ -51,201 +51,167 @@ void setupInputs() {
   encoder.init(!(initialPcf0State & (1 << ENC_A)), !(initialPcf0State & (1 << ENC_B)));
 }
 
-// updateInputs (as before, with correct scrollAct call signature)
 void updateInputs() {
-  unsigned long curT = millis();
-  selectMux(0);
-  uint8_t pcf0S = readPCF(PCF0_ADDR);
-  int encA_val = !(pcf0S & (1 << ENC_A));
-  int encB_val = !(pcf0S & (1 << ENC_B));
-  if (encoder.update(encA_val, encB_val)) {
-    static int lastEncoderPosition = 0;
-    int diff = encoder.position - lastEncoderPosition;
-    if (diff != 0) {
-      // Pass dummy false flags for non-grid/carousel contexts if scrollAct no longer uses them directly
-      // For MAIN_MENU and WIFI_SETUP_MENU, the last two bools for scrollAct don't matter
-      // as their context is determined by currentMenu inside scrollAct.
-      scrollAct(diff > 0 ? 1 : -1, false, false);
-      lastEncoderPosition = encoder.position;
-    }
-  }
-  for (int i = 0; i <= BTN_RIGHT2; i++) {
-    if (i == ENC_A || i == ENC_B) continue;
-    bool rawHardwareState = (pcf0S & (1 << i)) ? true : false;
-    bool currentRawState = rawHardwareState;
-    if (currentRawState != lastRawHState0[i]) {
-      lastDbncT0[i] = curT;
-    }
-    lastRawHState0[i] = currentRawState;
-    if ((curT - lastDbncT0[i]) > DEBOUNCE_DELAY) {
-      bool debouncedState = currentRawState;
-      if (debouncedState != prevDbncHState0[i]) {
-        if (debouncedState == false) {
-          btnPress0[i] = true;
-        }
-        prevDbncHState0[i] = debouncedState;
-      }
-    }
-  }
+    unsigned long curT = millis();
+    selectMux(0); // For Encoder and PCF0 buttons
+    uint8_t pcf0S = readPCF(PCF0_ADDR);
+    int encA_val = !(pcf0S & (1 << ENC_A)); 
+    int encB_val = !(pcf0S & (1 << ENC_B)); 
 
-  selectMux(1);
-  uint8_t pcf1S = readPCF(PCF1_ADDR);
-  for (int i = 0; i < 8; i++) {
-    bool rawHardwareState = (pcf1S & (1 << i)) ? true : false;
-    bool currentRawState = rawHardwareState;
-    if (currentRawState != lastRawHState1[i]) {
-      lastDbncT1[i] = curT;
+    // Encoder Logic
+    static int lastEncoderPosition = 0; // Keep static for encoder diff
+    if (encoder.update(encA_val, encB_val)) {
+        int diff = encoder.position - lastEncoderPosition;
+        if (diff != 0) {
+            // scrollAct will determine context internally based on currentMenu
+            scrollAct(diff > 0 ? 1 : -1, false, false); 
+            lastEncoderPosition = encoder.position;
+        }
     }
-    lastRawHState1[i] = currentRawState;
-    if ((curT - lastDbncT1[i]) > DEBOUNCE_DELAY) {
-      bool debouncedState = currentRawState;
-      int scrollDirection = 0;
-      bool relevantScrollButton = false;
-      // The flags isGridNow and isCarouselNow are determined inside scrollAct based on currentMenu
-      // So, we don't need to pass them accurately from here for menu-specific button actions if scrollAct handles context.
-      // However, the original code uses them to determine scrollDirection magnitude for grid.
-      bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID);
-      bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU);
 
-      if (debouncedState != prevDbncHState1[i]) {
-        prevDbncHState1[i] = debouncedState;
-        if (debouncedState == false) {
-          btnPress1[i] = true;
-          if (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU) {
-            if (i == NAV_UP) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_DOWN) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
-            }
-          } else if (isCarouselNow) {
-            if (i == NAV_LEFT) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_RIGHT) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
-            }
-          } else if (isGridNow) {
-            if (i == NAV_UP) {
-              scrollDirection = -gridCols;
-              relevantScrollButton = true;
-            } else if (i == NAV_DOWN) {
-              scrollDirection = gridCols;
-              relevantScrollButton = true;
-            } else if (i == NAV_LEFT) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_RIGHT) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
-            }
-          }
-          if (relevantScrollButton) {
-            scrollAct(scrollDirection, false, false);  // Pass dummy flags
-            isBtnHeld1[i] = true;
-            btnHoldStartT1[i] = curT;
-            lastRepeatT1[i] = curT;
-          }
-        } else {
-          if (isBtnHeld1[i]) {
-            isBtnHeld1[i] = false;
-          }
+    // PCF0 Button Logic (e.g., Encoder Button)
+    for (int i = 0; i <= BTN_RIGHT2; i++) { // Assuming BTN_RIGHT2 is the last used button on PCF0
+        if (i == ENC_A || i == ENC_B) continue; // Skip encoder pins
+        bool rawHardwareState = (pcf0S & (1 << i)) ? true : false; 
+        bool currentRawState = rawHardwareState; 
+        if (currentRawState != lastRawHState0[i]) {
+            lastDbncT0[i] = curT; 
         }
-      } else if (debouncedState == false && isBtnHeld1[i]) {
-        if (curT - btnHoldStartT1[i] > REPEAT_INIT_DELAY && curT - lastRepeatT1[i] > REPEAT_INT) {
-          relevantScrollButton = false;
-          scrollDirection = 0;
-          if (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU) {
-            if (i == NAV_UP) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_DOWN) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
+        lastRawHState0[i] = currentRawState;
+        if ((curT - lastDbncT0[i]) > DEBOUNCE_DELAY) {
+            bool debouncedState = currentRawState;
+            if (debouncedState != prevDbncHState0[i]) { 
+                if (debouncedState == false) { // Button pressed (transition from high to low assumed for pull-ups)
+                    btnPress0[i] = true;
+                }
+                prevDbncHState0[i] = debouncedState;
             }
-          } else if (isCarouselNow) {
-            if (i == NAV_LEFT) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_RIGHT) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
-            }
-          } else if (isGridNow) {
-            if (i == NAV_UP) {
-              scrollDirection = -gridCols;
-              relevantScrollButton = true;
-            } else if (i == NAV_DOWN) {
-              scrollDirection = gridCols;
-              relevantScrollButton = true;
-            } else if (i == NAV_LEFT) {
-              scrollDirection = -1;
-              relevantScrollButton = true;
-            } else if (i == NAV_RIGHT) {
-              scrollDirection = 1;
-              relevantScrollButton = true;
-            }
-          }
-          if (relevantScrollButton) {
-            scrollAct(scrollDirection, false, false);  // Pass dummy flags
-            lastRepeatT1[i] = curT;
-          }
         }
-      }
     }
-  }
+
+    // PCF1 Button Logic (NAV_LEFT, NAV_RIGHT, etc.)
+    selectMux(1); // MUX channel for PCF1
+    uint8_t pcf1S = readPCF(PCF1_ADDR);
+    for (int i = 0; i < 8; i++) { // Iterate all 8 pins of PCF1
+        bool rawHardwareState = (pcf1S & (1 << i)) ? true : false;
+        bool currentRawState = rawHardwareState; 
+        if (currentRawState != lastRawHState1[i]) {
+            lastDbncT1[i] = curT;
+        }
+        lastRawHState1[i] = currentRawState;
+
+        if ((curT - lastDbncT1[i]) > DEBOUNCE_DELAY) {
+            bool debouncedState = currentRawState;
+            int scrollDirection = 0;
+            bool relevantScrollButton = false;
+
+            // Determine context for button actions
+            bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU);
+            bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU); // Added UTILITIES_MENU
+            bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID); 
+
+            if (debouncedState != prevDbncHState1[i]) { // State changed
+                prevDbncHState1[i] = debouncedState;
+                if (debouncedState == false) { // Button pressed
+                    btnPress1[i] = true; // Set one-shot press flag for OK/BACK
+
+                    // Handle scrolling for directional buttons
+                    if (isListNow) { 
+                        if (i == NAV_UP) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_DOWN) { scrollDirection = 1; relevantScrollButton = true; }
+                    } else if (isCarouselNow) { // <--- THIS IS KEY FOR LEFT/RIGHT IN CAROUSEL
+                        if (i == NAV_LEFT) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_RIGHT) { scrollDirection = 1; relevantScrollButton = true; }
+                    } else if (isGridNow) { 
+                        if (i == NAV_UP) { scrollDirection = -gridCols; relevantScrollButton = true; }
+                        else if (i == NAV_DOWN) { scrollDirection = gridCols; relevantScrollButton = true; }
+                        else if (i == NAV_LEFT) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_RIGHT) { scrollDirection = 1; relevantScrollButton = true; }
+                    }
+
+                    if (relevantScrollButton) {
+                        scrollAct(scrollDirection, false, false); // scrollAct determines detailed context
+                        isBtnHeld1[i] = true; // For auto-repeat
+                        btnHoldStartT1[i] = curT;
+                        lastRepeatT1[i] = curT;
+                    }
+                } else {  // Button released
+                    if (isBtnHeld1[i]) {
+                        isBtnHeld1[i] = false; 
+                    }
+                }
+            } else if (debouncedState == false && isBtnHeld1[i]) { // Button held down (for auto-repeat)
+                if (curT - btnHoldStartT1[i] > REPEAT_INIT_DELAY && curT - lastRepeatT1[i] > REPEAT_INT) {
+                    // Reset scrollDirection and relevantScrollButton for this repeat event
+                    scrollDirection = 0;
+                    relevantScrollButton = false;
+
+                    if (isListNow) { 
+                        if (i == NAV_UP) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_DOWN) { scrollDirection = 1; relevantScrollButton = true; }
+                    } else if (isCarouselNow) {
+                        if (i == NAV_LEFT) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_RIGHT) { scrollDirection = 1; relevantScrollButton = true; }
+                    } else if (isGridNow) {
+                        if (i == NAV_UP) { scrollDirection = -gridCols; relevantScrollButton = true; }
+                        else if (i == NAV_DOWN) { scrollDirection = gridCols; relevantScrollButton = true; }
+                        else if (i == NAV_LEFT) { scrollDirection = -1; relevantScrollButton = true; }
+                        else if (i == NAV_RIGHT) { scrollDirection = 1; relevantScrollButton = true; }
+                    }
+
+                    if (relevantScrollButton) {
+                        scrollAct(scrollDirection, false, false);
+                        lastRepeatT1[i] = curT; 
+                    }
+                }
+            }
+        }
+    }
 }
 
 void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselContextFlag_IGNORED) {
   int oldMenuIndexGeneric = menuIndex;
   int oldWifiMenuIndex = wifiMenuIndex;
-  bool isCarouselActiveCurrent = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU);
+  bool isCarouselActiveCurrent = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU); // Added UTILITIES_MENU
   bool isGridContextCurrent = (currentMenu == TOOL_CATEGORY_GRID);
   bool indexChanged = false;
 
   if (isGridContextCurrent) {
-    // ... (Grid navigation and targetGridScrollOffset_Y logic from your "perfect" version)
-    // This part should be exactly as in the previously confirmed working scrollAct for grid.
-    // For brevity, I'm not repeating the ~70 lines of grid logic here.
-    // Ensure it correctly sets menuIndex and targetGridScrollOffset_Y.
-    if (maxMenuItems <= 0) {
-      menuIndex = 0;
-      targetGridScrollOffset_Y = 0;
-      return;
-    }
-    int oldMenuIndexGrid = menuIndex;
+    // ... Grid logic from previous 'perfect' version ...
+    // Ensure this block correctly updates menuIndex and targetGridScrollOffset_Y
+    // and sets indexChanged = (oldMenuIndexGrid != menuIndex);
+    if (maxMenuItems <= 0) { menuIndex = 0; targetGridScrollOffset_Y = 0; return; }
+    int oldMenuIndexGrid = menuIndex; 
     int currentRow = menuIndex / gridCols;
     int currentCol = menuIndex % gridCols;
     int numRows = (maxMenuItems + gridCols - 1) / gridCols;
     int newIndex = menuIndex;
-    if (direction == -1) {
+    if (direction == -1) { 
       newIndex = menuIndex - 1;
-      if (currentCol == 0) {
-        if (currentRow == 0) newIndex = maxMenuItems - 1;
-        else newIndex = (currentRow * gridCols) - 1;
+      if (currentCol == 0) { 
+        if (currentRow == 0) newIndex = maxMenuItems - 1; 
+        else newIndex = (currentRow * gridCols) - 1; 
       }
       if (newIndex < 0) newIndex = maxMenuItems - 1;
-    } else if (direction == 1) {
+    } else if (direction == 1) { 
       newIndex = menuIndex + 1;
-      if (menuIndex == maxMenuItems - 1) {
-        newIndex = 0;
-      } else if (currentCol == gridCols - 1) {
-        newIndex = (currentRow + 1) * gridCols;
-        if (newIndex >= maxMenuItems) newIndex = 0;
-      } else if (newIndex >= maxMenuItems) {
-        newIndex = 0;
+      if (menuIndex == maxMenuItems - 1) { 
+        newIndex = 0; 
+      } else if (currentCol == gridCols - 1) { 
+        newIndex = (currentRow + 1) * gridCols; 
+        if (newIndex >= maxMenuItems) newIndex = 0; 
+      } else if (newIndex >= maxMenuItems) { 
+         newIndex = 0; 
       }
-    } else if (direction == -gridCols) {
-      if (currentRow > 0) {
+    } else if (direction == -gridCols) {  
+      if (currentRow > 0) { 
         newIndex = menuIndex - gridCols;
-      } else {
+      } else { 
         int targetCol = currentCol - 1;
         if (targetCol < 0) {
-          targetCol = gridCols - 1;
+          targetCol = gridCols - 1; 
         }
-        newIndex = -1;
+        newIndex = -1; 
         for (int r = numRows - 1; r >= 0; --r) {
           int tempIdx = r * gridCols + targetCol;
           if (tempIdx < maxMenuItems) {
@@ -253,36 +219,36 @@ void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselCon
             break;
           }
         }
-        if (newIndex == -1) {
-          newIndex = maxMenuItems - 1;
+        if (newIndex == -1) { 
+          newIndex = maxMenuItems -1; 
         }
       }
-    } else if (direction == gridCols) {
+    } else if (direction == gridCols) {  
       if (currentRow < numRows - 1 && (menuIndex + gridCols < maxMenuItems)) {
         newIndex = menuIndex + gridCols;
-      } else {
+      } else { 
         int targetCol = currentCol + 1;
         if (targetCol >= gridCols) {
-          targetCol = 0;
+          targetCol = 0; 
         }
-        newIndex = targetCol;
-        if (newIndex >= maxMenuItems) {
-          newIndex = 0;
+        newIndex = targetCol; 
+        if (newIndex >= maxMenuItems) { 
+          newIndex = 0; 
         }
       }
     }
     menuIndex = newIndex;
-    if (maxMenuItems > 0) {
-      if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems - 1;
-      if (menuIndex < 0) menuIndex = 0;
+    if (maxMenuItems > 0) { 
+        if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems - 1;
+        if (menuIndex < 0) menuIndex = 0;
     } else {
-      menuIndex = 0;
+        menuIndex = 0;
     }
     indexChanged = (oldMenuIndexGrid != menuIndex);
     int currentSelectionRow = menuIndex / gridCols;
     const int gridItemRowHeight = GRID_ITEM_H + GRID_ITEM_PADDING_Y;
-    int gridVisibleAreaY_start = STATUS_BAR_H + 1 + GRID_ITEM_PADDING_Y;
-    int gridVisibleAreaH = 64 - gridVisibleAreaY_start - GRID_ITEM_PADDING_Y;
+    int gridVisibleAreaY_start = STATUS_BAR_H + 1 + GRID_ITEM_PADDING_Y; 
+    int gridVisibleAreaH = 64 - gridVisibleAreaY_start - GRID_ITEM_PADDING_Y; 
     int visibleRowsOnGrid = gridVisibleAreaH > 0 ? gridVisibleAreaH / gridItemRowHeight : 1;
     if (visibleRowsOnGrid <= 0) visibleRowsOnGrid = 1;
     int top_row_of_current_targeted_viewport = targetGridScrollOffset_Y / gridItemRowHeight;
@@ -302,85 +268,64 @@ void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselCon
     }
     if (targetGridScrollOffset_Y < 0) targetGridScrollOffset_Y = 0;
 
-
   } else if (currentMenu == WIFI_SETUP_MENU) {
-    if (maxMenuItems <= 0) {
-      wifiMenuIndex = 0;
-      targetWifiListScrollOffset_Y = 0;
-      return;
-    }
+    // ... WiFi logic from previous 'perfect' version ...
+    // Ensure this block correctly updates wifiMenuIndex and targetWifiListScrollOffset_Y
+    // and sets indexChanged = (oldWifiMenuIndex != wifiMenuIndex);
+    if (maxMenuItems <= 0) { wifiMenuIndex = 0; targetWifiListScrollOffset_Y = 0; return; }
     int oldWifiIdx = wifiMenuIndex;
     wifiMenuIndex += direction;
     if (wifiMenuIndex >= maxMenuItems) wifiMenuIndex = 0;
     else if (wifiMenuIndex < 0) wifiMenuIndex = maxMenuItems - 1;
     indexChanged = (oldWifiIdx != wifiMenuIndex);
-
-    // For WIFI_SETUP_MENU, targetWifiListScrollOffset_Y is calculated differently
-    // by drawWifiSetupScreen itself to center the selected item.
-    // This function (scrollAct) primarily needs to update wifiMenuIndex.
-    // The actual scroll value that makes drawWifiSetupScreen center the item
-    // is derived inside drawWifiSetupScreen based on wifiMenuIndex.
-    // So, we don't explicitly set targetWifiListScrollOffset_Y here in the same way
-    // as for the grid. The drawing function will calculate the effective scroll.
-    // However, the *animation variable* currentWifiListScrollOffset_Y_anim still needs a target.
-    // Let's keep it simple: allow drawWifiSetupScreen to handle the final centering logic.
-    // What scrollAct *can* do is calculate a rough target based on bringing the item to the top,
-    // and drawWifiSetupScreen will refine it for centering.
-
     const int item_row_h = WIFI_LIST_ITEM_H;
     int list_start_y_abs = STATUS_BAR_H + 1;
     int list_visible_h = 64 - list_start_y_abs;
-
-    // Calculate the scroll offset needed to place the TOP of the selected item
-    // at the CENTER of the visible list area.
-    // Then the draw function will adjust from this to truly center the item's middle.
-    // This is the target for currentWifiListScrollOffset_Y_anim.
     float scroll_to_center_selected_item = (wifiMenuIndex * item_row_h) - (list_visible_h / 2) + (item_row_h / 2);
-
-    // Clamp this target scroll value
     if (scroll_to_center_selected_item < 0) scroll_to_center_selected_item = 0;
-
     float max_scroll_val = (maxMenuItems * item_row_h) - list_visible_h;
-    if (max_scroll_val < 0) max_scroll_val = 0;  // List shorter than screen
-
+    if (max_scroll_val < 0) max_scroll_val = 0; 
     if (scroll_to_center_selected_item > max_scroll_val) {
-      scroll_to_center_selected_item = max_scroll_val;
+        scroll_to_center_selected_item = max_scroll_val;
     }
-    if (scroll_to_center_selected_item < 0) scroll_to_center_selected_item = 0;  // Final safety clamp
+    if (scroll_to_center_selected_item < 0) scroll_to_center_selected_item = 0; 
+    targetWifiListScrollOffset_Y = scroll_to_center_selected_item; 
 
-    targetWifiListScrollOffset_Y = scroll_to_center_selected_item;  // Store this as the conceptual target
 
-
-  } else {  // Main Menu or Carousel
-    if (maxMenuItems <= 0) {
-      menuIndex = 0;
-      return;
-    }
+  } else {  // Main Menu or Carousel (Games, Tools, Settings, Utilities)
+    if (maxMenuItems <= 0) { menuIndex = 0; return; } // No items to navigate
     int oldMenuIdx = menuIndex;
-    menuIndex += direction;
+    menuIndex += direction; 
     if (menuIndex >= maxMenuItems) menuIndex = 0;
     else if (menuIndex < 0) menuIndex = maxMenuItems - 1;
     indexChanged = (oldMenuIdx != menuIndex);
   }
 
-  if (indexChanged || isGridContextCurrent || currentMenu == WIFI_SETUP_MENU) {
+  // Update animation targets or related states
+  // This needs to be sensitive to whether the index actually changed for the *active* menu system
+  bool actualIndexDidChange = false;
+  if (currentMenu == WIFI_SETUP_MENU) {
+    actualIndexDidChange = (oldWifiMenuIndex != wifiMenuIndex);
+  } else {
+    actualIndexDidChange = (oldMenuIndexGeneric != menuIndex);
+  }
+
+
+  // Update animation targets if an index changed OR 
+  // if it's a scrollable context that might need marquee reset even if index didn't change at edge.
+  if (actualIndexDidChange || isGridContextCurrent || currentMenu == WIFI_SETUP_MENU || isCarouselActiveCurrent) {
     if (currentMenu == MAIN_MENU) {
       mainMenuAnim.setTargets(menuIndex, maxMenuItems);
     } else if (currentMenu == WIFI_SETUP_MENU) {
-      // wifiListAnim.setTargets is primarily for scale, Y offset is now implicitly handled
-      // by how drawWifiSetupScreen uses currentWifiListScrollOffset_Y_anim
-      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);  // Still call for scale updates
-      marqueeActive = false;
+      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems); // For scale
+      marqueeActive = false; 
       marqueeOffset = 0;
-    } else if (isCarouselActiveCurrent) {
+    } else if (isCarouselActiveCurrent) { 
+      // THIS IS CRUCIAL FOR CAROUSEL ANIMATION
       subMenuAnim.setTargets(menuIndex, maxMenuItems);
-      marqueeActive = false;
-      marqueeOffset = 0;
-      marqueeScrollLeft = true;
-    } else if (isGridContextCurrent) {
-      marqueeActive = false;
-      marqueeOffset = 0;
-      marqueeScrollLeft = true;
+      marqueeActive = false; marqueeOffset = 0; marqueeScrollLeft = true;
+    } else if (isGridContextCurrent) { 
+      marqueeActive = false; marqueeOffset = 0; marqueeScrollLeft = true;
     }
   }
 }
