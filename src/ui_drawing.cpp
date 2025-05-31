@@ -553,10 +553,14 @@ char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display) 
 void drawStatusBar() {
     float v = getSmoothV(); 
     uint8_t s = batPerc(v);
-    u8g2.setFont(u8g2_font_6x10_tf); // Default font for status bar text
+    u8g2.setFont(u8g2_font_6x10_tf); 
     const char* titleText = "Kiva OS"; 
 
     // --- Title Logic (remains the same) ---
+    if (currentMenu == TOOL_CATEGORY_GRID) { /* ... */ }
+    else if (currentMenu == WIFI_SETUP_MENU) { /* ... */ }
+    else if (currentMenu != MAIN_MENU && mainMenuSavedIndex >= 0 && mainMenuSavedIndex < getMainMenuItemsCount()) { /* ... */ }
+    // (Ensure full title logic is present from previous versions)
     if (currentMenu == TOOL_CATEGORY_GRID) { 
         if (toolsCategoryIndex >= 0 && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) { 
             titleText = toolsMenuItems[toolsCategoryIndex];
@@ -570,64 +574,49 @@ void drawStatusBar() {
         titleText = mainMenuItems[mainMenuSavedIndex];
     }
 
+
     char titleBuffer[14]; 
     strncpy(titleBuffer, titleText, sizeof(titleBuffer) - 1);
     titleBuffer[sizeof(titleBuffer) - 1] = '\0';
-    int max_title_width = 65; // Max width for title to leave space for battery info
+    int max_title_width = 65; 
      if (u8g2.getStrWidth(titleBuffer) > max_title_width) { 
-        truncateText(titleText, max_title_width - 5, u8g2); // Truncate a bit more to ensure "..." fits
+        truncateText(titleText, max_title_width - 5, u8g2); 
         strncpy(titleBuffer, SBUF, sizeof(titleBuffer)-1); 
         titleBuffer[sizeof(titleBuffer) - 1] = '\0';
     }
-    u8g2.drawStr(2, 7, titleBuffer); // y=7 for 6x10 font baseline
+    u8g2.drawStr(2, 7, titleBuffer); 
 
     // --- Battery Display Area (Right Aligned) ---
     int battery_area_right_margin = 2;
     int current_x_origin_for_battery = u8g2.getDisplayWidth() - battery_area_right_margin;
 
     // 1. Draw Battery Icon (Simplified)
-    // Icon is 9px wide, 5px high. Status bar top is y=0.
-    // Status bar height is 11. Icon height 5. y_top = (11-5)/2 = 3.
     int bat_icon_y_top = 3; 
-    int bat_icon_width = 9; 
+    int bat_icon_width = 9;  // From drawBatIcon: body 7 + tip 1 + 1px spacing between = 9 approx
     current_x_origin_for_battery -= bat_icon_width; 
     drawBatIcon(current_x_origin_for_battery, bat_icon_y_top, s);
 
-    // 2. Draw Charging Icon (if charging) - Using a Glyph
+    // 2. Draw Charging Icon (if charging) - Using Custom Icon 17
     if (isCharging) {
-        // The 'zap' (lightning bolt) glyph from open_iconic_all_1x is 0x00BA (decimal 186)
-        // or 0xE00D in some mappings. Check u8g2 docs for u8g2_font_open_iconic_all_1x_t
-        // For u8g2_font_open_iconic_embedded_1x_t, 'P' (0x50) can look like a plug, or zap is often 0xBA.
-        // Let's try a common lightning bolt glyph ID for icon fonts.
-        // Glyphs are typically 8x8.
-        int charge_icon_glyph_width = 8; // Approximate width of the glyph rendering area
-        int charge_icon_spacing = 1;
-        current_x_origin_for_battery -= (charge_icon_glyph_width + charge_icon_spacing);
+        int charge_icon_width = 6; // Bounding box for our custom small lightning bolt
+        int charge_icon_height = 7; // Bounding box height
+        int charge_icon_spacing = 2;
+        current_x_origin_for_battery -= (charge_icon_width + charge_icon_spacing); 
+        
+        // Vertically align the custom icon. If bat_icon_y_top = 3 and icon is 7px high,
+        // and status bar font has baseline at y=7.
+        // For custom icon, y is its top-left.
+        // If bat icon top is 3, and it's 5px high, its center is ~5.5.
+        // If lightning icon is 7px high, to center it with bat icon, its top should be (3 + 5/2) - 7/2 = 3 - 1 = 2
+        int charge_icon_y_top = bat_icon_y_top -1; // Aim to make it look vertically centered with bat icon
+                                                 // (bat icon is 5px high, lightning 7px high. Difference is 2. Shift by 1)
+        if (charge_icon_y_top < 0) charge_icon_y_top = 0; // Don't draw above status bar
 
-        u8g2.setFont(u8g2_font_open_iconic_all_1x_t); // Switch to icon font
-        // Glyph y position needs to be baseline. For an 8x8 icon font, if status bar font baseline is 7,
-        // and icon font ascent is ~7, its baseline could also be 7.
-        // Or center its 8px height: (11-8)/2 = 1.5 (y_top). Baseline y_top + ascent.
-        // Ascent for open_iconic_all_1x_t is often 7 or 8.
-        // If status bar font baseline is 7, and icon font ascent is 7, glyph_y = 7.
-        int glyph_y_baseline = 7; 
-        // Try glyph U+26A1 (HIGH VOLTAGE SIGN ☇ ) or find one in open_iconic like 0xBA
-        // u8g2 often uses different ranges. 0x7A in open_iconic_weather_1x is lightning.
-        // For open_iconic_all_1x_t, zap/lightning might be 0xBA or similar.
-        // For this example, let's use the 'flash' / 'zap' icon often mapped to 0xBA or 0xE00D.
-        // Check the u8g2 font guide for your specific version.
-        // Common one is 'flash' icon (lightning bolt):
-        // In u8g2_font_open_iconic_all_1x_t, 0xE00D is often 'bolt'. Or 0xBA.
-        // Let's assume 0xE00D based on some common u8g2 mappings for `pf` fonts converted to `u8g2`.
-        // The `u8x8_GetGlyphBitmap` tool from u8g2 can help find codes.
-        // Alternatively, `flash` in `u8g2_font_streamline_interface_essential_16.tf` is good but too big.
-        // The character '!' (0x21) or '$' (0x24) might be an abstract charging symbol if a bolt isn't easily found.
-        // For a test, let's use '!'
-        // u8g2.drawGlyph(current_x_origin_for_battery, glyph_y_baseline, 0x21); // '!'
-        // A better option from open_iconic_all_1x_t could be 0xBA (often a lightning/zap)
-         u8g2.drawGlyph(current_x_origin_for_battery + 1, glyph_y_baseline, 0xBA); // Try 0xBA, shift by 1 for centering 6px wide glyph
 
-        u8g2.setFont(u8g2_font_6x10_tf); // Switch back to default text font
+        // Ensure draw color is set for the icon (white on black, or black on white if status bar inverted)
+        // Assuming status bar background is black, icon should be white.
+        u8g2.setDrawColor(1); // Set to white if not already
+        drawCustomIcon(current_x_origin_for_battery, charge_icon_y_top, 17, false); 
     }
 
     // 3. Draw Battery Percentage Text
@@ -636,6 +625,8 @@ void drawStatusBar() {
     int percent_text_width = u8g2.getStrWidth(batteryStr);
     int percent_text_spacing = 2;
     current_x_origin_for_battery -= (percent_text_width + percent_text_spacing); 
+    // Ensure draw color is set for text (white on black)
+    u8g2.setDrawColor(1);
     u8g2.drawStr(current_x_origin_for_battery, 7, batteryStr); 
 
     // --- Status Bar Line ---
@@ -1204,33 +1195,35 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
       }
       break;
     
-        case 17: // UI Icon: Small Lightning Bolt (for charging status)
-      // This icon is intended to be small, around 5-7px wide/high.
-      // 'isLarge' flag might be ignored or used for a slightly bolder version if needed.
-      // For status bar, 'isLarge = false' is expected.
-      if (isLarge) { // Larger version (e.g. 10x10 or 12x12 for other UI elements if needed)
-        // Draw a more prominent lightning bolt
-        u8g2.drawLine(x + 5, y + 0, x + 2, y + 5);
-        u8g2.drawLine(x + 2, y + 5, x + 6, y + 4);
-        u8g2.drawLine(x + 6, y + 4, x + 3, y + 9);
-        u8g2.drawLine(x + 3, y + 9, x + 7, y + 8);
-        u8g2.drawLine(x + 7, y + 8, x + 4, y + 13); // Example larger size
-      } else { // Small version for status bar (target ~6px width, ~8px height)
-        // Top point
-        // u8g2.drawPixel(x + 2, y + 0);
-        // Upper segment
-        u8g2.drawLine(x + 2, y + 0, x + 0, y + 3); // Slant down-left
-        // Middle segment
-        u8g2.drawLine(x + 0, y + 3, x + 3, y + 2); // Slant up-right slightly
-        // Lower segment
-        u8g2.drawLine(x + 3, y + 2, x + 1, y + 5); // Slant down-left
-        // Bottom point (optional, can make it look too long)
-        // u8g2.drawPixel(x + 3, y + 7);
-        // A more compact version for 8px height:
-        u8g2.drawLine(x+3, y+0, x+1, y+3); // Top zig
-        u8g2.drawLine(x+1, y+3, x+4, y+3); // Middle zag
-        u8g2.drawLine(x+4, y+3, x+2, y+6); // Bottom zig
+    case 17: // UI Icon: Small Lightning Bolt (for charging status) - Refined
+      // Target: Small, sharp, modern. Approx 5-6px wide, 7-8px high.
+      // 'isLarge' can provide a slightly scaled up version if needed elsewhere.
+      if (isLarge) { // Larger version (e.g., for a different UI context)
+        // Example for a ~10px wide, ~14px high bolt
+        u8g2.drawLine(x + 5, y + 0, x + 2, y + 6);  // Top-left stroke
+        u8g2.drawLine(x + 2, y + 6, x + 7, y + 5);  // Middle-right stroke (crossing)
+        u8g2.drawLine(x + 7, y + 5, x + 4, y + 13); // Bottom-left stroke
+      } else { // Small version for status bar (target ~5px width, ~7px height)
+        // Simple, sharp "N" or "Z" shape
+        // x, y is top-left of the drawing bounding box.
+        // Let's aim for a 5x7 icon bounding box.
+        // y is y_top of this box.
+
+        // Top point: (x+2, y)
+        // Mid-left: (x+0, y+3)
+        // Mid-right: (x+4, y+3)
+        // Bottom point: (x+2, y+6)
+
+        u8g2.drawLine(x + 2, y + 0, x + 0, y + 3); // Down-left
+        u8g2.drawLine(x + 0, y + 3, x + 4, y + 3); // Across to right
+        u8g2.drawLine(x + 4, y + 3, x + 2, y + 6); // Down-left to bottom point
+
+        // Alternative slightly more "jagged" Z:
+        // u8g2.drawLine(x + 3, y + 0, x + 0, y + 2); // Top part, slanted
+        // u8g2.drawLine(x + 0, y + 2, x + 4, y + 4); // Middle part, slanted
+        // u8g2.drawLine(x + 4, y + 4, x + 1, y + 6); // Bottom part, slanted
       }
+      break;
 
     default:
       if (isLarge) {
