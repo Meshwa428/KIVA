@@ -1,312 +1,3 @@
-// // #include <Wire.h> // <--- ADD THIS LINE
-// // #include "config.h"
-// // #include "pcf_utils.h"
-// // #include "input_handling.h"
-// // #include "battery_monitor.h"
-// // #include "ui_drawing.h"
-// // #include "menu_logic.h"
-
-// // // === Global Object Definitions ===
-// // U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-// // QuadratureEncoder encoder;
-// // VerticalListAnimation mainMenuAnim;
-// // CarouselAnimation subMenuAnim;
-
-// // // === Global Variable Definitions (from extern in config.h) ===
-// // MenuState currentMenu = MAIN_MENU;
-// // int menuIndex = 0;
-// // int maxMenuItems = 0; // Will be set by initializeCurrentMenu
-// // int mainMenuSavedIndex = 0;
-// // int toolsCategoryIndex = 0;
-// // int gridCols = 2; 
-// // int targetGridScrollOffset_Y = 0;
-// // float currentGridScrollOffset_Y_anim = 0.0f;
-// // uint8_t pcf0Output = 0xFF & ~((1 << 6) | (1 << 7)); 
-
-// // // Battery externs
-// // float batReadings[BAT_SAMPLES] = {0};
-// // int batIndex = 0;
-// // bool batInitialized = false;
-// // float lastValidBattery = 4.0f;
-// // unsigned long lastBatteryCheck = 0;
-// // float currentBatteryVoltage = 4.0f;
-// // bool batteryNeedsUpdate = true;
-
-// // // Grid animation externs
-// // float gridItemScale[MAX_GRID_ITEMS];
-// // float gridItemTargetScale[MAX_GRID_ITEMS];
-// // unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];
-// // bool gridAnimatingIn = false;
-
-// // // Marquee externs
-// // char marqueeText[40];
-// // int marqueeTextLenPx = 0;
-// // float marqueeOffset = 0;
-// // unsigned long lastMarqueeTime = 0;
-// // bool marqueeActive = false;
-// // bool marqueePaused = false;
-// // unsigned long marqueePauseStartTime = 0;
-// // bool marqueeScrollLeft = true;
-
-// // // Shared buffer for truncateText
-// // char SBUF[32];
-
-// // // Button press flags
-// // bool btnPress0[8] = {false};
-// // bool btnPress1[8] = {false};
-
-
-// // void setup() {
-// //   Serial.begin(115200);
-// //   Wire.begin(); // Initialize I2C
-
-// //   analogReadResolution(12); 
-// //   #if defined(ESP32) || defined(ESP_PLATFORM)
-// //   // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB); 
-// //   #endif
-// //   setupBatteryMonitor(); 
-
-// //   setupInputs(); 
-
-// //   selectMux(0); 
-// //   writePCF(PCF0_ADDR, pcf0Output); 
-
-// //   selectMux(4); 
-// //   u8g2.begin();
-// //   u8g2.enableUTF8Print();
-
-// //   initializeCurrentMenu(); 
-
-// //   u8g2.clearBuffer();
-// //   u8g2.setFont(u8g2_font_ncenB08_tr);
-// //   u8g2.drawStr((128-u8g2.getStrWidth("Kiva OS"))/2, 28, "Kiva OS");
-// //   u8g2.setFont(u8g2_font_5x7_tf);
-// //   u8g2.drawStr((128-u8g2.getStrWidth("Modular UI"))/2, 40, "Modular UI");
-// //   u8g2.drawStr((128-u8g2.getStrWidth("Starting..."))/2, 52, "Starting...");
-// //   u8g2.sendBuffer();
-// //   delay(1500);
-// // }
-
-// // void loop() {
-// //   updateInputs(); 
-
-// //   if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
-// //     if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false; 
-// //     if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false; 
-// //     handleMenuSelection();
-// //   }
-
-// //   if (btnPress1[NAV_BACK]) {
-// //     btnPress1[NAV_BACK] = false; 
-// //     handleMenuBackNavigation();
-// //   }
-
-// //   for (int i = 0; i < 8; ++i) {
-// //       if (i != ENC_BTN) btnPress0[i] = false; 
-// //       if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false; 
-// //   }
-  
-// //   drawUI(); // This function is in ui_drawing.cpp, declared in ui_drawing.h
-
-// //   delay(16); 
-// // }
-
-
-
-
-// // KivaMain.ino
-
-// #include <Wire.h> 
-// #include "config.h"
-// #include "pcf_utils.h"
-// #include "input_handling.h"
-// #include "battery_monitor.h"
-// #include "ui_drawing.h"
-// #include "menu_logic.h"
-
-// // === Bitmap Data for Splash Screen ===
-// #define im_width 128
-// #define im_height 64
-// static const unsigned char im_bits[] U8X8_PROGMEM = { // Added U8X8_PROGMEM to save RAM
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x60,0x00,0x00,0x00,0x00,0x00,0x00,0x78,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0xe0,0x03,0x00,0x00,0x00,0x00,0x00,0x3e,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0xe0,0x0f,0x00,0x00,0x00,0x00,0xc0,0x1f,0x00,0x00,0x00,0x20,
-// 0x00,0x00,0x00,0x00,0xe2,0x1f,0x00,0x00,0x00,0x00,0xf0,0x0f,0x18,0x00,0x00,
-// 0x38,0x00,0x00,0x00,0x80,0xf1,0x1f,0x00,0x00,0x00,0x00,0xf8,0x07,0x1c,0x00,
-// 0x00,0x3f,0x00,0x00,0x00,0xe0,0xf0,0x2f,0x00,0x00,0x00,0x00,0xfc,0x07,0x1e,
-// 0x00,0x80,0x3f,0x00,0x00,0x00,0xf0,0xf0,0x27,0x00,0x00,0x00,0x00,0xfe,0x03,
-// 0x1f,0x00,0x80,0x3f,0x00,0x00,0x00,0x7c,0xf0,0x47,0x00,0x00,0x00,0x00,0xff,
-// 0x81,0x3f,0x00,0x80,0x3f,0x00,0x00,0x00,0x7f,0xf0,0xc7,0x00,0x00,0x00,0x80,
-// 0xff,0xc0,0x3f,0x00,0x80,0x1f,0x00,0x00,0x80,0x3f,0xf8,0xc7,0x00,0x00,0x00,
-// 0xc0,0x7f,0xe0,0x3f,0x00,0x80,0x1f,0x00,0x00,0xe0,0x3f,0xf8,0x83,0x01,0x00,
-// 0x00,0xe0,0x3f,0xf0,0x7f,0x00,0xc0,0x1f,0x00,0x00,0xf8,0x1f,0xf8,0x83,0x03,
-// 0x00,0x00,0xe0,0x1f,0xf8,0x7f,0x00,0xc0,0x1f,0x00,0x00,0xfe,0x1f,0xf8,0x03,
-// 0x03,0x00,0x00,0xf0,0x0f,0xfc,0x7f,0x00,0xc0,0x1f,0x00,0x00,0xff,0x0f,0xf8,
-// 0x03,0x07,0x00,0x00,0xf8,0x07,0xfe,0xfd,0x00,0xc0,0x1f,0x00,0xc0,0xff,0x07,
-// 0xfc,0x03,0x0f,0x00,0x00,0xfc,0x03,0xff,0xfc,0x00,0xc0,0x1f,0x00,0xf0,0xff,
-// 0x01,0xfc,0x01,0x0e,0x00,0x00,0xfe,0x83,0x7f,0xfc,0x00,0xe0,0x0f,0x00,0xfc,
-// 0x7f,0x00,0xfc,0x01,0x1e,0x00,0x00,0xff,0xc1,0x3f,0xf8,0x01,0xe0,0x0f,0x00,
-// 0xfe,0x1f,0x00,0xfc,0x01,0x3c,0x00,0x80,0xff,0xf0,0x1f,0xf8,0x01,0xe0,0x0f,
-// 0x80,0xff,0x07,0x00,0xfc,0x01,0x3c,0x00,0xc0,0x7f,0xf8,0x0f,0xf8,0x01,0xe0,
-// 0x0f,0xe0,0xff,0x01,0x00,0xfe,0x00,0x7c,0x00,0xe0,0x3f,0xfc,0x07,0xf8,0x03,
-// 0xf0,0x0f,0xf0,0x7f,0x00,0x00,0xfe,0x00,0xf8,0x00,0xf0,0x1f,0xfe,0x03,0xf0,
-// 0x03,0xf0,0x0f,0xfc,0x1f,0x00,0x00,0xfe,0x00,0xf8,0x00,0xf8,0x0f,0xff,0x01,
-// 0xf0,0x03,0xf0,0x0f,0xff,0x07,0x00,0x00,0xfe,0x00,0xf8,0x01,0xfc,0x87,0xff,
-// 0x00,0xf0,0x07,0xf0,0xcf,0xff,0x01,0x00,0x00,0xfe,0x00,0xf0,0x03,0xfe,0xc3,
-// 0x7f,0x00,0xf0,0x07,0xf0,0xe7,0x7f,0x00,0x00,0x00,0x7f,0x00,0xf0,0x03,0xff,
-// 0xe1,0x1f,0x00,0xe0,0x07,0xf8,0xff,0xff,0x01,0x00,0x00,0x7f,0x00,0xe0,0x87,
-// 0xff,0xf1,0x0f,0x00,0xe0,0x07,0xf8,0xe7,0xff,0x07,0x00,0x00,0x7f,0x00,0xe0,
-// 0xcf,0xff,0xf8,0x07,0x00,0xe0,0x0f,0xf8,0x07,0xff,0x0f,0x00,0x00,0x7f,0x00,
-// 0xe0,0xef,0x7f,0xfc,0x03,0x00,0xe0,0x0f,0xf8,0x07,0xfc,0x3f,0x00,0x00,0x3f,
-// 0x00,0xc0,0xff,0x3f,0xfe,0x01,0x00,0xc0,0x0f,0xf8,0x07,0xe0,0xff,0x00,0x80,
-// 0x3f,0x00,0xc0,0xff,0x1f,0xff,0x00,0x00,0xfc,0x1f,0xfc,0x07,0x00,0xff,0x01,
-// 0x80,0x3f,0x00,0x80,0xff,0xcf,0x7f,0xfe,0xff,0xc7,0x1f,0xfc,0x07,0x00,0xfc,
-// 0x07,0x80,0x3f,0x00,0x80,0xff,0xe7,0xff,0xff,0xff,0xc0,0x1f,0xfc,0x03,0x00,
-// 0xe0,0x1f,0x00,0x3f,0x00,0x80,0xff,0xe3,0xff,0xff,0x0f,0x80,0x3f,0xfe,0x03,
-// 0x00,0x00,0x7f,0x00,0x1f,0x00,0x00,0xff,0xc1,0xff,0xff,0x01,0x80,0x3f,0xfe,
-// 0x03,0x00,0x00,0xf8,0x00,0x1f,0x00,0x00,0xff,0x80,0xff,0x3f,0x00,0x80,0x3f,
-// 0xfc,0x03,0x00,0x00,0xe0,0x03,0x1e,0x00,0x00,0xff,0x00,0xff,0x07,0x00,0x80,
-// 0x3f,0xf8,0x03,0x00,0x00,0x00,0x0f,0x1e,0x00,0x00,0x7e,0x00,0xfe,0x00,0x00,
-// 0x00,0x3f,0xe0,0x03,0x00,0x00,0x00,0x38,0x0e,0x00,0x00,0x3e,0x00,0x0c,0x00,
-// 0x00,0x00,0x1f,0xc0,0x03,0x00,0x00,0x00,0xe0,0x0c,0x00,0x00,0x1c,0x00,0x00,
-// 0x00,0x00,0x00,0x1f,0x00,0x01,0x00,0x00,0x00,0x00,0x0f,0x00,0x00,0x0c,0x00,
-// 0x00,0x00,0x00,0x00,0x0f,0x00,0x02,0x00,0x00,0x00,0x00,0x0c,0x00,0x00,0x04,
-// 0x00,0x00,0x00,0x00,0x00,0x0e,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-// 0x00,0x00,0x00,0x00
-// };
-
-// // === Global Object Definitions ===
-// U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-// QuadratureEncoder encoder;
-// VerticalListAnimation mainMenuAnim;
-// CarouselAnimation subMenuAnim;
-
-// // === Global Variable Definitions (from extern in config.h) ===
-// MenuState currentMenu = MAIN_MENU;
-// int menuIndex = 0;
-// int maxMenuItems = 0; 
-// int mainMenuSavedIndex = 0;
-// int toolsCategoryIndex = 0;
-// int gridCols = 2; 
-// int targetGridScrollOffset_Y = 0;
-// float currentGridScrollOffset_Y_anim = 0.0f;
-// uint8_t pcf0Output = 0xFF & ~((1 << 6) | (1 << 7)); 
-
-// // Battery externs
-// float batReadings[BAT_SAMPLES] = {0};
-// int batIndex = 0;
-// bool batInitialized = false;
-// float lastValidBattery = 4.0f;
-// unsigned long lastBatteryCheck = 0;
-// float currentBatteryVoltage = 4.0f;
-// bool batteryNeedsUpdate = true;
-
-// // Grid animation externs
-// float gridItemScale[MAX_GRID_ITEMS];
-// float gridItemTargetScale[MAX_GRID_ITEMS];
-// unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];
-// bool gridAnimatingIn = false;
-
-// // Marquee externs
-// char marqueeText[40];
-// int marqueeTextLenPx = 0;
-// float marqueeOffset = 0;
-// unsigned long lastMarqueeTime = 0;
-// bool marqueeActive = false;
-// bool marqueePaused = false;
-// unsigned long marqueePauseStartTime = 0;
-// bool marqueeScrollLeft = true;
-
-// // Shared buffer for truncateText
-// char SBUF[32];
-
-// // Button press flags
-// bool btnPress0[8] = {false};
-// bool btnPress1[8] = {false};
-
-
-// void setup() {
-//   Serial.begin(115200);
-//   Wire.begin(); 
-
-//   analogReadResolution(12); 
-//   #if defined(ESP32) || defined(ESP_PLATFORM)
-//   // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB); 
-//   #endif
-//   setupBatteryMonitor(); 
-
-//   setupInputs(); 
-
-//   selectMux(0); 
-//   writePCF(PCF0_ADDR, pcf0Output); 
-
-//   selectMux(4); 
-//   u8g2.begin();
-//   u8g2.enableUTF8Print();
-
-//   initializeCurrentMenu(); 
-
-//   // --- Splash Screen with Bitmap ---
-//   u8g2.clearBuffer();
-//   // Draw the XBM image at position (0,0) on the screen
-//   // u8g2.drawXBM(x_pos, y_pos, bitmap_width, bitmap_height, bitmap_data_array)
-//   u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
-//   u8g2.sendBuffer();
-//   delay(2500); // Display splash for 2.5 seconds (adjust as needed)
-// }
-
-// void loop() {
-//   updateInputs(); 
-
-//   if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
-//     if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false; 
-//     if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false; 
-//     handleMenuSelection();
-//   }
-
-//   if (btnPress1[NAV_BACK]) {
-//     btnPress1[NAV_BACK] = false; 
-//     handleMenuBackNavigation();
-//   }
-
-//   for (int i = 0; i < 8; ++i) {
-//       if (i != ENC_BTN) btnPress0[i] = false; 
-//       if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false; 
-//   }
-  
-//   drawUI(); 
-
-//   delay(16); 
-// }
-
-
-
-// KivaMain.ino
-
 #include <Wire.h> 
 #include "config.h"
 #include "pcf_utils.h"
@@ -314,16 +5,12 @@
 #include "battery_monitor.h"
 #include "ui_drawing.h"
 #include "menu_logic.h"
+#include "wifi_manager.h" // <--- ADDED
 
-// === Bitmap Data for Splash Screen ===
-// NOTE: The actual bitmap data array (im_bits) is omitted here for brevity
-// but should be placed here in your actual code.
+// ... (Bitmap Data) ...
 #define im_width 128
 #define im_height 64
-// Example: static const unsigned char im_bits[] U8X8_PROGMEM = { /* YOUR DATA HERE */ };
-// Make sure to include your im_bits array definition here.
-// For this example to compile without your specific data, I'll use a placeholder.
-// In your actual code, REPLACE THE NEXT LINE with your full im_bits array.
+
 static const unsigned char im_bits[] U8X8_PROGMEM = { // Added U8X8_PROGMEM to save RAM
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -397,12 +84,14 @@ static const unsigned char im_bits[] U8X8_PROGMEM = { // Added U8X8_PROGMEM to s
 };
 
 // === Global Object Definitions ===
-U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-QuadratureEncoder encoder;
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE); 
+U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2_small(U8G2_R0, U8X8_PIN_NONE); 
+QuadratureEncoder encoder; // Definition
 VerticalListAnimation mainMenuAnim;
 CarouselAnimation subMenuAnim;
+VerticalListAnimation wifiListAnim; 
 
-// === Global Variable Definitions (from extern in config.h) ===
+// === Global Variable Definitions ===
 MenuState currentMenu = MAIN_MENU;
 int menuIndex = 0;
 int maxMenuItems = 0; 
@@ -413,7 +102,6 @@ int targetGridScrollOffset_Y = 0;
 float currentGridScrollOffset_Y_anim = 0.0f;
 uint8_t pcf0Output = 0xFF & ~((1 << 6) | (1 << 7)); 
 
-// Battery externs
 float batReadings[BAT_SAMPLES] = {0};
 int batIndex = 0;
 bool batInitialized = false;
@@ -421,14 +109,12 @@ float lastValidBattery = 4.0f;
 unsigned long lastBatteryCheck = 0;
 float currentBatteryVoltage = 4.0f;
 bool batteryNeedsUpdate = true;
+bool isCharging = false; // <--- NEW: Global for charging state
 
-// Grid animation externs
 float gridItemScale[MAX_GRID_ITEMS];
 float gridItemTargetScale[MAX_GRID_ITEMS];
 unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];
 bool gridAnimatingIn = false;
-
-// Marquee externs
 char marqueeText[40];
 int marqueeTextLenPx = 0;
 float marqueeOffset = 0;
@@ -437,13 +123,18 @@ bool marqueeActive = false;
 bool marqueePaused = false;
 unsigned long marqueePauseStartTime = 0;
 bool marqueeScrollLeft = true;
-
-// Shared buffer for truncateText
 char SBUF[32];
-
-// Button press flags
 bool btnPress0[8] = {false};
 bool btnPress1[8] = {false};
+
+// Wi-Fi Related Global Variable DEFINITIONS
+WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
+int foundWifiNetworksCount = 0;
+int wifiMenuIndex = 0; 
+bool wifiIsScanning = false;                // <--- DEFINITION
+unsigned long lastWifiScanCheckTime = 0;    // <--- DEFINITION
+float currentWifiListScrollOffset_Y_anim = 0.0f; // <--- NEW DEFINITION
+int targetWifiListScrollOffset_Y = 0;         // <--- NEW DEFINITION
 
 
 void setup() {
@@ -455,61 +146,84 @@ void setup() {
   // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB); 
   #endif
   setupBatteryMonitor(); 
-
   setupInputs(); 
+  setupWifi(); 
 
   selectMux(0); 
   writePCF(PCF0_ADDR, pcf0Output); 
 
-  selectMux(4); 
+  selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
   u8g2.begin();
   u8g2.enableUTF8Print();
 
-  // --- Animated Splash Screen ---
-  // Ensure im_bits is defined above with your actual data for this to work correctly.
-  // If im_bits is just the placeholder {0}, it will likely draw nothing or a single pixel.
+  selectMux(MUX_CHANNEL_SECOND_DISPLAY);
+  u8g2_small.begin();                                 
+  u8g2_small.enableUTF8Print();
+  u8g2_small.clearBuffer();
+  u8g2_small.setFont(u8g2_font_5x7_tf);
+  u8g2_small.drawStr(0,7,"Kiva Aux"); 
+  u8g2_small.sendBuffer();
+  delay(500); 
+
+  selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
+  // ... (Splash screen animation code as before) ...
+    int progressBarY = im_height - 12; 
+    int progressBarHeight = 7;        
+    int progressBarWidth = im_width - 40; 
+    int progressBarX = (im_width - progressBarWidth) / 2;
+    int numSteps = 25; 
+    int stepDelay = 80; 
+    for (int i = 0; i <= numSteps; i++) {
+        u8g2.firstPage(); 
+        do {
+        if (sizeof(im_bits) > 1) { 
+            u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
+        } else { 
+            u8g2.setFont(u8g2_font_ncenB10_tr);
+            u8g2.drawStr((128-u8g2.getStrWidth("KIVA"))/2, 35, "KIVA");
+        }
+        u8g2.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1); 
+        int currentFillWidth = (progressBarWidth - 2) * i / numSteps; 
+        if (currentFillWidth > 0) {
+            u8g2.drawRBox(progressBarX + 1, progressBarY + 1, currentFillWidth, progressBarHeight - 2, 0); 
+        }
+        } while (u8g2.nextPage());
+        delay(stepDelay);
+    }
   
-  // 1. Define Progress Bar properties
-  int progressBarY = im_height - 12; // Position 12px from bottom
-  int progressBarHeight = 7;        // A bit taller
-  int progressBarWidth = im_width - 40; // Leave 20px margin on each side
-  int progressBarX = (im_width - progressBarWidth) / 2;
-  int numSteps = 25; // Number of steps for the animation
-  int stepDelay = 80; // Milliseconds per step (total time = numSteps * stepDelay, e.g., 25*80 = 2000ms = 2s)
-
-  // 2. Animate the progress bar filling up
-  for (int i = 0; i <= numSteps; i++) {
-    u8g2.firstPage(); 
-    do {
-      // Redraw background bitmap in each frame of the animation loop
-      // Ensure your actual im_bits array is defined for this to show your logo
-      if (sizeof(im_bits) > 1) { // Only draw if bitmap is not just the placeholder
-          u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
-      } else { // Fallback if bitmap is missing
-          u8g2.setFont(u8g2_font_ncenB10_tr);
-          u8g2.drawStr((128-u8g2.getStrWidth("KIVA"))/2, 35, "KIVA");
-      }
-      
-      // Draw the progress bar frame
-      u8g2.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1); // Rounded frame
-      
-      // Calculate current fill width
-      int currentFillWidth = (progressBarWidth - 2) * i / numSteps; // -2 for inner padding
-      
-      // Draw the filled part
-      if (currentFillWidth > 0) {
-        u8g2.drawRBox(progressBarX + 1, progressBarY + 1, currentFillWidth, progressBarHeight - 2, 0); // Rounded fill
-      }
-    } while (u8g2.nextPage());
-    delay(stepDelay);
-  }
-  // End of Animated Splash Screen
-
-  initializeCurrentMenu(); // Initialize menu system AFTER splash
+  // initiateAsyncWifiScan(); // Don't scan on initial setup, wait for menu
+  initializeCurrentMenu(); 
 }
 
 void loop() {
   updateInputs(); 
+
+  if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning) {
+    if (millis() - lastWifiScanCheckTime > WIFI_SCAN_CHECK_INTERVAL) { // WIFI_SCAN_CHECK_INTERVAL from config.h
+      int scanResult = checkAndRetrieveWifiScanResults(); // Updates foundWifiNetworksCount
+      
+      if (scanResult != WIFI_SCAN_RUNNING) { // Scan finished or failed
+        wifiIsScanning = false; 
+        
+        // Call initializeCurrentMenu() AFTER wifiIsScanning is false and foundWifiNetworksCount is updated.
+        // This will set the correct maxMenuItems for the Wi-Fi menu.
+        initializeCurrentMenu(); 
+        
+        // Reset menu index and scroll position for the (potentially new) list
+        wifiMenuIndex = 0; 
+        targetWifiListScrollOffset_Y = 0;
+        currentWifiListScrollOffset_Y_anim = 0; // Optional: snap scroll, or let it animate from previous
+
+        // Ensure animation targets are correctly set with the new wifiMenuIndex and maxMenuItems
+        // (initializeCurrentMenu already calls wifiListAnim.setTargets if currentMenu is WIFI_SETUP_MENU,
+        // but explicitly calling it after wifiMenuIndex is reset to 0 ensures the selection starts at the top)
+        if (currentMenu == WIFI_SETUP_MENU) { // Double check as initializeCurrentMenu might change currentMenu on error
+             wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
+        }
+      }
+      lastWifiScanCheckTime = millis();
+    }
+  }
 
   if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
     if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false; 
@@ -522,6 +236,7 @@ void loop() {
     handleMenuBackNavigation();
   }
 
+  // Clear one-shot button presses (as before)
   for (int i = 0; i < 8; ++i) {
       if (i != ENC_BTN) btnPress0[i] = false; 
       if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false; 

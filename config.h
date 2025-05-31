@@ -1,13 +1,20 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <Arduino.h> // For standard types like uint8_t, etc.
-#include <U8g2lib.h> // For U8G2 types if needed in structs here
+#include <Arduino.h> 
+#include <U8g2lib.h> 
 
 // === I2C Multiplexer & Peripherals ===
 #define MUX_ADDR 0x70
-#define PCF0_ADDR 0x24 // Inputs (Encoder, Buttons) & Outputs (LEDs?)
-#define PCF1_ADDR 0x20 // Inputs (Navigation Buttons)
+#define PCF0_ADDR 0x24 
+#define PCF1_ADDR 0x20 
+
+// --- Display MUX Channels ---
+#define MUX_CHANNEL_MAIN_DISPLAY 4
+#define MUX_CHANNEL_SECOND_DISPLAY 2 // New
+
+// --- Second Display I2C Address ---
+#define SECOND_DISPLAY_I2C_ADDR 0x3C // Common for SSD1306, 
 
 // === Display ===
 // U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE); // Definition will be in KivaMain.ino
@@ -18,7 +25,7 @@
 #define ADC_RES 4095
 #define VOLTAGE_RATIO (70.0f / 50.0f)
 #define BAT_SAMPLES 20
-#define BATTERY_CHECK_INTERVAL 120000UL // ms
+#define BATTERY_CHECK_INTERVAL 1000UL // ms
 
 // === Buttons (PCF0) ===
 #define ENC_BTN 0
@@ -49,7 +56,8 @@ enum MenuState {
   GAMES_MENU,
   TOOLS_MENU,
   SETTINGS_MENU,
-  TOOL_CATEGORY_GRID
+  TOOL_CATEGORY_GRID,
+  WIFI_SETUP_MENU
   // Add more states for actual game/tool screens later
 };
 
@@ -70,9 +78,29 @@ extern uint8_t pcf0Output; // For controlling outputs on PCF0
 #define GRID_ITEM_PADDING_Y 4
 #define GRID_ITEM_PADDING_X 4
 #define STATUS_BAR_H 11
+#define WIFI_LIST_ITEM_H 18 // NEW: Height for Wi-Fi list items, e.g., 18 or 20 for more space
+
+
+// --- Wi-Fi Related Globals & Struct ---
+#define MAX_WIFI_NETWORKS 15 
+#define WIFI_SCAN_CHECK_INTERVAL 250UL // Moved from KivaMain.ino
+
+struct WifiNetwork {        
+  char ssid[33]; 
+  int8_t rssi;   
+  bool isSecure; 
+};
+extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS]; 
+extern int foundWifiNetworksCount;                     
+extern int wifiMenuIndex;                              
+extern bool wifiIsScanning;
+extern unsigned long lastWifiScanCheckTime;   
+extern float currentWifiListScrollOffset_Y_anim; // <--- NEW: For smooth scrolling the list
+extern int targetWifiListScrollOffset_Y;         // <--- NEW: Target for the scroll
+
 
 // --- Animation Constants & Structs ---
-#define MAX_ANIM_ITEMS 10
+#define MAX_ANIM_ITEMS (MAX_WIFI_NETWORKS + 2)
 #define MAX_GRID_ITEMS 20 
 #define GRID_ANIM_STAGGER_DELAY 40.0f
 #define GRID_ANIM_SPEED 20.0f
@@ -82,9 +110,6 @@ extern float gridItemTargetScale[MAX_GRID_ITEMS];
 extern unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];
 extern bool gridAnimatingIn;
 
-// Forward declare U8G2 type for struct members if they use it directly
-// (Not strictly needed here if they only take U8G2& as parameter)
-// class U8G2; // Example: U8G2_SH1106_128X64_NONAME_F_HW_I2C;
 
 
 struct QuadratureEncoder {
@@ -136,6 +161,10 @@ extern bool marqueeActive;
 extern bool marqueePaused;
 extern unsigned long marqueePauseStartTime;
 extern bool marqueeScrollLeft;
+
+extern VerticalListAnimation mainMenuAnim;
+extern CarouselAnimation subMenuAnim;
+extern VerticalListAnimation wifiListAnim; // <--- ADDED
 
 // --- Shared Buffer for truncateText ---
 extern char SBUF[32];

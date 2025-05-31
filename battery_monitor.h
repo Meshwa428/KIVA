@@ -12,9 +12,10 @@ extern float lastValidBattery;
 extern unsigned long lastBatteryCheck;
 extern float currentBatteryVoltage;
 extern bool batteryNeedsUpdate;
+extern bool isCharging; // <--- NEW: Extern for charging state (MOVED HERE)
 
 // Function declarations
-void setupBatteryMonitor(); // Optional, if specific init needed beyond ADC setup
+void setupBatteryMonitor(); 
 float readBatV();
 float getSmoothV();
 uint8_t batPerc(float voltage);
