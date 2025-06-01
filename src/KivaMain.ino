@@ -1,5 +1,6 @@
 #include <Wire.h> 
 #include "config.h"
+#include "keyboard_layout.h" // Include for KeyboardLayer enum and layouts
 #include "pcf_utils.h"
 #include "input_handling.h"
 #include "battery_monitor.h"
@@ -94,13 +95,13 @@ VerticalListAnimation wifiListAnim;
 // === Global Variable Definitions ===
 MenuState currentMenu = MAIN_MENU;
 int menuIndex = 0;
-int maxMenuItems = 0; 
+int maxMenuItems = 0;
 int mainMenuSavedIndex = 0;
 int toolsCategoryIndex = 0;
-int gridCols = 2; 
+int gridCols = 2;
 int targetGridScrollOffset_Y = 0;
 float currentGridScrollOffset_Y_anim = 0.0f;
-uint8_t pcf0Output = 0xFF & ~((1 << 6) | (1 << 7)); 
+uint8_t pcf0Output = 0xFF & ~((1 << 6) | (1 << 7));
 
 float batReadings[BAT_SAMPLES] = {0};
 int batIndex = 0;
@@ -109,11 +110,10 @@ float lastValidBattery = 4.0f;
 unsigned long lastBatteryCheck = 0;
 float currentBatteryVoltage = 4.0f;
 bool batteryNeedsUpdate = true;
-bool isCharging = false; // <--- NEW: Global for charging state
+bool isCharging = false;
 
-// Utility modules
-bool vibrationOn = false; // <--- NEW
-bool laserOn = false;     // <--- NEW
+bool vibrationOn = false;
+bool laserOn = false;
 
 float gridItemScale[MAX_GRID_ITEMS];
 float gridItemTargetScale[MAX_GRID_ITEMS];
@@ -134,119 +134,159 @@ bool btnPress1[8] = {false};
 // Wi-Fi Related Global Variable DEFINITIONS
 WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
 int foundWifiNetworksCount = 0;
-int wifiMenuIndex = 0; 
-bool wifiIsScanning = false;                // <--- DEFINITION
-unsigned long lastWifiScanCheckTime = 0;    // <--- DEFINITION
-float currentWifiListScrollOffset_Y_anim = 0.0f; // <--- NEW DEFINITION
-int targetWifiListScrollOffset_Y = 0;         // <--- NEW DEFINITION
+int wifiMenuIndex = 0;
+bool wifiIsScanning = false;
+unsigned long lastWifiScanCheckTime = 0;
+float currentWifiListScrollOffset_Y_anim = 0.0f;
+int targetWifiListScrollOffset_Y = 0;
 
+char currentSsidToConnect[33];      // <--- NEW DEFINITION
+char wifiPasswordInput[PASSWORD_MAX_LEN + 1]; // <--- NEW DEFINITION
+int wifiPasswordInputCursor = 0;    // <--- NEW DEFINITION
+bool selectedNetworkIsSecure = false; // <--- NEW DEFINITION
+
+// Keyboard related globals
+KeyboardLayer currentKeyboardLayer = KB_LAYER_LOWERCASE; // <--- NEW DEFINITION
+int keyboardFocusRow = 0;               // <--- NEW DEFINITION
+int keyboardFocusCol = 0;               // <--- NEW DEFINITION
+bool capsLockActive = false;            // <--- NEW DEFINITION
+
+// Timer for connection attempt / info display
+unsigned long wifiStatusMessageTimeout = 0; // <--- NEW DEFINITION
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin(); 
+  Wire.begin();
 
-  analogReadResolution(12); 
+  analogReadResolution(12);
   #if defined(ESP32) || defined(ESP_PLATFORM)
-  // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB); 
+  // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB);
   #endif
-  setupBatteryMonitor(); 
-  setupInputs(); 
-  setupWifi(); 
+  setupBatteryMonitor();
+  setupInputs();
+  setupWifi(); // From wifi_manager
 
-  selectMux(0); 
-  writePCF(PCF0_ADDR, pcf0Output); 
+  selectMux(0);
+  writePCF(PCF0_ADDR, pcf0Output);
 
-  selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
+  selectMux(MUX_CHANNEL_MAIN_DISPLAY);
   u8g2.begin();
   u8g2.enableUTF8Print();
 
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
-  u8g2_small.begin();                                 
+  u8g2_small.begin();
   u8g2_small.enableUTF8Print();
   u8g2_small.clearBuffer();
   u8g2_small.setFont(u8g2_font_5x7_tf);
-  u8g2_small.drawStr(0,7,"Kiva Aux"); 
+  u8g2_small.drawStr(0,7,"Kiva Aux");
   u8g2_small.sendBuffer();
-  delay(500); 
+  delay(500);
 
-  selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
-  // ... (Splash screen animation code as before) ...
-    int progressBarY = im_height - 12; 
-    int progressBarHeight = 7;        
-    int progressBarWidth = im_width - 40; 
+  selectMux(MUX_CHANNEL_MAIN_DISPLAY);
+  // ... (Splash screen animation code - existing) ...
+    int progressBarY = im_height - 12;
+    int progressBarHeight = 7;
+    int progressBarWidth = im_width - 40;
     int progressBarX = (im_width - progressBarWidth) / 2;
-    int numSteps = 25; 
-    int stepDelay = 80; 
+    int numSteps = 25;
+    int stepDelay = 80;
     for (int i = 0; i <= numSteps; i++) {
-        u8g2.firstPage(); 
+        u8g2.firstPage();
         do {
-        if (sizeof(im_bits) > 1) { 
+        if (sizeof(im_bits) > 1) {
             u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
-        } else { 
+        } else {
             u8g2.setFont(u8g2_font_ncenB10_tr);
             u8g2.drawStr((128-u8g2.getStrWidth("KIVA"))/2, 35, "KIVA");
         }
-        u8g2.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1); 
-        int currentFillWidth = (progressBarWidth - 2) * i / numSteps; 
+        u8g2.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1);
+        int currentFillWidth = (progressBarWidth - 2) * i / numSteps;
         if (currentFillWidth > 0) {
-            u8g2.drawRBox(progressBarX + 1, progressBarY + 1, currentFillWidth, progressBarHeight - 2, 0); 
+            u8g2.drawRBox(progressBarX + 1, progressBarY + 1, currentFillWidth, progressBarHeight - 2, 0);
         }
         } while (u8g2.nextPage());
         delay(stepDelay);
     }
-  
-  // initiateAsyncWifiScan(); // Don't scan on initial setup, wait for menu
-  initializeCurrentMenu(); 
+
+  initializeCurrentMenu();
+  wifiPasswordInput[0] = '\0'; // Ensure password buffer is empty initially
 }
 
 void loop() {
-  updateInputs(); 
+  updateInputs();
 
   if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning) {
-    if (millis() - lastWifiScanCheckTime > WIFI_SCAN_CHECK_INTERVAL) { // WIFI_SCAN_CHECK_INTERVAL from config.h
-      int scanResult = checkAndRetrieveWifiScanResults(); // Updates foundWifiNetworksCount
-      
-      if (scanResult != WIFI_SCAN_RUNNING) { // Scan finished or failed
-        wifiIsScanning = false; 
-        
-        // Call initializeCurrentMenu() AFTER wifiIsScanning is false and foundWifiNetworksCount is updated.
-        // This will set the correct maxMenuItems for the Wi-Fi menu.
-        initializeCurrentMenu(); 
-        
-        // Reset menu index and scroll position for the (potentially new) list
-        wifiMenuIndex = 0; 
-        targetWifiListScrollOffset_Y = 0;
-        currentWifiListScrollOffset_Y_anim = 0; // Optional: snap scroll, or let it animate from previous
+    if (millis() - lastWifiScanCheckTime > WIFI_SCAN_CHECK_INTERVAL) {
+      int scanCompleteResult = WiFi.scanComplete(); // Directly check the library's status
 
-        // Ensure animation targets are correctly set with the new wifiMenuIndex and maxMenuItems
-        // (initializeCurrentMenu already calls wifiListAnim.setTargets if currentMenu is WIFI_SETUP_MENU,
-        // but explicitly calling it after wifiMenuIndex is reset to 0 ensures the selection starts at the top)
-        if (currentMenu == WIFI_SETUP_MENU) { // Double check as initializeCurrentMenu might change currentMenu on error
+      if (scanCompleteResult >= 0) { // Scan finished (found 'scanCompleteResult' networks) or 0 networks
+        wifiIsScanning = false; // Mark scanning as done *before* retrieving
+        checkAndRetrieveWifiScanResults(); // This will now populate foundWifiNetworksCount
+
+        // Re-initialize the menu now that scanning is false and results are populated
+        initializeCurrentMenu();
+
+        // Reset menu index and scroll for the new list
+        wifiMenuIndex = 0;
+        targetWifiListScrollOffset_Y = 0;
+        currentWifiListScrollOffset_Y_anim = 0;
+        if (currentMenu == WIFI_SETUP_MENU) { // Ensure animation targets are set for the new list
              wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
         }
+
+      } else if (scanCompleteResult == WIFI_SCAN_FAILED) { // -2
+        Serial.println("Loop: Scan failed as per WiFi.scanComplete()");
+        wifiIsScanning = false;
+        foundWifiNetworksCount = 0; // No networks
+        checkAndRetrieveWifiScanResults(); // Call to update internal status string if any
+        initializeCurrentMenu(); // Update UI to show "Scan Failed" or empty list
+         wifiMenuIndex = 0; targetWifiListScrollOffset_Y = 0; currentWifiListScrollOffset_Y_anim = 0;
+         if(currentMenu == WIFI_SETUP_MENU) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
+
+
+      } else { // WIFI_SCAN_RUNNING (-1), scan is still ongoing
+        // Do nothing, wait for next check interval
       }
       lastWifiScanCheckTime = millis();
     }
+  } else if (currentMenu == WIFI_CONNECTING) {
+      // ... (existing connection logic) ...
+       WifiConnectionStatus status = checkWifiConnectionProgress();
+      if (status != WIFI_CONNECTING_IN_PROGRESS) {
+          currentMenu = WIFI_CONNECTION_INFO;
+          wifiStatusMessageTimeout = millis() + 3000;
+          initializeCurrentMenu();
+      }
+  } else if (currentMenu == WIFI_CONNECTION_INFO) {
+      // ... (existing connection info logic) ...
+      if (millis() > wifiStatusMessageTimeout) {
+          WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
+          if (lastStatus == WIFI_CONNECTED_SUCCESS) currentMenu = WIFI_SETUP_MENU;
+          else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) currentMenu = WIFI_PASSWORD_INPUT;
+          else currentMenu = WIFI_SETUP_MENU;
+          initializeCurrentMenu();
+      }
   }
 
+
   if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
-    if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false; 
-    if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false; 
-    handleMenuSelection();
+    if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false;
+    if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
+    if (currentMenu != WIFI_PASSWORD_INPUT) {
+        handleMenuSelection();
+    }
   }
 
   if (btnPress1[NAV_BACK]) {
-    btnPress1[NAV_BACK] = false; 
+    btnPress1[NAV_BACK] = false;
     handleMenuBackNavigation();
   }
 
-  // Clear one-shot button presses (as before)
   for (int i = 0; i < 8; ++i) {
-      if (i != ENC_BTN) btnPress0[i] = false; 
-      if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false; 
+      if (i != ENC_BTN) btnPress0[i] = false;
+      if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false;
   }
-  
-  drawUI(); 
 
-  delay(16); 
+  drawUI();
+  delay(16);
 }

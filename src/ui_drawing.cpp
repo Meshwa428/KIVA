@@ -1,8 +1,10 @@
 #include "ui_drawing.h"
-#include "battery_monitor.h" // For getSmoothV, batPerc
-#include "menu_logic.h"      // For menu item text arrays
-#include "pcf_utils.h"       // For selectMux needed by drawUI
-#include <Arduino.h> // For millis() for uptime clock example
+#include "battery_monitor.h"
+#include "menu_logic.h"
+#include "pcf_utils.h"
+#include "keyboard_layout.h" // For keyboard structures and definitions
+#include "wifi_manager.h"    // For getWifiStatusMessage()
+#include <Arduino.h>
 
 // Externs for Wi-Fi data (defined in KivaMain.ino)
 extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
@@ -283,34 +285,238 @@ void drawWifiSetupScreen() {
     u8g2.setMaxClipWindow(); 
 }
 
+void drawPasswordInputScreen() {
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setDrawColor(1);
+
+    // Display SSID
+    char ssidTitle[40];
+    snprintf(ssidTitle, sizeof(ssidTitle), "Enter Pass for:");
+    u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle); // Adjusted Y for status bar if it's drawn
+
+    char truncatedSsid[22];
+    strncpy(truncatedSsid, currentSsidToConnect, sizeof(truncatedSsid)-1);
+    truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
+    if (u8g2.getStrWidth(truncatedSsid) > u8g2.getDisplayWidth() - 4) {
+        truncateText(currentSsidToConnect, u8g2.getDisplayWidth() - 4, u8g2); // SBUF is used
+        strncpy(truncatedSsid, SBUF, sizeof(truncatedSsid)-1);
+        truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
+    }
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, 19 + STATUS_BAR_H, truncatedSsid);
+
+
+    // Password Input Field
+    int fieldX = 5;
+    // Make sure PASSWORD_INPUT_FIELD_Y from config.h considers the status bar height if status bar is drawn on this screen.
+    // If status bar is NOT drawn on WIFI_PASSWORD_INPUT screen, then PASSWORD_INPUT_FIELD_Y can be absolute.
+    // Assuming status bar is NOT drawn here for more space:
+    int fieldY = PASSWORD_INPUT_FIELD_Y; // Y pos from top of display
+    int fieldW = u8g2.getDisplayWidth() - 10;
+    int fieldH = PASSWORD_INPUT_FIELD_H;
+    u8g2.drawFrame(fieldX, fieldY, fieldW, fieldH);
+
+    // Mask password with asterisks
+    char maskedPassword[PASSWORD_MAX_LEN + 1];
+    int len = strlen(wifiPasswordInput);
+    for (int i = 0; i < len; ++i) {
+        maskedPassword[i] = '*';
+    }
+    maskedPassword[len] = '\0';
+
+    // Display masked password
+    int textX = fieldX + 3;
+    // Vertically center text in field. For 6x10 font (height usually 7-8px for ascent), in 12px fieldH:
+    // Baseline Y = fieldY + (fieldH - font_height)/2 + font_ascent
+    // u8g2.getAscent() for 6x10 is 7. u8g2.getDescent() is -1. MaxCharHeight is 8.
+    int textY = fieldY + (fieldH - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
+    
+    int maxPassDisplayLengthChars = (fieldW - 6) / u8g2.getStrWidth("*"); // Approx chars that fit
+    if (maxPassDisplayLengthChars < 1) maxPassDisplayLengthChars = 1;
+
+    int passDisplayStartIdx = 0;
+    if (wifiPasswordInputCursor >= maxPassDisplayLengthChars) {
+        passDisplayStartIdx = wifiPasswordInputCursor - maxPassDisplayLengthChars + 1;
+    }
+    
+    char displaySegment[maxPassDisplayLengthChars + 2]; // +1 for char, +1 for null
+    strncpy(displaySegment, maskedPassword + passDisplayStartIdx, maxPassDisplayLengthChars);
+    displaySegment[maxPassDisplayLengthChars] = '\0'; // Ensure null termination
+    u8g2.drawStr(textX, textY, displaySegment);
+
+
+    // Draw Cursor
+    int cursorDisplayPosInSegment = wifiPasswordInputCursor - passDisplayStartIdx;
+    int cursorX = textX;
+    // Calculate width of the displayed part of the password up to the cursor
+    // To do this without getStrWidthN, we iterate or make a temporary string.
+    if (cursorDisplayPosInSegment > 0) {
+        char tempCursorSubstr[maxPassDisplayLengthChars + 1];
+        strncpy(tempCursorSubstr, maskedPassword + passDisplayStartIdx, cursorDisplayPosInSegment);
+        tempCursorSubstr[cursorDisplayPosInSegment] = '\0';
+        cursorX += u8g2.getStrWidth(tempCursorSubstr);
+    }
+
+
+    // Simple blinking cursor
+    if ((millis() / 500) % 2 == 0) {
+        u8g2.drawVLine(cursorX, fieldY + 2, fieldH - 4);
+    }
+
+    // Instruction Text (if status bar is NOT drawn, Y needs to be absolute from bottom)
+    u8g2.setFont(u8g2_font_5x7_tf);
+    const char* instr = "Use aux display for keyboard";
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(instr)) / 2, u8g2.getDisplayHeight() - 2, instr);
+}
+
+void drawKeyboardOnSmallDisplay() {
+    u8g2_small.clearBuffer();
+    u8g2_small.setFont(u8g2_font_5x7_tf); // Small font for keys
+
+    const KeyboardKey* currentLayout = getCurrentKeyboardLayout(currentKeyboardLayer);
+    if (!currentLayout) return;
+
+    // Define key geometry on the 128x32 display
+    const int keyHeight = 8; // 32px / 4 rows
+    const int keyWidthBase = 12; // Approx 128px / 10-11 cols, leaves some margin
+    const int interKeySpacingX = 1;
+    const int interKeySpacingY = 0; // Keys are tight vertically
+
+    int currentX, currentY = 0;
+
+    for (int r = 0; r < KB_ROWS; ++r) {
+        currentX = 0;
+        currentY = r * keyHeight;
+        for (int c = 0; c < KB_LOGICAL_COLS; ) { // c is incremented by colSpan
+            const KeyboardKey& key = getKeyFromLayout(currentLayout, r, c);
+            if (key.value == KB_KEY_NONE && key.displayChar == 0) { // Skip truly empty placeholder
+                 c++; continue;
+            }
+            if (key.colSpan == 0) { // Also skip colSpan 0 placeholders used for wide keys
+                c++; continue;
+            }
+
+
+            int actualKeyWidth = key.colSpan * keyWidthBase + (key.colSpan - 1) * interKeySpacingX;
+            if (currentX + actualKeyWidth > u8g2_small.getDisplayWidth()) {
+                // This key would overflow, might indicate layout error or need for smaller base width
+                actualKeyWidth = u8g2_small.getDisplayWidth() - currentX;
+            }
+            if (actualKeyWidth <=0) {c += key.colSpan; continue;}
+
+
+            bool isFocused = (r == keyboardFocusRow && c == keyboardFocusCol);
+
+            if (isFocused) {
+                u8g2_small.setDrawColor(1); // White background
+                u8g2_small.drawBox(currentX, currentY, actualKeyWidth, keyHeight);
+                u8g2_small.setDrawColor(0); // Black text
+            } else {
+                u8g2_small.setDrawColor(1); // White text/frame
+                u8g2_small.drawFrame(currentX, currentY, actualKeyWidth, keyHeight);
+            }
+
+            // Determine display char for special keys
+            char displayCharStr[2] = {0};
+            if (key.displayChar != 0) { // If a specific display char is provided
+                displayCharStr[0] = key.displayChar;
+            } else { // Fallback for special keys without explicit display char
+                switch(key.value) {
+                    case KB_KEY_BACKSPACE: displayCharStr[0] = '<'; break;
+                    case KB_KEY_ENTER:     displayCharStr[0] = 'E'; break; // Compact 'Ent'
+                    case KB_KEY_SHIFT:     displayCharStr[0] = (capsLockActive || (currentKeyboardLayer == KB_LAYER_UPPERCASE && !capsLockActive)) ? 's' : 'S'; break;
+                    case KB_KEY_SPACE:     /* Handled by wider box, no char needed or draw "Spc" */ break;
+                    case KB_KEY_TO_NUM:    displayCharStr[0] = '1'; break;
+                    case KB_KEY_TO_SYM:    displayCharStr[0] = '%'; break;
+                    case KB_KEY_TO_LOWER:
+                    case KB_KEY_TO_UPPER:  displayCharStr[0] = 'a'; break;
+                    default: if (key.value > 0 && key.value < 127) displayCharStr[0] = (char)key.value; break;
+                }
+            }
+
+            if (displayCharStr[0] != 0) {
+                int charWidth = u8g2_small.getStrWidth(displayCharStr);
+                int textX = currentX + (actualKeyWidth - charWidth) / 2;
+                // For 5x7 font (height 6), in an 8px key, baseline is y + 6 or y + (8-6)/2 + 5 = y+1+5 = y+6
+                int textY = currentY + 6;
+                u8g2_small.drawStr(textX, textY, displayCharStr);
+            }
+            currentX += actualKeyWidth + interKeySpacingX;
+            c += key.colSpan; // Advance by the number of logical columns this key took
+        }
+    }
+    u8g2_small.setDrawColor(1); // Reset color
+    u8g2_small.sendBuffer();
+}
+
+
+void drawWifiConnectingStatusScreen() {
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setDrawColor(1);
+    const char* msg1 = "Connecting to:";
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(msg1)) / 2, 20, msg1);
+
+    char truncatedSsid[22];
+    strncpy(truncatedSsid, currentSsidToConnect, sizeof(truncatedSsid)-1);
+    truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
+    if (u8g2.getStrWidth(truncatedSsid) > u8g2.getDisplayWidth() - 20) {
+        truncateText(currentSsidToConnect, u8g2.getDisplayWidth() - 20, u8g2);
+        strncpy(truncatedSsid, SBUF, sizeof(truncatedSsid)-1);
+        truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
+    }
+     u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, 32, truncatedSsid);
+
+
+    // Simple animated ellipsis
+    int dots = (millis() / 300) % 4;
+    char ellipsis[4] = "";
+    for(int i=0; i<dots; ++i) ellipsis[i] = '.';
+    ellipsis[dots] = '\0';
+
+    char connectingMsg[20];
+    snprintf(connectingMsg, sizeof(connectingMsg), "Please wait%s", ellipsis);
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(connectingMsg)) / 2, 50, connectingMsg);
+}
+
+void drawWifiConnectionResultScreen() {
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setDrawColor(1);
+
+    const char* resultMsg = getWifiStatusMessage(); // From wifi_manager
+
+    int msgWidth = u8g2.getStrWidth(resultMsg);
+    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, 32, resultMsg);
+
+    WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
+    if (lastStatus == WIFI_CONNECTED_SUCCESS) {
+        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 3, true); // Info icon (example, replace with checkmark if available)
+    } else {
+        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 11, true); // Jamming/Error icon (example, replace with X if available)
+    }
+}
+
 void drawUI() {
   unsigned long currentTime = millis();
-  
-  if (currentMenu == FLASHLIGHT_MODE) { // <--- NEW: Flashlight Mode
-      // Main Display Full White
+
+  if (currentMenu == FLASHLIGHT_MODE) {
       selectMux(MUX_CHANNEL_MAIN_DISPLAY);
-      u8g2.clearBuffer();
-      u8g2.setDrawColor(1); // White
+      u8g2.clearBuffer(); u8g2.setDrawColor(1);
       u8g2.drawBox(0, 0, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
       u8g2.sendBuffer();
-
-      // Second Display Full White
       selectMux(MUX_CHANNEL_SECOND_DISPLAY);
-      u8g2_small.clearBuffer();
-      u8g2_small.setDrawColor(1); // White
+      u8g2_small.clearBuffer(); u8g2_small.setDrawColor(1);
       u8g2_small.drawBox(0, 0, u8g2_small.getDisplayWidth(), u8g2_small.getDisplayHeight());
       u8g2_small.sendBuffer();
-      return; // Skip normal UI drawing
+      return;
   }
 
-  // --- Draw Passive Display (CH2) ---
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
-  drawPassiveDisplay(); 
+  drawPassiveDisplay(); // This will call drawKeyboardOnSmallDisplay if needed
 
-  // --- Draw Main Display (CH4) ---
-  selectMux(MUX_CHANNEL_MAIN_DISPLAY); 
+  selectMux(MUX_CHANNEL_MAIN_DISPLAY);
   u8g2.clearBuffer();
-  drawStatusBar(); 
+  if (currentMenu != WIFI_PASSWORD_INPUT && currentMenu != WIFI_CONNECTING && currentMenu != WIFI_CONNECTION_INFO) {
+      drawStatusBar(); // Status bar might not be wanted on password/connect screens
+  }
 
   if (currentMenu == TOOL_CATEGORY_GRID) {
     // ... (grid animation and drawing logic for u8g2 - main display)
@@ -355,115 +561,72 @@ void drawUI() {
     }
     drawToolGridScreen(); // Draws on u8g2 (main display)
   } else if (currentMenu == MAIN_MENU) {
-    drawMainMenu(); // Draws on u8g2 (main display)
-  } else if (currentMenu == WIFI_SETUP_MENU) { // <--- ADDED CASE
+    drawMainMenu();
+  } else if (currentMenu == WIFI_SETUP_MENU) {
     drawWifiSetupScreen();
-  } else { 
-    drawCarouselMenu(); // Draws on u8g2 (main display)
+  } else if (currentMenu == WIFI_PASSWORD_INPUT) {
+    drawPasswordInputScreen();
+  } else if (currentMenu == WIFI_CONNECTING) {
+    drawWifiConnectingStatusScreen();
+  } else if (currentMenu == WIFI_CONNECTION_INFO) {
+    drawWifiConnectionResultScreen();
   }
-  u8g2.sendBuffer(); // Send main display buffer
+  else { // Assumed Carousel for Games, Tools (categories), Settings, Utilities
+    drawCarouselMenu();
+  }
+  u8g2.sendBuffer();
 }
 
-// Modify drawPassiveDisplay for correct context title
 void drawPassiveDisplay() {
-    u8g2_small.clearBuffer();
+    if (currentMenu == WIFI_PASSWORD_INPUT) {
+        drawKeyboardOnSmallDisplay(); // Keyboard takes full small display
+    } else {
+        // Default passive display content (uptime, mode)
+        u8g2_small.clearBuffer();
+        u8g2_small.setDrawColor(1);
 
-    // --- Top Row: Wi-Fi / Bluetooth Placeholders (Optional - can be removed if not used) ---
-    u8g2_small.setFont(u8g2_font_5x7_tf); // Small font for these indicators
-    u8g2_small.setDrawColor(1); // White
-    // Example: u8g2_small.drawStr(0, 7, "W:---"); 
-    // Example: u8g2_small.drawStr(u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth("B:---") -1, 7, "B:---");
-    // For now, let's keep them minimal or comment out if not actively used yet
-    // String currentSsidName = getCurrentSsid(); // From wifi_manager.h
-    // if (currentSsidName.length() > 0) {
-    //    char truncatedSsid[5]; // "W:XXX"
-    //    snprintf(truncatedSsid, sizeof(truncatedSsid), "W:%.3s", currentSsidName.c_str());
-    //    u8g2_small.drawStr(0,7, truncatedSsid);
-    // } else {
-    //    u8g2_small.drawStr(0,7, "W: Off");
-    // }
+        // --- Uptime Clock ---
+        unsigned long now = millis(); unsigned long allSeconds = now / 1000;
+        int runHours = allSeconds / 3600; int secsRemaining = allSeconds % 3600;
+        int runMinutes = secsRemaining / 60; int runSeconds = secsRemaining % 60;
+        char timeStr[9]; sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
+        u8g2_small.setFont(u8g2_font_helvB08_tr);
+        int time_y_baseline = 17; // Adjusted for helvB08 on 32px display
+        u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(timeStr)) / 2, time_y_baseline, timeStr);
 
-
-    // --- Middle Row: Uptime Clock ---
-    unsigned long now = millis();
-    unsigned long allSeconds = now / 1000;
-    int runHours = allSeconds / 3600;
-    int secsRemaining = allSeconds % 3600;
-    int runMinutes = secsRemaining / 60;
-    int runSeconds = secsRemaining % 60;
-    char timeStr[9]; 
-    sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
-    
-    u8g2_small.setFont(u8g2_font_helvB08_tr); // Using a clear, slightly larger font for time
-                                          // _tr is transparent, _tf is solid background (choose one)
-    int timeStrWidth = u8g2_small.getStrWidth(timeStr);
-    // Vertically center the time in the available space, or position it nicely
-    // Display height is 32. Top placeholders might take ~8px. Bottom mode text might take ~10-12px.
-    // Let's try to place uptime clock around Y=16 (baseline) for its vertical center.
-    // Ascent for helvB08 is ~8. For a 32px high display, if top area is 8px, y=16 is good baseline.
-    int time_y_baseline = 17; // Adjust for best vertical centering
-    u8g2_small.drawStr((u8g2_small.getDisplayWidth() - timeStrWidth) / 2, time_y_baseline, timeStr); 
-
-
-    // --- Bottom Row: Current Mode/Context Text ---
-    const char* modeText = "---"; // Default
-    // Logic to determine modeText based on currentMenu and sub-states
-    if (currentMenu == FLASHLIGHT_MODE) {
-        modeText = "Torch";
-    } else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) {
-        modeText = mainMenuItems[menuIndex]; // Show selected main menu item name
-    } else if (currentMenu == UTILITIES_MENU) {
-        if (menuIndex < getUtilitiesMenuItemsCount() && utilitiesMenuItems[menuIndex] != NULL) {
-            // Show selected utility item, or just "Utilities" if preferred
-            modeText = utilitiesMenuItems[menuIndex]; 
-            // If you want to show "Utilities > Vibration" then more complex string construction needed.
-            // For simplicity on small display, showing the current utility item name is good.
-        } else {
-            modeText = "Utilities";
+        // --- Current Mode Text ---
+        const char* modeText = "---";
+        // (Logic to determine modeText based on currentMenu as before)
+        if (currentMenu == FLASHLIGHT_MODE) modeText = "Torch";
+        else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) modeText = mainMenuItems[menuIndex];
+        else if (currentMenu == UTILITIES_MENU && menuIndex < getUtilitiesMenuItemsCount()) modeText = utilitiesMenuItems[menuIndex];
+        else if (currentMenu == GAMES_MENU) modeText = "Games";
+        else if (currentMenu == TOOLS_MENU) modeText = "Tools";
+        else if (currentMenu == SETTINGS_MENU) modeText = "Settings";
+        else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) modeText = toolsMenuItems[toolsCategoryIndex];
+        else if (currentMenu == WIFI_SETUP_MENU) {
+            if (wifiIsScanning) modeText = "Scanning WiFi";
+            else modeText = "Wi-Fi Setup";
+        } else if (currentMenu == WIFI_CONNECTING) {
+            modeText = "Connecting...";
+        } else if (currentMenu == WIFI_CONNECTION_INFO) {
+            modeText = getWifiStatusMessage(); // Show connection result
         }
-    } else if (currentMenu == GAMES_MENU) {
-         modeText = "Games"; // Or gamesMenuItems[menuIndex] if space and desired
-    } else if (currentMenu == TOOLS_MENU) {
-         modeText = "Tools"; // Or toolsMenuItems[menuIndex]
-    } else if (currentMenu == SETTINGS_MENU) {
-         modeText = "Settings"; // Or settingsMenuItems[menuIndex]
-    } else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) {
-         modeText = toolsMenuItems[toolsCategoryIndex]; // Show the category name from Tools Menu
-    } else if (currentMenu == WIFI_SETUP_MENU) {
-        if (wifiIsScanning) modeText = "Scanning WiFi";
-        else modeText = "Wi-Fi Setup";
-    }
-    // Add other specific screen titles here if needed
 
-    // Font for mode text - can be same as time or slightly smaller if long
-    // u8g2_font_6x10_tf could also work well here for clarity.
-    u8g2_small.setFont(u8g2_font_6x12_tr); // Trying a slightly taller font for modeText
-    // u8g2_font_profont11_tr is also a nice clear, slightly condensed font.
 
-    char truncatedModeText[22]; // Max chars for typical 128px display width with small font
-    strncpy(truncatedModeText, modeText, sizeof(truncatedModeText)-1);
-    truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
-
-    // If text is still too wide for display, truncate with "..."
-    // Max width available for mode text, e.g., display_width - 4px padding
-    int max_mode_text_width = u8g2_small.getDisplayWidth() - 4; 
-    if (u8g2_small.getStrWidth(truncatedModeText) > max_mode_text_width) {
-        // SBUF is extern char SBUF[32];
-        // Need to pass u8g2_small to truncateText if it relies on display.getUTF8Width
-        strcpy(SBUF, truncatedModeText); // Copy to SBUF for truncateText
-        truncateText(SBUF, max_mode_text_width, u8g2_small); // Pass u8g2_small
-        strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText)-1);
+        u8g2_small.setFont(u8g2_font_6x12_tr); // Or other suitable font
+        char truncatedModeText[22]; strncpy(truncatedModeText, modeText, sizeof(truncatedModeText)-1);
         truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
-    }
-    
-    int modeTextWidth = u8g2_small.getStrWidth(truncatedModeText);
-    // Position mode text at the bottom of the display
-    // Ascent for 6x12 is ~9. For 32px high, bottom baseline could be 32-1 = 31, or 32- (12-9) = 29
-    int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2; // Baseline near bottom edge
-    u8g2_small.drawStr((u8g2_small.getDisplayWidth() - modeTextWidth) / 2, mode_text_y_baseline, truncatedModeText);
+        if (u8g2_small.getStrWidth(truncatedModeText) > u8g2_small.getDisplayWidth() - 4) {
+            truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small); // SBUF used
+            strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText)-1);
+            truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
+        }
+        int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2;
+        u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(truncatedModeText)) / 2, mode_text_y_baseline, truncatedModeText);
 
-    u8g2_small.setDrawColor(1); // Ensure draw color is reset if changed
-    u8g2_small.sendBuffer();
+        u8g2_small.sendBuffer();
+    }
 }
 
 

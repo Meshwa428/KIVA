@@ -1,34 +1,38 @@
 #ifndef UI_DRAWING_H
 #define UI_DRAWING_H
 
-#include "config.h"   
-#include <U8g2lib.h>  
+#include "config.h"
+#include <U8g2lib.h>
 
-extern U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2;         // Main display
-extern U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2_small; // Second display object
+extern U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2;
+extern U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2_small;
 
 extern VerticalListAnimation mainMenuAnim;
 extern CarouselAnimation subMenuAnim;
-extern VerticalListAnimation wifiListAnim; // <--- Make sure 
+extern VerticalListAnimation wifiListAnim;
 
 // Function declarations
-void drawUI(); 
+void drawUI();
 void drawStatusBar();
 void drawMainMenu();
 void drawCarouselMenu();
 void drawToolGridScreen();
-void startGridItemAnimation(); 
-void drawPassiveDisplay(); // <--- New function for the small display
+void startGridItemAnimation();
+void drawPassiveDisplay();
 
-void drawWifiSetupScreen(); // <--- ADDED
-// In ui_drawing.h
+void drawWifiSetupScreen();
 void drawWifiSignalStrength(int x, int y, int8_t rssi);
+
+void drawPasswordInputScreen();      // <--- NEW
+void drawKeyboardOnSmallDisplay();   // <--- NEW
+void drawWifiConnectingStatusScreen(); // <--- NEW
+void drawWifiConnectionResultScreen(); // <--- NEW
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill);
 void drawBatIcon(int x, int y, uint8_t percentage);
 void drawCustomIcon(int x, int y, int iconType, bool isLarge);
 
 void updateMarquee(int cardInnerW, const char* text);
-char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display); 
+char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display);
 
 #endif // UI_DRAWING_H
