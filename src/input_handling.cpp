@@ -73,13 +73,17 @@ void handleKeyboardInput(int keyPressedValue) {
                 }
                 break;
             case KB_KEY_ENTER:
-                if (selectedNetworkIsSecure) {
-                    attemptWpaWifiConnection(currentSsidToConnect, wifiPasswordInput);
-                } else {
-                    attemptDirectWifiConnection(currentSsidToConnect);
-                }
-                currentMenu = WIFI_CONNECTING;
-                initializeCurrentMenu();
+                if (strlen(currentSsidToConnect) > 0) { 
+                    if (selectedNetworkIsSecure) {
+                        attemptWpaWifiConnection(currentSsidToConnect, wifiPasswordInput);
+                        addOrUpdateKnownNetwork(currentSsidToConnect, wifiPasswordInput, true); // Correct: new password, reset fails.
+                    } else {
+                        attemptDirectWifiConnection(currentSsidToConnect); 
+                        // addOrUpdateKnownNetwork is called inside attemptDirectWifiConnection
+                    }
+                    currentMenu = WIFI_CONNECTING;
+                    initializeCurrentMenu(); 
+                } // ...
                 break;
             case KB_KEY_SHIFT:
                 if (capsLockActive) {

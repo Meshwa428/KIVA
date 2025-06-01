@@ -124,113 +124,168 @@ void drawWifiSetupScreen() {
     const int list_start_y_abs = STATUS_BAR_H + 1;
     const int list_visible_height = u8g2.getDisplayHeight() - list_start_y_abs;
     const int item_row_h = WIFI_LIST_ITEM_H;
-    const int item_padding_x = 2; const int content_padding_x = 4;
+    const int item_padding_x = 2; 
+    const int content_padding_x = 4; // Padding for content within each item row
 
+    // Set a clipping window for the list area to prevent drawing over status bar or below screen
     u8g2.setClipWindow(0, list_start_y_abs, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
     
-    float target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
-    // ... (clamping logic for target_scroll_for_centering as before) ...
-    if (maxMenuItems * item_row_h <= list_visible_height) target_scroll_for_centering = 0;
-    else {
+    // Smooth scroll animation logic (target calculation and easing)
+    float target_scroll_for_centering = 0;
+    if (maxMenuItems > 0 && (maxMenuItems * item_row_h > list_visible_height)) { // Only scroll if content exceeds visible area
+        target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
+        // Clamp scroll value
         if (target_scroll_for_centering < 0) target_scroll_for_centering = 0;
-        float max_scroll = (maxMenuItems * item_row_h) - list_visible_height;
-        if (max_scroll < 0) max_scroll = 0;
-        if (target_scroll_for_centering > max_scroll) target_scroll_for_centering = max_scroll;
+        float max_scroll_val = (maxMenuItems * item_row_h) - list_visible_height;
+        if (max_scroll_val < 0) max_scroll_val = 0; // Handles case where list is shorter
+        if (target_scroll_for_centering > max_scroll_val) {
+            target_scroll_for_centering = max_scroll_val;
+        }
+    }
+    // Apply easing to scroll animation
+    float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
+    if (abs(scrollDiff) > 0.1f) {
+        currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f; // Using GRID_ANIM_SPEED, adjust if needed
+    } else {
+        currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
     }
 
-    float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
-    if (abs(scrollDiff) > 0.1f) currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
-    else currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
 
-
-    if (wifiIsScanning) {
-        // ... (scanning message as before) ...
-        u8g2.setFont(u8g2_font_6x10_tf); u8g2.setDrawColor(1);
-        const char* scanMsg = "Scanning...";
+    if (!wifiHardwareEnabled) { // If Wi-Fi hardware is globally disabled
+        u8g2.setFont(u8g2_font_6x10_tf); 
+        u8g2.setDrawColor(1); // White text
+        const char* offMsg = getWifiStatusMessage(); // Should be "Wi-Fi Off"
+        int msgWidth = u8g2.getStrWidth(offMsg);
+        // Center the message vertically and horizontally in the list area
+        int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
+        u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, offMsg);
+        // No list items to draw if Wi-Fi is off. "Back" handled by physical button.
+        // If an "Enable Wi-Fi" item were added, it would be handled by the loop below.
+    } else if (wifiIsScanning) { // If Wi-Fi is on and actively scanning
+        u8g2.setFont(u8g2_font_6x10_tf); 
+        u8g2.setDrawColor(1);
+        const char* scanMsg = getWifiStatusMessage(); // Should be "Scanning..."
         int msgWidth = u8g2.getStrWidth(scanMsg);
-        int text_y_pos = list_start_y_abs + list_visible_height/2 - (u8g2.getAscent() - u8g2.getDescent())/2 + u8g2.getAscent();
+        int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
         u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, scanMsg);
-    } else {
-        wifiListAnim.update();
-        u8g2.setFont(u8g2_font_6x10_tf);
+    } else { // Wi-Fi is on, not scanning, so draw the list of networks (or "No Networks")
+        wifiListAnim.update(); // Update item scale/position animations
+        u8g2.setFont(u8g2_font_6x10_tf); // Font for list items
+
+        if (foundWifiNetworksCount == 0 && maxMenuItems <= 2) { // maxMenuItems includes Scan Again & Back
+            u8g2.setDrawColor(1);
+            const char* noNetMsg = getWifiStatusMessage(); // Should be "No Networks" or similar
+            int msgWidth = u8g2.getStrWidth(noNetMsg);
+            int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
+            u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, noNetMsg);
+            // Still need to draw "Scan Again" and "Back" if they are part of maxMenuItems
+            // The loop below will handle them if maxMenuItems is set correctly.
+            // If foundWifiNetworksCount is 0, loop for 'i < maxMenuItems' will still run for Scan/Back.
+        }
+
 
         for (int i = 0; i < maxMenuItems; i++) {
+            // Calculate Y position for the current item, considering scroll offset
             int item_center_y_in_full_list = (i * item_row_h) + (item_row_h / 2);
             int item_center_on_screen_y = list_start_y_abs + item_center_y_in_full_list - (int)currentWifiListScrollOffset_Y_anim;
             int item_top_on_screen_y = item_center_on_screen_y - item_row_h / 2;
 
-            if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) continue;
+            // Cull items that are completely off-screen
+            if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) {
+                continue;
+            }
 
             bool is_selected_item = (i == wifiMenuIndex);
-            // ... (drawing selection box as before) ...
+            
+            // Draw selection highlight
             if (is_selected_item) {
-                u8g2.setDrawColor(1);
-                drawRndBox(item_padding_x, item_top_on_screen_y, u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 2, true);
-                u8g2.setDrawColor(0); 
+                u8g2.setDrawColor(1); // White background for selected item
+                drawRndBox(item_padding_x, item_top_on_screen_y, u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 2, true); // Filled
+                u8g2.setDrawColor(0); // Black text on selected item
             } else {
-                u8g2.setDrawColor(1); 
+                u8g2.setDrawColor(1); // White text for non-selected items
             }
             
-            const char* currentItemTextPtr = NULL; // Use a pointer for the item text
+            const char* currentItemTextPtr = nullptr;
             bool isNetworkItem = false;
-            int8_t currentRssi = 0; bool currentIsSecure = false; int action_icon_type = -1;
-            String displayText; // Use String for easier manipulation with asterisk
+            int8_t currentRssi = 0; 
+            bool currentIsSecure = false; 
+            int action_icon_type = -1; // For icons like "Scan" or "Back"
+            String displayText; // Use String for prepending "*" to connected SSID
 
-            if (i < foundWifiNetworksCount) {
-                displayText = scannedNetworks[i].ssid;
+            if (i < foundWifiNetworksCount) { // This is a scanned network item
                 // Check if this is the currently connected SSID
                 if (currentConnectedSsid.length() > 0 && currentConnectedSsid.equals(scannedNetworks[i].ssid)) {
-                    displayText = "* " + displayText; // Prepend asterisk
+                    displayText = "* "; // Prepend asterisk and space
+                    displayText += scannedNetworks[i].ssid;
+                } else {
+                    displayText = scannedNetworks[i].ssid;
                 }
                 currentItemTextPtr = displayText.c_str(); // Get char* for drawing functions
 
                 currentRssi = scannedNetworks[i].rssi;
                 currentIsSecure = scannedNetworks[i].isSecure;
                 isNetworkItem = true;
-            } else if (i == foundWifiNetworksCount) { 
-                currentItemTextPtr = "Scan Again"; action_icon_type = 16; 
-            } else if (i == foundWifiNetworksCount + 1) { 
-                currentItemTextPtr = "Back"; action_icon_type = 8; 
+            } else if (i == foundWifiNetworksCount) { // This is "Scan Again"
+                currentItemTextPtr = "Scan Again"; 
+                action_icon_type = 16; // Refresh/Rescan icon
+            } else if (i == foundWifiNetworksCount + 1) { // This is "Back"
+                currentItemTextPtr = "Back"; 
+                action_icon_type = 8; // Back arrow icon
             }
 
-            if (currentItemTextPtr == NULL || currentItemTextPtr[0] == '\0') continue;
+            if (currentItemTextPtr == nullptr || currentItemTextPtr[0] == '\0') continue; // Should not happen
             
-            int current_content_x = content_padding_x + item_padding_x;
-            int icon_y_center_for_draw = item_center_on_screen_y;
+            // Calculate X positions for icons and text
+            int current_content_x = content_padding_x + item_padding_x; // Start X for icons/text
+            int icon_y_center_for_draw = item_center_on_screen_y; // Base Y for vertical centering of icons
 
             if (isNetworkItem) {
-                // ... (draw signal and lock icons as before) ...
-                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi); 
-                current_content_x += 12; 
-                if(currentIsSecure) { 
-                    int lock_body_start_x = current_content_x; int body_top_y = icon_y_center_for_draw - 2;
-                    u8g2.drawBox(lock_body_start_x, body_top_y, 5, 4); 
-                    u8g2.drawHLine(lock_body_start_x + 1, body_top_y - 3, 3); 
-                    u8g2.drawPixel(lock_body_start_x, body_top_y - 2); u8g2.drawPixel(lock_body_start_x + 4, body_top_y - 2); 
-                    u8g2.drawVLine(lock_body_start_x, body_top_y - 1, 1); u8g2.drawVLine(lock_body_start_x + 4, body_top_y - 1, 1); 
-                    current_content_x += 7;
-                } else { current_content_x += 7; } 
-            } else if (action_icon_type != -1) {
-                drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false);
-                current_content_x += 10;
-            } else { current_content_x += 10; }
+                // Draw Wi-Fi signal strength icon (small version)
+                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi); // -4 to align 8px icon
+                current_content_x += 12; // Approx width of signal icon + spacing
+                
+                if(currentIsSecure) { // Draw lock icon if secure
+                    // Simple lock icon (adjust coordinates as needed for 8px height alignment)
+                    int lock_body_start_x = current_content_x; 
+                    int body_top_y = icon_y_center_for_draw - 3; // Centering a ~6px high lock
+                    u8g2.drawBox(lock_body_start_x, body_top_y, 4, 4); // Lock body 
+                    u8g2.drawHLine(lock_body_start_x + 1, body_top_y - 2, 2); // Top of shackle
+                    u8g2.drawPixel(lock_body_start_x, body_top_y - 1); 
+                    u8g2.drawPixel(lock_body_start_x + 3, body_top_y - 1);
+                    current_content_x += 6; // Approx width of lock icon + spacing
+                } else { // No lock icon, just add spacing
+                    current_content_x += 6; 
+                }
+            } else if (action_icon_type != -1) { // For "Scan Again" or "Back"
+                drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false); // Small icon
+                current_content_x += 10; // Approx width of small icon + spacing
+            } else { // Fallback spacing if no icon
+                current_content_x += 10; 
+            }
 
+            // Calculate position and available width for text
             int text_x_start = current_content_x;
             int text_available_width = u8g2.getDisplayWidth() - text_x_start - content_padding_x - item_padding_x;
             int text_baseline_y = item_center_on_screen_y - (u8g2.getAscent() + u8g2.getDescent())/2 + u8g2.getAscent();
 
-            if (is_selected_item && isNetworkItem) {
-                updateMarquee(text_available_width, currentItemTextPtr); // Use currentItemTextPtr
-                if (marqueeActive) u8g2.drawStr(text_x_start + (int)marqueeOffset, text_baseline_y, marqueeText);
-                else { char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2); u8g2.drawStr(text_x_start, text_baseline_y, truncated); }
-            } else {
+            // Marquee for selected network SSID, static for others
+            if (is_selected_item && isNetworkItem) { // Only marquee for selected network items
+                updateMarquee(text_available_width, currentItemTextPtr); 
+                if (marqueeActive) {
+                    u8g2.drawStr(text_x_start + (int)marqueeOffset, text_baseline_y, marqueeText);
+                } else { 
+                    char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2); 
+                    u8g2.drawStr(text_x_start, text_baseline_y, truncated); 
+                }
+            } else { // Non-selected items or non-network items (Scan, Back)
                 char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2);
                 u8g2.drawStr(text_x_start, text_baseline_y, truncated);
             }
         }
     }
-    u8g2.setDrawColor(1);
-    u8g2.setMaxClipWindow();
+    u8g2.setDrawColor(1); // Reset draw color
+    u8g2.setMaxClipWindow(); // Reset clipping window
 }
 
 void drawPasswordInputScreen() {

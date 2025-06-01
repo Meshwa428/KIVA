@@ -67,7 +67,7 @@ enum MenuState {
   WIFI_PASSWORD_INPUT,  // <--- NEW
   WIFI_CONNECTING,      // <--- NEW
   WIFI_CONNECTION_INFO // <--- NEW (for displaying success/failure briefly)
-    // Add more states for actual game/tool screens later
+  // Add more states for actual game/tool screens later
 };
 
 // --- Extern Global Variables (to be defined in KivaMain.ino or a globals.cpp) ---
@@ -84,6 +84,7 @@ extern bool isCharging;
 
 extern bool vibrationOn; // <--- NEW
 extern bool laserOn;     // <--- NEW
+extern bool wifiHardwareEnabled; // <--- ADDED (for general Wi-Fi hardware state)
 
 extern uint8_t pcf0Output; // For controlling outputs on PCF0
 
@@ -97,6 +98,11 @@ extern uint8_t pcf0Output; // For controlling outputs on PCF0
 #define PASSWORD_INPUT_FIELD_Y 30 // Y position for password field on main display
 #define PASSWORD_INPUT_FIELD_H 12
 #define PASSWORD_MAX_LEN 63
+
+
+      
+// === SD Card ===
+#define SD_CS_PIN 21
 
 
 // --- Wi-Fi Related Globals & Struct ---

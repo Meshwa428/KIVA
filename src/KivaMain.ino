@@ -7,6 +7,7 @@
 #include "ui_drawing.h"
 #include "menu_logic.h"
 #include "wifi_manager.h" // <--- ADDED
+#include "sd_card_manager.h" // <--- ADDED
 
 // ... (Bitmap Data) ...
 #define im_width 128
@@ -144,6 +145,7 @@ char currentSsidToConnect[33];      // <--- NEW DEFINITION
 char wifiPasswordInput[PASSWORD_MAX_LEN + 1]; // <--- NEW DEFINITION
 int wifiPasswordInputCursor = 0;    // <--- NEW DEFINITION
 bool selectedNetworkIsSecure = false; // <--- NEW DEFINITION
+bool wifiHardwareEnabled = false; // <--- ADDED DEFINITION, default to off
 
 // Keyboard related globals
 KeyboardLayer currentKeyboardLayer = KB_LAYER_LOWERCASE; // <--- NEW DEFINITION
@@ -158,6 +160,21 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
 
+  selectMux(0);
+  writePCF(PCF0_ADDR, pcf0Output);
+
+  // Initialize SD Card first, as other modules might depend on it
+  if (setupSdCard()) { // From sd_card_manager.h
+    Serial.println("SD Card initialized successfully.");
+    // Optional: Perform a quick test or list root directory
+    listDirectory("/", 0); 
+    // testSdFileIO("/test.txt"); // Uncomment to run I/O test on boot
+  } else {
+    Serial.println("SD Card initialization failed!");
+    // Potentially set a global flag or display an error message on screen
+  }
+
+
   analogReadResolution(12);
   #if defined(ESP32) || defined(ESP_PLATFORM)
   // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB);
@@ -165,9 +182,6 @@ void setup() {
   setupBatteryMonitor();
   setupInputs();
   setupWifi(); // From wifi_manager
-
-  selectMux(0);
-  writePCF(PCF0_ADDR, pcf0Output);
 
   selectMux(MUX_CHANNEL_MAIN_DISPLAY);
   u8g2.begin();
@@ -215,55 +229,101 @@ void setup() {
 void loop() {
   updateInputs();
 
+  // --- Wi-Fi Auto Shutdown Logic ---
+  if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
+    // If Wi-Fi hardware is on but not connected...
+    bool inWifiMenu = (currentMenu == WIFI_SETUP_MENU || 
+                       currentMenu == WIFI_PASSWORD_INPUT || 
+                       currentMenu == WIFI_CONNECTING || 
+                       currentMenu == WIFI_CONNECTION_INFO);
+    
+    if (!inWifiMenu && !wifiIsScanning) { 
+      // Not in a Wi-Fi specific menu and not actively scanning
+      
+      // Get the current connection/scan status using the getter function
+      WifiConnectionStatus currentStatus = getCurrentWifiConnectionStatus(); // From wifi_manager.h
+
+      if (currentStatus != WIFI_CONNECTING_IN_PROGRESS && currentStatus != KIVA_WIFI_SCAN_RUNNING) {
+           // This block was intended for updating a timer, but for a simple aggressive shutdown,
+           // the condition below is sufficient. If a grace period is added, this is where
+           // 'lastWifiActivityOrConnectAttempt' would be updated.
+      }
+
+      // If not actively trying to connect or scan, turn off Wi-Fi.
+      if (currentStatus != WIFI_CONNECTING_IN_PROGRESS && currentStatus != KIVA_WIFI_SCAN_RUNNING) {
+          Serial.println("Loop: Wi-Fi hardware enabled, not connected, not in Wi-Fi menu, not actively trying. Disabling Wi-Fi hardware.");
+          setWifiHardwareState(false); // This function will handle WiFi.disconnect, WiFi.mode(WIFI_OFF), etc.
+                                       // It also updates wifiHardwareEnabled, currentConnectedSsid, and wifiStatusString.
+      }
+    }
+  }
+
+
   if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning) {
     if (millis() - lastWifiScanCheckTime > WIFI_SCAN_CHECK_INTERVAL) {
-      int scanCompleteResult = WiFi.scanComplete(); // Directly check the library's status
+      int scanCompleteResult = WiFi.scanComplete(); 
 
-      if (scanCompleteResult >= 0) { // Scan finished (found 'scanCompleteResult' networks) or 0 networks
-        wifiIsScanning = false; // Mark scanning as done *before* retrieving
-        checkAndRetrieveWifiScanResults(); // This will now populate foundWifiNetworksCount
-
-        // Re-initialize the menu now that scanning is false and results are populated
+      if (scanCompleteResult >= 0) { 
+        wifiIsScanning = false; 
+        checkAndRetrieveWifiScanResults(); 
         initializeCurrentMenu();
-
-        // Reset menu index and scroll for the new list
         wifiMenuIndex = 0;
         targetWifiListScrollOffset_Y = 0;
         currentWifiListScrollOffset_Y_anim = 0;
-        if (currentMenu == WIFI_SETUP_MENU) { // Ensure animation targets are set for the new list
+        if (currentMenu == WIFI_SETUP_MENU) { 
              wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
         }
-
-      } else if (scanCompleteResult == WIFI_SCAN_FAILED) { // -2
+      } else if (scanCompleteResult == WIFI_SCAN_FAILED) { 
         Serial.println("Loop: Scan failed as per WiFi.scanComplete()");
         wifiIsScanning = false;
-        foundWifiNetworksCount = 0; // No networks
-        checkAndRetrieveWifiScanResults(); // Call to update internal status string if any
-        initializeCurrentMenu(); // Update UI to show "Scan Failed" or empty list
-         wifiMenuIndex = 0; targetWifiListScrollOffset_Y = 0; currentWifiListScrollOffset_Y_anim = 0;
-         if(currentMenu == WIFI_SETUP_MENU) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
-
-
+        foundWifiNetworksCount = 0; 
+        checkAndRetrieveWifiScanResults(); 
+        initializeCurrentMenu(); 
+        wifiMenuIndex = 0; targetWifiListScrollOffset_Y = 0; currentWifiListScrollOffset_Y_anim = 0;
+        if(currentMenu == WIFI_SETUP_MENU) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
       } else { // WIFI_SCAN_RUNNING (-1), scan is still ongoing
         // Do nothing, wait for next check interval
       }
       lastWifiScanCheckTime = millis();
     }
   } else if (currentMenu == WIFI_CONNECTING) {
-      // ... (existing connection logic) ...
-       WifiConnectionStatus status = checkWifiConnectionProgress();
+      WifiConnectionStatus status = checkWifiConnectionProgress(); // From wifi_manager.h
       if (status != WIFI_CONNECTING_IN_PROGRESS) {
           currentMenu = WIFI_CONNECTION_INFO;
-          wifiStatusMessageTimeout = millis() + 3000;
+          wifiStatusMessageTimeout = millis() + 3000; // Display result for 3 seconds
           initializeCurrentMenu();
+          // If connection failed and it was a secure network, the fail count was updated.
+          // If succeeded, fail count was reset.
+          // The known network list was updated by addOrUpdateKnownNetwork if a new password was entered.
       }
   } else if (currentMenu == WIFI_CONNECTION_INFO) {
-      // ... (existing connection info logic) ...
       if (millis() > wifiStatusMessageTimeout) {
-          WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
-          if (lastStatus == WIFI_CONNECTED_SUCCESS) currentMenu = WIFI_SETUP_MENU;
-          else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) currentMenu = WIFI_PASSWORD_INPUT;
-          else currentMenu = WIFI_SETUP_MENU;
+          WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus(); // From wifi_manager.h
+          if (lastStatus == WIFI_CONNECTED_SUCCESS) {
+              currentMenu = WIFI_SETUP_MENU; // Go back to the (updated) list
+              // Re-check scan results to potentially reorder list with connected on top
+              // if not already handled by checkAndRetrieveWifiScanResults being called
+              // after successful connection logic.
+              // For now, initializeCurrentMenu will refresh the list display.
+          } else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) {
+              // If connection failed for secure network (wrong pass or timeout), go back to password input
+              // This gives the user another chance or they can back out.
+              // Check fail count again. If it's now >= MAX_WIFI_FAIL_ATTEMPTS, it will prompt.
+              // If it's a new network, it won't have a high fail count yet from this single attempt.
+              KnownWifiNetwork* net = findKnownNetwork(currentSsidToConnect);
+              if (net && net->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
+                  currentMenu = WIFI_PASSWORD_INPUT; // Prompt again
+              } else {
+                 // If fail count is not yet maxed out OR it was a timeout on a first attempt with new password
+                 // (and we want to give another chance without re-entering password),
+                 // or if it's an open network that failed to connect.
+                 // For simplicity, after any failure, go back to the Wi-Fi list.
+                 // The user can then choose to re-select and try again (which might re-prompt for pass if needed).
+                  currentMenu = WIFI_SETUP_MENU;
+              }
+          } else { // Other failures, or open network failure
+              currentMenu = WIFI_SETUP_MENU;
+          }
           initializeCurrentMenu();
       }
   }
@@ -272,7 +332,7 @@ void loop() {
   if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
     if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false;
     if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
-    if (currentMenu != WIFI_PASSWORD_INPUT) {
+    if (currentMenu != WIFI_PASSWORD_INPUT) { // Password input OK is handled by keyboard logic
         handleMenuSelection();
     }
   }
@@ -282,11 +342,30 @@ void loop() {
     handleMenuBackNavigation();
   }
 
+  // Clear one-shot button presses (except encoder button if used by keyboard)
   for (int i = 0; i < 8; ++i) {
-      if (i != ENC_BTN) btnPress0[i] = false;
-      if (i != NAV_OK && i != NAV_BACK) btnPress1[i] = false;
+      if (currentMenu == WIFI_PASSWORD_INPUT && i == ENC_BTN) {
+          // Don't clear ENC_BTN if in password input, as it's used for key presses there
+      } else {
+          btnPress0[i] = false;
+      }
+      // Clear NAV_OK and NAV_BACK as they are handled above or by keyboard input
+      if (i != NAV_OK && i != NAV_BACK) {
+         // For other PCF1 buttons, if they are not meant to be one-shot outside of keyboard/scrolling,
+         // clear them here. Otherwise, their specific handlers should clear them.
+         // For now, assume other NAV buttons (A, B, etc.) are not used as one-shot general presses.
+         // btnPress1[i] = false; // Uncomment if other NAV buttons are general one-shot
+      }
   }
+  // Specifically clear NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT from btnPress1,
+  // as their primary action (scrolling) is continuous or handled by initial press.
+  // One-shot press flags for these are mostly for initiating hold/repeat.
+  btnPress1[NAV_UP] = false;
+  btnPress1[NAV_DOWN] = false;
+  btnPress1[NAV_LEFT] = false;
+  btnPress1[NAV_RIGHT] = false;
+
 
   drawUI();
-  delay(16);
+  delay(16); // Approx 60 FPS target
 }
