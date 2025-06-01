@@ -121,20 +121,17 @@ void drawWifiSignalStrength(int x, int y_icon_top, int8_t rssi) {
 
 
 void drawWifiSetupScreen() {
-    const int list_start_y_abs = STATUS_BAR_H + 1;    
-    const int list_visible_height = u8g2.getDisplayHeight() - list_start_y_abs; 
-    const int list_center_y_on_screen = list_start_y_abs + list_visible_height / 2; 
-
-    const int item_row_h = WIFI_LIST_ITEM_H; 
-    const int item_padding_x = 2; 
-    const int content_padding_x = 4;
+    const int list_start_y_abs = STATUS_BAR_H + 1;
+    const int list_visible_height = u8g2.getDisplayHeight() - list_start_y_abs;
+    const int item_row_h = WIFI_LIST_ITEM_H;
+    const int item_padding_x = 2; const int content_padding_x = 4;
 
     u8g2.setClipWindow(0, list_start_y_abs, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
     
     float target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
-    if (maxMenuItems * item_row_h <= list_visible_height) { 
-        target_scroll_for_centering = 0; 
-    } else {
+    // ... (clamping logic for target_scroll_for_centering as before) ...
+    if (maxMenuItems * item_row_h <= list_visible_height) target_scroll_for_centering = 0;
+    else {
         if (target_scroll_for_centering < 0) target_scroll_for_centering = 0;
         float max_scroll = (maxMenuItems * item_row_h) - list_visible_height;
         if (max_scroll < 0) max_scroll = 0;
@@ -142,147 +139,98 @@ void drawWifiSetupScreen() {
     }
 
     float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
-    if (abs(scrollDiff) > 0.1f) {
-        currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f; 
-        if ((scrollDiff > 0 && currentWifiListScrollOffset_Y_anim > target_scroll_for_centering) ||
-            (scrollDiff < 0 && currentWifiListScrollOffset_Y_anim < target_scroll_for_centering)) {
-            currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
-        }
-    } else {
-        currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
-    }
+    if (abs(scrollDiff) > 0.1f) currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
+    else currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
+
 
     if (wifiIsScanning) {
-        u8g2.setFont(u8g2_font_6x10_tf); 
-        u8g2.setDrawColor(1); 
+        // ... (scanning message as before) ...
+        u8g2.setFont(u8g2_font_6x10_tf); u8g2.setDrawColor(1);
         const char* scanMsg = "Scanning...";
         int msgWidth = u8g2.getStrWidth(scanMsg);
-        int text_y_pos = list_center_y_on_screen - (u8g2.getAscent() - u8g2.getDescent())/2 + u8g2.getAscent();
+        int text_y_pos = list_start_y_abs + list_visible_height/2 - (u8g2.getAscent() - u8g2.getDescent())/2 + u8g2.getAscent();
         u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, scanMsg);
-    } else { 
-        wifiListAnim.update(); 
+    } else {
+        wifiListAnim.update();
         u8g2.setFont(u8g2_font_6x10_tf);
 
-        for (int i = 0; i < maxMenuItems; i++) { 
+        for (int i = 0; i < maxMenuItems; i++) {
             int item_center_y_in_full_list = (i * item_row_h) + (item_row_h / 2);
             int item_center_on_screen_y = list_start_y_abs + item_center_y_in_full_list - (int)currentWifiListScrollOffset_Y_anim;
             int item_top_on_screen_y = item_center_on_screen_y - item_row_h / 2;
-            
-            float item_visual_scale = 1.0f;
-            if (i < MAX_ANIM_ITEMS && i == wifiMenuIndex) {
-                 item_visual_scale = wifiListAnim.itemScale[i]; 
-                 if (item_visual_scale < 1.0f) item_visual_scale = 1.0f;
-            }
 
-            if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) {
-                continue;
-            }
-            
-            bool is_selected_item = (i == wifiMenuIndex); 
-            
+            if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) continue;
+
+            bool is_selected_item = (i == wifiMenuIndex);
+            // ... (drawing selection box as before) ...
             if (is_selected_item) {
-                u8g2.setDrawColor(1); 
-                drawRndBox(item_padding_x, item_top_on_screen_y, 
-                           u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 
-                           2, true);
+                u8g2.setDrawColor(1);
+                drawRndBox(item_padding_x, item_top_on_screen_y, u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 2, true);
                 u8g2.setDrawColor(0); 
             } else {
                 u8g2.setDrawColor(1); 
             }
             
-            const char* currentItemText = NULL; 
+            const char* currentItemTextPtr = NULL; // Use a pointer for the item text
             bool isNetworkItem = false;
-            int8_t currentRssi = 0;
-            bool currentIsSecure = false;
-            int action_icon_type = -1;
+            int8_t currentRssi = 0; bool currentIsSecure = false; int action_icon_type = -1;
+            String displayText; // Use String for easier manipulation with asterisk
 
-            if (i < foundWifiNetworksCount) { 
-                currentItemText = scannedNetworks[i].ssid;
+            if (i < foundWifiNetworksCount) {
+                displayText = scannedNetworks[i].ssid;
+                // Check if this is the currently connected SSID
+                if (currentConnectedSsid.length() > 0 && currentConnectedSsid.equals(scannedNetworks[i].ssid)) {
+                    displayText = "* " + displayText; // Prepend asterisk
+                }
+                currentItemTextPtr = displayText.c_str(); // Get char* for drawing functions
+
                 currentRssi = scannedNetworks[i].rssi;
                 currentIsSecure = scannedNetworks[i].isSecure;
                 isNetworkItem = true;
             } else if (i == foundWifiNetworksCount) { 
-                currentItemText = "Scan Again";
-                action_icon_type = 16; 
+                currentItemTextPtr = "Scan Again"; action_icon_type = 16; 
             } else if (i == foundWifiNetworksCount + 1) { 
-                currentItemText = "Back";
-                action_icon_type = 8; 
+                currentItemTextPtr = "Back"; action_icon_type = 8; 
             }
 
-            if (currentItemText == NULL || currentItemText[0] == '\0') continue;
+            if (currentItemTextPtr == NULL || currentItemTextPtr[0] == '\0') continue;
             
-            int current_content_x = content_padding_x + item_padding_x; 
-            int icon_y_center_for_draw = item_center_on_screen_y; 
+            int current_content_x = content_padding_x + item_padding_x;
+            int icon_y_center_for_draw = item_center_on_screen_y;
 
             if (isNetworkItem) {
-                // Signal strength is drawn with the current draw color (black on selected, white on unselected)
-                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi); // -4 for 8px high icon
-                current_content_x += 12; // Width for signal icon (4 bars * 2px + 3 spaces = 11) + 1px gap
+                // ... (draw signal and lock icons as before) ...
+                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi); 
+                current_content_x += 12; 
+                if(currentIsSecure) { 
+                    int lock_body_start_x = current_content_x; int body_top_y = icon_y_center_for_draw - 2;
+                    u8g2.drawBox(lock_body_start_x, body_top_y, 5, 4); 
+                    u8g2.drawHLine(lock_body_start_x + 1, body_top_y - 3, 3); 
+                    u8g2.drawPixel(lock_body_start_x, body_top_y - 2); u8g2.drawPixel(lock_body_start_x + 4, body_top_y - 2); 
+                    u8g2.drawVLine(lock_body_start_x, body_top_y - 1, 1); u8g2.drawVLine(lock_body_start_x + 4, body_top_y - 1, 1); 
+                    current_content_x += 7;
+                } else { current_content_x += 7; } 
+            } else if (action_icon_type != -1) {
+                drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false);
+                current_content_x += 10;
+            } else { current_content_x += 10; }
 
-                if(currentIsSecure) {
-                    // Lock Icon Attempt 3 (direct draw, ~5px wide body, shackle on top)
-                    int lock_body_start_x = current_content_x;
-                    // Aim to center the whole lock (body + shackle) vertically around icon_y_center_for_draw
-                    // Body height: 4px. Shackle height: ~3px. Total ~7px.
-                    // Top of shackle: icon_y_center_for_draw - 3 (approx)
-                    // Top of body: icon_y_center_for_draw (approx)
-                    // Bottom of body: icon_y_center_for_draw + 3 (approx)
-                    
-                    int body_top_y = icon_y_center_for_draw - 1; // Let body be slightly above center
-                    int body_width = 5;
-                    int body_height = 4;
-
-                    // Draw Lock Body
-                    u8g2.drawBox(lock_body_start_x, body_top_y, body_width, body_height);
-
-                    // Draw Shackle (aiming for rounder top)
-                    int shackle_top_most_y = body_top_y - 3; // 3 pixels above the body
-
-                    // Top "flat" part of the shackle (2 pixels wide)
-                    u8g2.drawHLine(lock_body_start_x + 1, shackle_top_most_y, 3); // Draw from x+1 to x+3 (3px wide flat top)
-
-                    // Upper "curved" shoulders of the shackle
-                    u8g2.drawPixel(lock_body_start_x, shackle_top_most_y + 1);     // Left shoulder
-                    u8g2.drawPixel(lock_body_start_x + 4, shackle_top_most_y + 1); // Right shoulder
-                    
-                    // Vertical sides of the shackle connecting to the body
-                    u8g2.drawVLine(lock_body_start_x, shackle_top_most_y + 2, 1);     // Left side connection
-                    u8g2.drawVLine(lock_body_start_x + 4, shackle_top_most_y + 2, 1); // Right side connection
-                    
-                    current_content_x += 7; // Approx width for lock icon (5px) + 2px gap
-                } else {
-                    current_content_x += 7; // Keep spacing consistent if no lock
-                }
-            } else { // Action items ("Scan Again", "Back")
-                if (action_icon_type != -1) {
-                    // Icons for action items also need to respect selected/unselected color
-                    drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false); // small icon
-                    current_content_x += 10; 
-                } else {
-                     current_content_x += 10; // Placeholder if no icon
-                }
-            }
-
-            int text_x_start = current_content_x; 
+            int text_x_start = current_content_x;
             int text_available_width = u8g2.getDisplayWidth() - text_x_start - content_padding_x - item_padding_x;
             int text_baseline_y = item_center_on_screen_y - (u8g2.getAscent() + u8g2.getDescent())/2 + u8g2.getAscent();
-            
-            if (is_selected_item && isNetworkItem) { 
-                updateMarquee(text_available_width, currentItemText);
-                if (marqueeActive) {
-                    u8g2.drawStr(text_x_start + (int)marqueeOffset, text_baseline_y, marqueeText);
-                } else {
-                    char* truncated = truncateText(currentItemText, text_available_width, u8g2);
-                    u8g2.drawStr(text_x_start, text_baseline_y, truncated);
-                }
-            } else { 
-                char* truncated = truncateText(currentItemText, text_available_width, u8g2);
+
+            if (is_selected_item && isNetworkItem) {
+                updateMarquee(text_available_width, currentItemTextPtr); // Use currentItemTextPtr
+                if (marqueeActive) u8g2.drawStr(text_x_start + (int)marqueeOffset, text_baseline_y, marqueeText);
+                else { char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2); u8g2.drawStr(text_x_start, text_baseline_y, truncated); }
+            } else {
+                char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2);
                 u8g2.drawStr(text_x_start, text_baseline_y, truncated);
             }
         }
     }
-    u8g2.setDrawColor(1); // Reset draw color to white for subsequent draws outside this function
-    u8g2.setMaxClipWindow(); 
+    u8g2.setDrawColor(1);
+    u8g2.setMaxClipWindow();
 }
 
 void drawPasswordInputScreen() {
@@ -292,13 +240,13 @@ void drawPasswordInputScreen() {
     // Display SSID
     char ssidTitle[40];
     snprintf(ssidTitle, sizeof(ssidTitle), "Enter Pass for:");
-    u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle); // Adjusted Y for status bar if it's drawn
+    u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle); // Adjusted Y for status bar
 
     char truncatedSsid[22];
     strncpy(truncatedSsid, currentSsidToConnect, sizeof(truncatedSsid)-1);
     truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
     if (u8g2.getStrWidth(truncatedSsid) > u8g2.getDisplayWidth() - 4) {
-        truncateText(currentSsidToConnect, u8g2.getDisplayWidth() - 4, u8g2); // SBUF is used
+        truncateText(currentSsidToConnect, u8g2.getDisplayWidth() - 4, u8g2);
         strncpy(truncatedSsid, SBUF, sizeof(truncatedSsid)-1);
         truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
     }
@@ -307,30 +255,21 @@ void drawPasswordInputScreen() {
 
     // Password Input Field
     int fieldX = 5;
-    // Make sure PASSWORD_INPUT_FIELD_Y from config.h considers the status bar height if status bar is drawn on this screen.
-    // If status bar is NOT drawn on WIFI_PASSWORD_INPUT screen, then PASSWORD_INPUT_FIELD_Y can be absolute.
-    // Assuming status bar is NOT drawn here for more space:
-    int fieldY = PASSWORD_INPUT_FIELD_Y; // Y pos from top of display
+    // Assuming status bar is NOT drawn on WIFI_PASSWORD_INPUT screen for more space
+    int fieldY = PASSWORD_INPUT_FIELD_Y;
     int fieldW = u8g2.getDisplayWidth() - 10;
     int fieldH = PASSWORD_INPUT_FIELD_H;
     u8g2.drawFrame(fieldX, fieldY, fieldW, fieldH);
 
-    // Mask password with asterisks
     char maskedPassword[PASSWORD_MAX_LEN + 1];
     int len = strlen(wifiPasswordInput);
-    for (int i = 0; i < len; ++i) {
-        maskedPassword[i] = '*';
-    }
+    for (int i = 0; i < len; ++i) maskedPassword[i] = '*';
     maskedPassword[len] = '\0';
 
-    // Display masked password
     int textX = fieldX + 3;
-    // Vertically center text in field. For 6x10 font (height usually 7-8px for ascent), in 12px fieldH:
-    // Baseline Y = fieldY + (fieldH - font_height)/2 + font_ascent
-    // u8g2.getAscent() for 6x10 is 7. u8g2.getDescent() is -1. MaxCharHeight is 8.
     int textY = fieldY + (fieldH - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
     
-    int maxPassDisplayLengthChars = (fieldW - 6) / u8g2.getStrWidth("*"); // Approx chars that fit
+    int maxPassDisplayLengthChars = (fieldW - 6) / u8g2.getStrWidth("*");
     if (maxPassDisplayLengthChars < 1) maxPassDisplayLengthChars = 1;
 
     int passDisplayStartIdx = 0;
@@ -338,17 +277,13 @@ void drawPasswordInputScreen() {
         passDisplayStartIdx = wifiPasswordInputCursor - maxPassDisplayLengthChars + 1;
     }
     
-    char displaySegment[maxPassDisplayLengthChars + 2]; // +1 for char, +1 for null
+    char displaySegment[maxPassDisplayLengthChars + 2];
     strncpy(displaySegment, maskedPassword + passDisplayStartIdx, maxPassDisplayLengthChars);
-    displaySegment[maxPassDisplayLengthChars] = '\0'; // Ensure null termination
+    displaySegment[maxPassDisplayLengthChars] = '\0';
     u8g2.drawStr(textX, textY, displaySegment);
 
-
-    // Draw Cursor
     int cursorDisplayPosInSegment = wifiPasswordInputCursor - passDisplayStartIdx;
     int cursorX = textX;
-    // Calculate width of the displayed part of the password up to the cursor
-    // To do this without getStrWidthN, we iterate or make a temporary string.
     if (cursorDisplayPosInSegment > 0) {
         char tempCursorSubstr[maxPassDisplayLengthChars + 1];
         strncpy(tempCursorSubstr, maskedPassword + passDisplayStartIdx, cursorDisplayPosInSegment);
@@ -356,16 +291,34 @@ void drawPasswordInputScreen() {
         cursorX += u8g2.getStrWidth(tempCursorSubstr);
     }
 
-
-    // Simple blinking cursor
     if ((millis() / 500) % 2 == 0) {
         u8g2.drawVLine(cursorX, fieldY + 2, fieldH - 4);
     }
 
-    // Instruction Text (if status bar is NOT drawn, Y needs to be absolute from bottom)
-    u8g2.setFont(u8g2_font_5x7_tf);
-    const char* instr = "Use aux display for keyboard";
-    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(instr)) / 2, u8g2.getDisplayHeight() - 2, instr);
+    // Instruction Text - with Marquee
+    u8g2.setFont(u8g2_font_5x7_tf); // Set font for instruction text
+    const char* instrOriginal = "See aux display for keyboard"; // Corrected spelling
+    int instrY = u8g2.getDisplayHeight() - 2; // Position at the bottom
+    int availableInstrWidth = u8g2.getDisplayWidth() - 4; // Small padding
+
+    // We need a dedicated marquee state for this instruction text
+    // For simplicity, let's reuse the global marquee variables.
+    // This means only one marquee can be active at a time. If another marquee was active,
+    // this will take over.
+    updateMarquee(availableInstrWidth, instrOriginal); // updateMarquee uses global marqueeText, marqueeOffset etc.
+
+    if (marqueeActive && strcmp(marqueeText, instrOriginal) == 0) { // Ensure this marquee is the one running
+        // Center the marquee text horizontally if it's shorter than available width (when not scrolling yet)
+        int text_render_x = (u8g2.getDisplayWidth() - u8g2.getStrWidth(marqueeText)) / 2;
+        if (marqueeTextLenPx > availableInstrWidth) { // Only apply offset if text is actually scrolling
+             text_render_x = 2 + (int)marqueeOffset; // Apply marquee offset from left padding
+        }
+        u8g2.drawStr(text_render_x, instrY, marqueeText);
+    } else {
+        // If not active or a different marquee is running, draw statically (truncated if needed)
+        char* truncatedInstr = truncateText(instrOriginal, availableInstrWidth, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedInstr)) / 2, instrY, truncatedInstr);
+    }
 }
 
 void drawKeyboardOnSmallDisplay() {

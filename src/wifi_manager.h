@@ -19,16 +19,18 @@ enum WifiConnectionStatus {
 
 
 int initiateAsyncWifiScan();
-int checkAndRetrieveWifiScanResults(); // Returns raw WiFi.scanComplete() or our KIVA_WIFI_ enums for scan status
-wl_status_t getCurrentWifiStatus(); // Raw ESP32 status
-String getCurrentSsid();
+int checkAndRetrieveWifiScanResults();
+wl_status_t getCurrentWifiStatus();
+String getCurrentSsid(); // Gets SSID if connected, otherwise empty
 void setupWifi();
 
-// New functions for connection attempts
 void attemptDirectWifiConnection(const char* ssid);
 void attemptWpaWifiConnection(const char* ssid, const char* password);
 WifiConnectionStatus checkWifiConnectionProgress();
-WifiConnectionStatus getCurrentWifiConnectionStatus(); // To get the last known status for WIFI_CONNECTION_INFO
-const char* getWifiStatusMessage(); // Get a human-readable message for the current status
+WifiConnectionStatus getCurrentWifiConnectionStatus();
+const char* getWifiStatusMessage();
+
+// New global variable to store the connected SSID for UI purposes
+extern String currentConnectedSsid; // Definition will be in wifi_manager.cpp
 
 #endif // WIFI_MANAGER_H
