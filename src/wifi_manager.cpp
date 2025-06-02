@@ -1,45 +1,66 @@
 #include "wifi_manager.h"
-#include "sd_card_manager.h" // For SD card operations
+#include "sd_card_manager.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <cstring>
-#include <algorithm> // For std::sort
+#include <algorithm>
 
-// Definition for the global variable
-String currentConnectedSsid = "";
-
-// New global from KivaMain.ino, now used here for control
+// This must be an extern to the global in KivaMain.ino
 extern bool wifiHardwareEnabled; 
 
-// Static variable to store the current connection attempt status and message
+// Static variables for this file
 static WifiConnectionStatus currentAttemptStatus = WIFI_STATUS_IDLE;
 static unsigned long connectionStartTime = 0;
-const unsigned long WIFI_CONNECTION_TIMEOUT_MS = 15000; // 15 seconds timeout
-static char wifiStatusString[50] = "Idle";
+const unsigned long WIFI_CONNECTION_TIMEOUT_MS = 15000;
+// const unsigned long WIFI_CONNECTION_TIMEOUT_MS = 15000; // Already in .h via config.h or similar
+static char wifiStatusString[50] = "Wi-Fi Off";
 
-// Definitions for known networks list
-KnownWifiNetwork knownNetworksList[MAX_KNOWN_WIFI_NETWORKS];
-int knownNetworksCount = 0;
+// Definitions for known networks list (already externed in .h)
+// KnownWifiNetwork knownNetworksList[MAX_KNOWN_WIFI_NETWORKS]; // Definition should be in KivaMain.ino
+// int knownNetworksCount = 0; // Definition should be in KivaMain.ino
+// Corrected: These are global and defined in KivaMain.ino. Accessed via extern.
+extern KnownWifiNetwork knownNetworksList[MAX_KNOWN_WIFI_NETWORKS];
+extern int knownNetworksCount;
+
 
 void setWifiHardwareState(bool enable) {
     if (enable && !wifiHardwareEnabled) {
         Serial.println("Wi-Fi Manager: Enabling Wi-Fi hardware.");
-        WiFi.mode(WIFI_STA); // Initialize STA mode
-        // WiFi.persistent(false); // Optional: don't save config to NVM by default
-        // WiFi.setAutoConnect(false); // We manage connections explicitly
-        // WiFi.setAutoReconnect(false);
+        WiFi.mode(WIFI_STA); 
+        if (WiFi.setHostname(DEVICE_HOSTNAME)) {
+            Serial.printf("Wi-Fi Manager: Hostname set to '%s'\n", DEVICE_HOSTNAME);
+        } else {
+            Serial.println("Wi-Fi Manager: Failed to set hostname during init.");
+        }
+        WiFi.persistent(false); 
+        WiFi.setAutoReconnect(false); 
         wifiHardwareEnabled = true;
-        // Note: This doesn't start scanning or connecting, just enables the hardware.
+        currentAttemptStatus = WIFI_STATUS_IDLE;
+        strncpy(wifiStatusString, "Wi-Fi Idle", sizeof(wifiStatusString)-1);
+        wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
     } else if (!enable && wifiHardwareEnabled) {
         Serial.println("Wi-Fi Manager: Disabling Wi-Fi hardware.");
-        WiFi.disconnect(true); // Disconnect and shut down RF
-        WiFi.mode(WIFI_OFF);   // Completely turn off Wi-Fi
+        if (wifiIsScanning) {
+             wifiIsScanning = false;
+        }
+        WiFi.disconnect(true); 
+        delay(100); 
+        WiFi.mode(WIFI_OFF);   
         wifiHardwareEnabled = false;
-        currentConnectedSsid = ""; // Clear any displayed connection
-        currentAttemptStatus = WIFI_STATUS_IDLE; // Reset status
+        currentConnectedSsid = "";
+        foundWifiNetworksCount = 0; 
+        currentAttemptStatus = WIFI_STATUS_IDLE;
         strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString)-1);
         wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
     }
+}
+
+
+void updateWifiStatusOnDisconnect() {
+    currentAttemptStatus = WIFI_STATUS_IDLE; 
+    strncpy(wifiStatusString, "Disconnected", sizeof(wifiStatusString) - 1);
+    wifiStatusString[sizeof(wifiStatusString) - 1] = '\0';
+    currentConnectedSsid = ""; 
 }
 
 
@@ -50,14 +71,12 @@ bool loadKnownWifiNetworks() {
         return false;
     }
     Serial.println("WiFi Creds Load: Attempting to load known networks from SD.");
-    String fileContent = readSdFile(KNOWN_WIFI_FILE_PATH); // readSdFile logs its own success/failure
+    String fileContent = readSdFile(KNOWN_WIFI_FILE_PATH);
     
     if (fileContent.length() == 0) {
-        // This can mean file doesn't exist, is empty, or readSdFile failed.
-        // readSdFile already prints "Failed to open file for reading" if SD.open fails.
         Serial.println("WiFi Creds Load: Known networks file is empty or could not be read.");
         knownNetworksCount = 0;
-        return true; // Not an error condition for the logic, just means no networks loaded.
+        return true;
     }
 
     knownNetworksCount = 0;
@@ -79,10 +98,10 @@ bool loadKnownWifiNetworks() {
         }
 
         int failCountEnd = fileContent.indexOf('\n', passEnd + 1);
-        if (failCountEnd == -1 && (passEnd +1 < fileContent.length())) { // If not the absolute end of file, expect newline
-             failCountEnd = fileContent.length(); // Treat as last line
+        if (failCountEnd == -1 && (passEnd +1 < fileContent.length())) { 
+             failCountEnd = fileContent.length(); 
              Serial.printf("WiFi Creds Load: Line %d missing newline, assuming end of file.\n", linesProcessed + 1);
-        } else if (failCountEnd == -1) { // Reached end of content properly
+        } else if (failCountEnd == -1) {
              failCountEnd = fileContent.length();
         }
 
@@ -90,7 +109,7 @@ bool loadKnownWifiNetworks() {
         String ssidStr = fileContent.substring(lineStart, ssidEnd);
         String passStr = fileContent.substring(ssidEnd + 1, passEnd);
         String failStr = fileContent.substring(passEnd + 1, failCountEnd);
-        failStr.trim(); // Remove potential \r or spaces
+        failStr.trim();
 
         if (ssidStr.length() == 0 || ssidStr.length() > 32) {
             Serial.printf("WiFi Creds Load: Invalid SSID length on line %d. Skipping.\n", linesProcessed + 1);
@@ -100,7 +119,6 @@ bool loadKnownWifiNetworks() {
             continue;
         }
 
-
         strncpy(knownNetworksList[knownNetworksCount].ssid, ssidStr.c_str(), sizeof(knownNetworksList[knownNetworksCount].ssid) - 1);
         knownNetworksList[knownNetworksCount].ssid[sizeof(knownNetworksList[knownNetworksCount].ssid) - 1] = '\0';
 
@@ -108,15 +126,10 @@ bool loadKnownWifiNetworks() {
         knownNetworksList[knownNetworksCount].password[sizeof(knownNetworksList[knownNetworksCount].password) - 1] = '\0';
         
         knownNetworksList[knownNetworksCount].failCount = failStr.toInt();
-        if (failStr.toInt() == 0 && failStr != "0") { // Check if toInt failed (e.g. non-numeric string)
+        if (failStr.toInt() == 0 && failStr != "0") {
             Serial.printf("WiFi Creds Load: Warning - could not parse fail count '%s' for SSID '%s' on line %d. Defaulting to 0.\n", failStr.c_str(), ssidStr.c_str(), linesProcessed + 1);
             knownNetworksList[knownNetworksCount].failCount = 0;
         }
-
-
-        // Serial.printf("Loaded WiFi: SSID=%s, Pass=*****, Fails=%d\n",
-        //               knownNetworksList[knownNetworksCount].ssid,
-        //               knownNetworksList[knownNetworksCount].failCount);
 
         knownNetworksCount++;
         linesProcessed++;
@@ -134,11 +147,6 @@ bool saveKnownWifiNetworks() {
     }
     if (knownNetworksCount == 0) {
         Serial.println("WiFi Creds Save: No known networks in list to save. Ensuring file is empty or deleted.");
-        // Optionally delete the file if it exists and count is 0
-        // if (SD.exists(KNOWN_WIFI_FILE_PATH)) {
-        //     deleteSdFile(KNOWN_WIFI_FILE_PATH);
-        // }
-        // Or write an empty string to clear it:
         if (writeSdFile(KNOWN_WIFI_FILE_PATH, "")) {
              Serial.println("WiFi Creds Save: Emptied known networks file.");
              return true;
@@ -150,18 +158,17 @@ bool saveKnownWifiNetworks() {
 
     String fileContent = "";
     for (int i = 0; i < knownNetworksCount; i++) {
-        // Basic validation before saving
         if (strlen(knownNetworksList[i].ssid) == 0) {
             Serial.printf("WiFi Creds Save: Skipping network at index %d due to empty SSID.\n", i);
             continue;
         }
         fileContent += String(knownNetworksList[i].ssid) + ";";
-        fileContent += String(knownNetworksList[i].password) + ";"; // Password can be empty for open networks
+        fileContent += String(knownNetworksList[i].password) + ";";
         fileContent += String(knownNetworksList[i].failCount) + "\n";
     }
 
     Serial.printf("WiFi Creds Save: Attempting to save %d known networks to SD.\n", knownNetworksCount);
-    if (writeSdFile(KNOWN_WIFI_FILE_PATH, fileContent.c_str())) { // writeSdFile logs its own success/failure
+    if (writeSdFile(KNOWN_WIFI_FILE_PATH, fileContent.c_str())) {
         Serial.printf("WiFi Creds Save: Successfully saved %d known networks.\n", knownNetworksCount);
         return true;
     } else {
@@ -184,13 +191,11 @@ bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetF
         Serial.println("WiFi Creds Add/Update: Attempted to add/update with an empty SSID. Aborting.");
         return false;
     }
-    // Password can be empty for open networks.
 
     KnownWifiNetwork* existingNetwork = findKnownNetwork(ssid);
     bool changed = false;
 
     if (existingNetwork) {
-        // Update existing
         if (strcmp(existingNetwork->password, password) != 0) {
             strncpy(existingNetwork->password, password, sizeof(existingNetwork->password) - 1);
             existingNetwork->password[sizeof(existingNetwork->password) - 1] = '\0';
@@ -202,11 +207,8 @@ bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetF
         }
         if (changed) {
             Serial.printf("WiFi Creds Add/Update: Updated network %s. ResetFail: %d\n", ssid, resetFailCountOnUpdate);
-        } else {
-            // Serial.printf("WiFi Creds Add/Update: Network %s already up-to-date.\n", ssid);
         }
     } else {
-        // Add new, if space available
         if (knownNetworksCount < MAX_KNOWN_WIFI_NETWORKS) {
             strncpy(knownNetworksList[knownNetworksCount].ssid, ssid, sizeof(knownNetworksList[knownNetworksCount].ssid) - 1);
             knownNetworksList[knownNetworksCount].ssid[sizeof(knownNetworksList[knownNetworksCount].ssid) - 1] = '\0';
@@ -214,7 +216,7 @@ bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetF
             strncpy(knownNetworksList[knownNetworksCount].password, password, sizeof(knownNetworksList[knownNetworksCount].password) - 1);
             knownNetworksList[knownNetworksCount].password[sizeof(knownNetworksList[knownNetworksCount].password) - 1] = '\0';
             
-            knownNetworksList[knownNetworksCount].failCount = 0; // New networks start with 0 fails
+            knownNetworksList[knownNetworksCount].failCount = 0;
             knownNetworksCount++;
             changed = true;
             Serial.printf("WiFi Creds Add/Update: Added new network %s.\n", ssid);
@@ -227,7 +229,7 @@ bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetF
     if (changed) {
         return saveKnownWifiNetworks();
     }
-    return true; // No changes needed, so effectively success.
+    return true;
 }
 
 bool incrementSsidFailCount(const char* ssid) {
@@ -251,7 +253,6 @@ bool resetSsidFailCount(const char* ssid) {
             Serial.printf("WiFi Creds FailCount: Reset fail count for %s.\n", ssid);
             return saveKnownWifiNetworks();
         }
-        // Serial.printf("WiFi Creds FailCount: Fail count for %s already 0.\n", ssid);
         return true; 
     }
     Serial.printf("WiFi Creds FailCount: Could not find network %s to reset fail count.\n", ssid);
@@ -260,54 +261,49 @@ bool resetSsidFailCount(const char* ssid) {
 
 
 void setupWifi() {
-    // Initial state is off by default (wifiHardwareEnabled = false in KivaMain.ino)
-    // setWifiHardwareState(false); // Explicitly ensure it's off if default changes
+    setWifiHardwareState(false); 
     
-    // Load known networks regardless of initial hardware state.
-    // They are loaded into RAM for when Wi-Fi is turned on.
     if (isSdCardAvailable()) {
         loadKnownWifiNetworks();
     } else {
         Serial.println("Wi-Fi Manager: SD Card not available, cannot load known Wi-Fi networks.");
         knownNetworksCount = 0;
     }
-    // Do not initialize WiFi.mode(WIFI_STA) here anymore.
-    // It will be done by setWifiHardwareState(true) when Wi-Fi is needed.
-    Serial.println("Wi-Fi Manager: Setup complete. Wi-Fi hardware initially off.");
-    strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString)-1);
-    wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+    Serial.println("Wi-Fi Manager: Setup complete. Wi-Fi hardware initially OFF.");
 }
 
 int initiateAsyncWifiScan() {
     if (!wifiHardwareEnabled) {
         Serial.println("Wi-Fi Manager: Cannot scan, Wi-Fi hardware is disabled.");
-        // Optionally update status string to "Wi-Fi Disabled" for UI
         strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString)-1);
         wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-        foundWifiNetworksCount = 0; // No networks if Wi-Fi is off
-        return -3; // Custom code for Wi-Fi disabled, or handle in caller
+        foundWifiNetworksCount = 0;
+        wifiIsScanning = false;
+        currentAttemptStatus = WIFI_STATUS_IDLE;
+        return -3;
     }
 
     Serial.println("Wi-Fi Manager: Initiating async scan...");
     WiFi.scanDelete(); 
     delay(50); 
+
     int scanResult = WiFi.scanNetworks(true, true); 
 
     if (scanResult == WIFI_SCAN_FAILED) { 
         Serial.println("Wi-Fi Manager: Scan initiation failed.");
         currentAttemptStatus = KIVA_WIFI_SCAN_FAILED;
         strncpy(wifiStatusString, "Scan Failed", sizeof(wifiStatusString)-1);
+        wifiIsScanning = false;
     } else if (scanResult == WIFI_SCAN_RUNNING) { 
         Serial.println("Wi-Fi Manager: Scan started successfully, running in background.");
         currentAttemptStatus = KIVA_WIFI_SCAN_RUNNING;
         strncpy(wifiStatusString, "Scanning...", sizeof(wifiStatusString)-1);
-    } else { // Positive number means synchronous scan completed (shouldn't happen with async=true)
-             // or other unexpected value.
+        wifiIsScanning = true;
+    } else { 
         Serial.printf("Wi-Fi Manager: scanNetworks call returned unexpected for async: %d\n", scanResult);
-        // Treat as if scan is done or failed to start async properly.
-        // Caller will call checkAndRetrieveWifiScanResults which will handle it.
-        currentAttemptStatus = WIFI_STATUS_IDLE; // Or some error
-        strncpy(wifiStatusString, "Scan Done?", sizeof(wifiStatusString)-1); 
+        currentAttemptStatus = WIFI_STATUS_IDLE;
+        strncpy(wifiStatusString, "Scan Done?", sizeof(wifiStatusString)-1);
+        wifiIsScanning = false;
     }
     wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
     return scanResult; 
@@ -316,84 +312,72 @@ int initiateAsyncWifiScan() {
 int checkAndRetrieveWifiScanResults() {
     int scanStatus = WiFi.scanComplete(); 
 
-    if (scanStatus == WIFI_SCAN_FAILED) { // -2 from ESP32 WiFi library
+    if (scanStatus == WIFI_SCAN_FAILED) {
         Serial.println("Wi-Fi Manager: WiFi.scanComplete() reported scan FAILED.");
         foundWifiNetworksCount = 0;
-        currentAttemptStatus = KIVA_WIFI_SCAN_FAILED; // Use our enum
+        currentAttemptStatus = KIVA_WIFI_SCAN_FAILED;
         strncpy(wifiStatusString, "Scan Failed", sizeof(wifiStatusString)-1);
         wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-        WiFi.scanDelete(); // Clean up results from WiFi library
-        return KIVA_WIFI_SCAN_FAILED; // Return our status
-    } else if (scanStatus == WIFI_SCAN_RUNNING) { // -1 from ESP32 WiFi library
-        // Still scanning, do nothing more here.
-        // Serial.println("Wi-Fi Manager: WiFi.scanComplete() reports scan STILL RUNNING.");
-        currentAttemptStatus = KIVA_WIFI_SCAN_RUNNING; // Use our enum
-        // wifiStatusString should already be "Scanning..."
-        return KIVA_WIFI_SCAN_RUNNING; // Return our status
-    } else if (scanStatus >= 0) { // Scan finished (found 'scanStatus' networks or 0)
+        wifiIsScanning = false;
+        WiFi.scanDelete();
+        return KIVA_WIFI_SCAN_FAILED;
+    } else if (scanStatus == WIFI_SCAN_RUNNING) {
+        currentAttemptStatus = KIVA_WIFI_SCAN_RUNNING;
+        return KIVA_WIFI_SCAN_RUNNING;
+    } else if (scanStatus >= 0) {
         Serial.print("Wi-Fi Manager: Async Scan done, ");
         Serial.print(scanStatus); 
         Serial.println(" networks found by WiFi.scanComplete().");
+        wifiIsScanning = false;
 
-        // Temporary array to hold all results from the scan before filtering and sorting
         WifiNetwork tempScannedNetworks[MAX_WIFI_NETWORKS]; 
-        int tempCount = 0; // Count of networks in tempScannedNetworks
+        int tempCount = 0;
 
-        // Populate tempScannedNetworks from WiFi library results
-        if (scanStatus > 0) { // Only process if networks were actually found by the scan
+        if (scanStatus > 0) {
             for (int i = 0; i < scanStatus && tempCount < MAX_WIFI_NETWORKS; ++i) {
                 String ssidStr = WiFi.SSID(i);
-                ssidStr.trim(); // Remove leading/trailing whitespace
-                if (ssidStr.length() == 0 || ssidStr.length() > 32) { // Skip empty or overly long SSIDs
-                    // Serial.printf("Skipping invalid SSID from scan: '%s'\n", WiFi.SSID(i).c_str());
-                    continue; // Move to the next scanned network
+                ssidStr.trim();
+                if (ssidStr.length() == 0 || ssidStr.length() > 32) {
+                    continue;
                 }
-
                 strncpy(tempScannedNetworks[tempCount].ssid, ssidStr.c_str(), 32);
-                tempScannedNetworks[tempCount].ssid[32] = '\0'; // Ensure null termination
+                tempScannedNetworks[tempCount].ssid[32] = '\0';
                 tempScannedNetworks[tempCount].rssi = WiFi.RSSI(i);
                 tempScannedNetworks[tempCount].isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
                 tempCount++;
             }
         }
         
-        // Sort all valid networks found in tempScannedNetworks by RSSI (strongest first)
         std::sort(tempScannedNetworks, tempScannedNetworks + tempCount, [](const WifiNetwork& a, const WifiNetwork& b) {
-            return a.rssi > b.rssi; // Sort for strongest RSSI first
+            return a.rssi > b.rssi;
         });
 
-        // Now, populate the final `scannedNetworks` list for the UI,
-        // prioritizing the currently connected network (if any) at the top.
-        foundWifiNetworksCount = 0; // Reset the count for the final list
-        int connectedNetworkOriginalIndexInTemp = -1; // To track if connected network was in temp and avoid re-adding
+        foundWifiNetworksCount = 0;
+        int connectedNetworkOriginalIndexInTemp = -1;
 
-        // If currently connected to a Wi-Fi, try to find it in the temp sorted list and add it first
         if (currentConnectedSsid.length() > 0) {
             for (int i = 0; i < tempCount; ++i) {
                 if (currentConnectedSsid.equals(tempScannedNetworks[i].ssid)) {
                     if (foundWifiNetworksCount < MAX_WIFI_NETWORKS) {
                         scannedNetworks[foundWifiNetworksCount++] = tempScannedNetworks[i];
-                        connectedNetworkOriginalIndexInTemp = i; // Mark it so we don't add it again from the loop below
+                        connectedNetworkOriginalIndexInTemp = i;
                     }
-                    break; // Found the connected network, no need to search further in temp list for it
+                    break;
                 }
             }
         }
 
-        // Add the rest of the networks from the sorted temporary list,
-        // skipping the one that was already added (if it was the connected one).
         for (int i = 0; i < tempCount; ++i) {
             if (i == connectedNetworkOriginalIndexInTemp) {
-                continue; // Skip if it was the connected one and already added to `scannedNetworks`
+                continue;
             }
-            if (foundWifiNetworksCount < MAX_WIFI_NETWORKS) { // Ensure we don't overflow `scannedNetworks`
+            if (foundWifiNetworksCount < MAX_WIFI_NETWORKS) {
                 scannedNetworks[foundWifiNetworksCount++] = tempScannedNetworks[i];
             } else {
-                break; // `scannedNetworks` is full
+                break;
             }
         }
 
-        // Update status string based on results
         if (foundWifiNetworksCount == 0) {
              Serial.println("Wi-Fi Manager: No valid networks stored after filtering and sorting.");
              strncpy(wifiStatusString, "No Networks", sizeof(wifiStatusString)-1);
@@ -401,19 +385,19 @@ int checkAndRetrieveWifiScanResults() {
              snprintf(wifiStatusString, sizeof(wifiStatusString)-1, "%d Networks", foundWifiNetworksCount);
         }
         wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-        currentAttemptStatus = WIFI_STATUS_IDLE; // Scan is no longer running or failed, it's idle/done for now
+        currentAttemptStatus = WIFI_STATUS_IDLE;
         
-        WiFi.scanDelete(); // Clean up scan results from WiFi library internal storage
-        return foundWifiNetworksCount; // Return actual count of networks in `scannedNetworks`
+        WiFi.scanDelete();
+        return foundWifiNetworksCount;
     }
     
-    // This part should ideally not be reached if the above conditions for scanStatus are exhaustive.
     Serial.printf("Wi-Fi Manager: WiFi.scanComplete() returned unhandled status: %d\n", scanStatus);
-    currentAttemptStatus = WIFI_STATUS_IDLE; // Or some other appropriate error state
+    currentAttemptStatus = WIFI_STATUS_IDLE;
     strncpy(wifiStatusString, "Scan Unknown", sizeof(wifiStatusString)-1);
     wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-    WiFi.scanDelete(); // Clean up in case of unexpected status too
-    return scanStatus; // Return the raw status from WiFi.scanComplete()
+    wifiIsScanning = false;
+    WiFi.scanDelete();
+    return scanStatus;
 }
 
 
@@ -423,53 +407,75 @@ wl_status_t getCurrentWifiStatus() {
 
 String getCurrentSsid() {
     if (WiFi.status() == WL_CONNECTED) {
-        currentConnectedSsid = WiFi.SSID(); // Keep our global updated
+        currentConnectedSsid = WiFi.SSID();
         return currentConnectedSsid;
     }
-    // If not connected, currentConnectedSsid will retain its last connected value or be empty.
-    // It's cleared during new connection attempts or on failure.
-    return ""; // Return empty if not actively connected at this moment
+    return "";
 }
 
 void attemptDirectWifiConnection(const char* ssid) {
     if (!wifiHardwareEnabled) {
         Serial.println("Attempting direct connection but Wi-Fi is off. Enabling first.");
-        setWifiHardwareState(true); // Ensure Wi-Fi is on
-        delay(100); // Give it a moment to power up
+        setWifiHardwareState(true);
+        delay(100);
+    } else {
+        if (strcmp(WiFi.getHostname(), DEVICE_HOSTNAME) != 0) {
+            if (WiFi.setHostname(DEVICE_HOSTNAME)) { // Use DEVICE_HOSTNAME from config.h
+                Serial.printf("Wi-Fi Manager: Hostname (re)set to '%s' before connecting.\n", DEVICE_HOSTNAME);
+            } else {
+                Serial.println("Wi-Fi Manager: Failed to (re)set hostname before connecting.");
+            }
+        }
     }
 
     Serial.printf("Wi-Fi Manager: Attempting to connect to OPEN network: %s\n", ssid);
-    currentConnectedSsid = ""; 
-    WiFi.disconnect(); 
+    currentConnectedSsid = "";
+    WiFi.disconnect(); // Ensure clean state
     delay(100);
-    WiFi.begin(ssid); // For open networks, password is NULL by default
+
+    // Explicitly configure for DHCP - this can sometimes help clear old states
+    IPAddress emptyIP(0,0,0,0);
+    WiFi.config(emptyIP, emptyIP, emptyIP); // Use DHCP
+    delay(50); // Short delay after config
+
+    WiFi.begin(ssid);
     connectionStartTime = millis();
     currentAttemptStatus = WIFI_CONNECTING_IN_PROGRESS;
     strncpy(wifiStatusString, "Connecting...", sizeof(wifiStatusString)-1);
     wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-    // For open networks, we can "confirm" the password as empty immediately
     addOrUpdateKnownNetwork(ssid, "", true);
 }
 
 void attemptWpaWifiConnection(const char* ssid, const char* password) {
     if (!wifiHardwareEnabled) {
         Serial.println("Attempting WPA connection but Wi-Fi is off. Enabling first.");
-        setWifiHardwareState(true); // Ensure Wi-Fi is on
-        delay(100); // Give it a moment to power up
+        setWifiHardwareState(true);
+        delay(100);
+    } else {
+        if (strcmp(WiFi.getHostname(), DEVICE_HOSTNAME) != 0) {
+             if (WiFi.setHostname(DEVICE_HOSTNAME)) { // Use DEVICE_HOSTNAME from config.h
+                Serial.printf("Wi-Fi Manager: Hostname (re)set to '%s' before connecting.\n", DEVICE_HOSTNAME);
+            } else {
+                Serial.println("Wi-Fi Manager: Failed to (re)set hostname before connecting.");
+            }
+        }
     }
 
     Serial.printf("Wi-Fi Manager: Attempting to connect to SECURE network: %s (Pass: ***)\n", ssid);
-    currentConnectedSsid = ""; 
-    WiFi.disconnect(); 
+    currentConnectedSsid = "";
+    WiFi.disconnect(); // Ensure clean state
     delay(100);
+
+    // Explicitly configure for DHCP
+    IPAddress emptyIP(0,0,0,0);
+    WiFi.config(emptyIP, emptyIP, emptyIP); // Use DHCP
+    delay(50); // Short delay after config
+
     WiFi.begin(ssid, password);
     connectionStartTime = millis();
     currentAttemptStatus = WIFI_CONNECTING_IN_PROGRESS;
     strncpy(wifiStatusString, "Connecting...", sizeof(wifiStatusString)-1);
     wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-    // Note: We save/update the password more definitively upon successful connection or explicit input.
-    // If this attempt is with a *new* password from user input, it will be saved by handleKeyboardInput.
-    // If this attempt is with a *stored* password, success/failure will update fail counts.
 }
 
 WifiConnectionStatus checkWifiConnectionProgress() {
@@ -478,40 +484,33 @@ WifiConnectionStatus checkWifiConnectionProgress() {
     }
 
     wl_status_t status = WiFi.status();
-    String connectingSsid = WiFi.SSID(); // Get SSID of current attempt if available
+    String connectingSsidAttempt = WiFi.SSID();
+    const char* ssidForUpdate = (strlen(currentSsidToConnect) > 0) ? currentSsidToConnect : connectingSsidAttempt.c_str();
 
     if (status == WL_CONNECTED) {
         Serial.println("Wi-Fi Manager: Connected successfully!");
         currentAttemptStatus = WIFI_CONNECTED_SUCCESS;
-        currentConnectedSsid = WiFi.SSID(); // Update global here
+        currentConnectedSsid = WiFi.SSID();
         snprintf(wifiStatusString, sizeof(wifiStatusString)-1, "Connected: %s", currentConnectedSsid.c_str());
-        // On successful connection, reset fail count for this SSID.
-        // The password used for this successful connection is now considered "good".
-        // If currentSsidToConnect was set (e.g. from selection or input), use that.
-        // Otherwise, use WiFi.SSID().
-        const char* ssidToUpdate = (strlen(currentSsidToConnect) > 0) ? currentSsidToConnect : currentConnectedSsid.c_str();
-        if (strlen(ssidToUpdate) > 0) {
-            resetSsidFailCount(ssidToUpdate);
-            // If it was a secure network and we have the password (e.g. from wifiPasswordInput), ensure it's saved.
-            // This logic is tricky because we don't always have the password here if it was a stored one.
-            // addOrUpdateKnownNetwork in handleKeyboardInput and upon connection success handles password saving.
+        if (strlen(ssidForUpdate) > 0) {
+            resetSsidFailCount(ssidForUpdate);
         }
     } else if (status == WL_NO_SSID_AVAIL) {
         Serial.println("Wi-Fi Manager: Connection Failed - SSID not available.");
         currentAttemptStatus = WIFI_FAILED_NO_SSID_AVAIL;
         strncpy(wifiStatusString, "SSID Not Found", sizeof(wifiStatusString)-1);
         currentConnectedSsid = ""; 
-    } else if (status == WL_CONNECT_FAILED) { // Often means wrong password for WPA
+        if (strlen(ssidForUpdate) > 0) incrementSsidFailCount(ssidForUpdate);
+    } else if (status == WL_CONNECT_FAILED) {
         Serial.println("Wi-Fi Manager: Connection Failed - WL_CONNECT_FAILED.");
-        const char* ssidOfFailedAttempt = (strlen(currentSsidToConnect) > 0) ? currentSsidToConnect : connectingSsid.c_str();
-
-        if (selectedNetworkIsSecure && strlen(ssidOfFailedAttempt) > 0) {
+        if (selectedNetworkIsSecure && strlen(ssidForUpdate) > 0) {
             currentAttemptStatus = WIFI_FAILED_WRONG_PASSWORD;
             strncpy(wifiStatusString, "Auth Error", sizeof(wifiStatusString)-1);
-            incrementSsidFailCount(ssidOfFailedAttempt);
+            incrementSsidFailCount(ssidForUpdate);
         } else {
             currentAttemptStatus = WIFI_FAILED_OTHER; 
             strncpy(wifiStatusString, "Connect Fail", sizeof(wifiStatusString)-1);
+            if (strlen(ssidForUpdate) > 0) incrementSsidFailCount(ssidForUpdate);
         }
         currentConnectedSsid = ""; 
     } else if (status == WL_IDLE_STATUS || status == WL_DISCONNECTED || status == WL_SCAN_COMPLETED) {
@@ -520,23 +519,21 @@ WifiConnectionStatus checkWifiConnectionProgress() {
             currentAttemptStatus = WIFI_FAILED_TIMEOUT;
             strncpy(wifiStatusString, "Timeout", sizeof(wifiStatusString)-1);
             currentConnectedSsid = ""; 
-            // Optionally increment fail count on timeout too if currentSsidToConnect is set
-            if (strlen(currentSsidToConnect) > 0) {
-                 incrementSsidFailCount(currentSsidToConnect);
+            if (strlen(ssidForUpdate) > 0) {
+                 incrementSsidFailCount(ssidForUpdate);
             }
             WiFi.disconnect(); 
         } else {
-            // Still trying, status is just idle or disconnected but not yet timed out.
             currentAttemptStatus = WIFI_CONNECTING_IN_PROGRESS;
         }
-    } else { // Other statuses like WL_NO_SHIELD, WL_CONNECTION_LOST etc.
+    } else {
         if (millis() - connectionStartTime > WIFI_CONNECTION_TIMEOUT_MS) {
             Serial.printf("Wi-Fi Manager: Timeout with unhandled status %d.\n", status);
-            currentAttemptStatus = WIFI_FAILED_TIMEOUT; // Or WIFI_FAILED_OTHER
+            currentAttemptStatus = WIFI_FAILED_TIMEOUT;
             strncpy(wifiStatusString, "Timeout/Error", sizeof(wifiStatusString)-1);
             currentConnectedSsid = ""; 
-            if (strlen(currentSsidToConnect) > 0) {
-                 incrementSsidFailCount(currentSsidToConnect);
+            if (strlen(ssidForUpdate) > 0) {
+                 incrementSsidFailCount(ssidForUpdate);
             }
             WiFi.disconnect();
         } else {
@@ -547,11 +544,16 @@ WifiConnectionStatus checkWifiConnectionProgress() {
     return currentAttemptStatus;
 }
 
-
 WifiConnectionStatus getCurrentWifiConnectionStatus() {
+    if (!wifiHardwareEnabled) {
+        return WIFI_STATUS_IDLE;
+    }
     return currentAttemptStatus;
 }
 
 const char* getWifiStatusMessage() {
+    if (!wifiHardwareEnabled) {
+        return "Wi-Fi Off";
+    }
     return wifiStatusString;
 }

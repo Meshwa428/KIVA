@@ -23,10 +23,11 @@ void drawPassiveDisplay();
 void drawWifiSetupScreen();
 void drawWifiSignalStrength(int x, int y, int8_t rssi);
 
-void drawPasswordInputScreen();      // <--- NEW
-void drawKeyboardOnSmallDisplay();   // <--- NEW
-void drawWifiConnectingStatusScreen(); // <--- NEW
-void drawWifiConnectionResultScreen(); // <--- NEW
+void drawPasswordInputScreen();
+void drawKeyboardOnSmallDisplay();
+void drawWifiConnectingStatusScreen();
+void drawWifiConnectionResultScreen();
+void drawWifiDisconnectOverlay(); // <--- NEW
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill);
 void drawBatIcon(int x, int y, uint8_t percentage);

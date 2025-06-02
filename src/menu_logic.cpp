@@ -1,9 +1,9 @@
 #include "menu_logic.h"
 #include "config.h"
 #include "ui_drawing.h"
-#include "wifi_manager.h"  // For connection attempts
+#include "wifi_manager.h"
 #include "pcf_utils.h"
-#include "keyboard_layout.h"  // For keyboard layer enums
+#include "keyboard_layout.h"
 
 // --- Menu Item Arrays (ensure "Utilities" is in mainMenuItems as configured) ---
 const char* mainMenuItems[] = {
@@ -61,14 +61,10 @@ void initializeCurrentMenu() {
   marqueeActive = false;
   marqueeOffset = 0;
   marqueeScrollLeft = true;
-  // gridAnimatingIn = false; // This should be set by startGridItemAnimation or when grid is left
 
-  // Reset keyboard focus for any menu that isn't password input
   if (currentMenu != WIFI_PASSWORD_INPUT) {
     keyboardFocusRow = 0;
     keyboardFocusCol = 0;
-    // currentKeyboardLayer = KB_LAYER_LOWERCASE; // Don't reset layer if just navigating menus
-    // capsLockActive = false; // Don't reset caps lock on general menu init
   }
 
   switch (currentMenu) {
@@ -76,9 +72,15 @@ void initializeCurrentMenu() {
       maxMenuItems = getMainMenuItemsCount();
       if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems > 0 ? maxMenuItems -1 : 0;
       if (menuIndex < 0) menuIndex = 0;
-      mainMenuAnim.init();
-      mainMenuAnim.setTargets(menuIndex, maxMenuItems);
-      gridAnimatingIn = false; // Ensure grid animation flag is off
+      // ---- MODIFIED PART ----
+      // Old way:
+      // mainMenuAnim.init();
+      // mainMenuAnim.setTargets(menuIndex, maxMenuItems);
+      // New way: Start the intro animation
+      // Items will start at Y-offset 0 (center of animation area) and Scale 0 (invisible)
+      mainMenuAnim.startIntro(menuIndex, maxMenuItems, 0.0f, 0.0f); 
+      // ---- END MODIFIED PART ----
+      gridAnimatingIn = false;
       break;
     case GAMES_MENU:
       maxMenuItems = getGamesMenuItemsCount();
@@ -124,75 +126,56 @@ void initializeCurrentMenu() {
       if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems > 0 ? maxMenuItems -1 : 0;
       if (menuIndex < 0) menuIndex = 0;
       
-      targetGridScrollOffset_Y = 0; // Reset scroll on entering grid or changing category
+      targetGridScrollOffset_Y = 0;
       currentGridScrollOffset_Y_anim = 0;
-      startGridItemAnimation(); // This sets gridAnimatingIn = true
+      startGridItemAnimation();
       break;
     case WIFI_SETUP_MENU:
-      if (!wifiHardwareEnabled) { 
-        // If Wi-Fi is off, maybe show 1 item: "Enable Wi-Fi" and then "Back"
-        // For simplicity, let's assume UI shows "Wi-Fi Off". Max items can be 1 for "Back".
-        // Or 0 if "Back" is handled by physical button only.
-        // If we want an "Enable Wi-Fi" item, need to adjust menu item text source.
-        // For now, drawWifiSetupScreen handles the "Wi-Fi is Off" message.
-        // Let's assume only "Back" is navigable if Wi-Fi is off for the list structure.
-        // Or, make maxMenuItems = 0 and rely on `drawWifiSetupScreen` for the message.
-        // Let's make it 1 for "Back" to be consistent with other empty lists.
-        // maxMenuItems = 1; // "Back"
-        // For now, let's be consistent with previous logic where drawWifiSetupScreen shows message.
-        // If `wifiHardwareEnabled` is false, `foundWifiNetworksCount` will be 0.
-        // `maxMenuItems` will then be 0 + 2 = 2 items ("Scan Again", "Back").
-        // The UI function `drawWifiSetupScreen` will display "Wi-Fi is Off" instead of the list.
-        // So, the existing logic for maxMenuItems should work with UI changes.
-         maxMenuItems = foundWifiNetworksCount + 2; // "Scan Again", "Back"
-         if (wifiIsScanning && wifiHardwareEnabled) maxMenuItems = 0; // "Scanning..."
+      if (!wifiHardwareEnabled) {
+         maxMenuItems = 2;
       } else if (wifiIsScanning) {
-        maxMenuItems = 0;  // "Scanning..." message takes over UI
+        maxMenuItems = 0;
       } else {
-        maxMenuItems = foundWifiNetworksCount + 2;  // Networks + Scan Again + Back
+        maxMenuItems = foundWifiNetworksCount + 2;
       }
 
       wifiListAnim.init();
-      if (maxMenuItems > 0) { // Check before accessing/setting wifiMenuIndex
+      if (maxMenuItems > 0) {
         if (wifiMenuIndex >= maxMenuItems) wifiMenuIndex = maxMenuItems - 1;
         if (wifiMenuIndex < 0) wifiMenuIndex = 0;
       } else {
-        wifiMenuIndex = 0; // Default if no items
+        wifiMenuIndex = 0;
       }
       wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
-      targetWifiListScrollOffset_Y = 0;  // Reset scroll on re-entry or scan finish
+      targetWifiListScrollOffset_Y = 0;
       currentWifiListScrollOffset_Y_anim = 0;
       gridAnimatingIn = false;
       break;
     case FLASHLIGHT_MODE:
-      maxMenuItems = 0;  // No selectable items in flashlight mode
+      maxMenuItems = 0;
       gridAnimatingIn = false;
       break;
     case WIFI_PASSWORD_INPUT:
-      maxMenuItems = 0;  // No list items, UI is custom for password input
-      // Keyboard state init
+      maxMenuItems = 0;
       keyboardFocusRow = 0;
       keyboardFocusCol = 0;
-      currentKeyboardLayer = KB_LAYER_LOWERCASE; // Default to lowercase
+      currentKeyboardLayer = KB_LAYER_LOWERCASE;
       capsLockActive = false;
       gridAnimatingIn = false;
-      // Password buffer (wifiPasswordInput) is expected to be initialized by caller or persist
       break;
     case WIFI_CONNECTING:
     case WIFI_CONNECTION_INFO:
-      maxMenuItems = 0;  // Custom UI, no list items
+      maxMenuItems = 0;
       gridAnimatingIn = false;
       break;
   }
 
-  // General bounds check for menuIndex if not handled by specific cases above
-  // (WIFI_SETUP_MENU uses wifiMenuIndex, handled in its case)
   if (currentMenu != WIFI_SETUP_MENU && currentMenu != WIFI_PASSWORD_INPUT && 
       currentMenu != WIFI_CONNECTING && currentMenu != WIFI_CONNECTION_INFO) {
     if (maxMenuItems > 0) {
       if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems - 1;
       if (menuIndex < 0) menuIndex = 0;
-    } else if (menuIndex != 0) { // If maxMenuItems is 0, index must be 0
+    } else if (menuIndex != 0) {
       menuIndex = 0;
     }
   }
@@ -201,10 +184,10 @@ void initializeCurrentMenu() {
 
 void handleMenuSelection() {
   MenuState previousMenu = currentMenu;
-  int localMenuIndexForNewMenu = 0; // Used to reset index when entering a new sub-menu
+  int localMenuIndexForNewMenu = 0;
 
   if (currentMenu == MAIN_MENU) {
-    mainMenuSavedIndex = menuIndex; // Save current main menu selection for returning
+    mainMenuSavedIndex = menuIndex;
     MenuState targetMenu = currentMenu;
     if (menuIndex < 0 || menuIndex >= getMainMenuItemsCount()) {
       Serial.println("Error: Main menu index out of bounds!");
@@ -215,38 +198,36 @@ void handleMenuSelection() {
     else if (strcmp(selectedMainItem, "Games") == 0) targetMenu = GAMES_MENU;
     else if (strcmp(selectedMainItem, "Settings") == 0) targetMenu = SETTINGS_MENU;
     else if (strcmp(selectedMainItem, "Utilities") == 0) targetMenu = UTILITIES_MENU;
-    else if (strcmp(selectedMainItem, "Info") == 0) { 
-      // Handle Info screen selection - for now, let's assume it's a placeholder
+    else if (strcmp(selectedMainItem, "Info") == 0) {
       Serial.println("Info selected - (Not yet implemented)");
-      return; 
+      return;
     }
 
     if (targetMenu != currentMenu) {
       currentMenu = targetMenu;
-      menuIndex = localMenuIndexForNewMenu; // Reset index for the new menu
+      menuIndex = localMenuIndexForNewMenu;
       initializeCurrentMenu();
     }
   } else if (currentMenu == TOOLS_MENU) {
     int currentMax = getToolsMenuItemsCount();
-    if (menuIndex == (currentMax - 1)) {  // "Back" selected from Tools menu
+    if (menuIndex == (currentMax - 1)) {
       currentMenu = MAIN_MENU;
-      // Try to restore previous main menu selection for "Tools"
       for (int i = 0; i < getMainMenuItemsCount(); ++i) {
         if (strcmp(mainMenuItems[i], "Tools") == 0) {
           menuIndex = i;
-          mainMenuSavedIndex = i; // Ensure mainMenuSavedIndex is also updated
+          mainMenuSavedIndex = i;
           break;
         }
       }
-    } else { // A tool category selected
-      toolsCategoryIndex = menuIndex; // Store which category was selected
+    } else {
+      toolsCategoryIndex = menuIndex;
       currentMenu = TOOL_CATEGORY_GRID;
-      menuIndex = localMenuIndexForNewMenu; // Reset index for the grid
+      menuIndex = localMenuIndexForNewMenu;
     }
-    initializeCurrentMenu(); // Initialize the new menu (MAIN_MENU or TOOL_CATEGORY_GRID)
+    initializeCurrentMenu();
   } else if (currentMenu == GAMES_MENU) {
     int currentMax = getGamesMenuItemsCount();
-    if (menuIndex == (currentMax - 1)) {  // "Back" selected from Games menu
+    if (menuIndex == (currentMax - 1)) {
       currentMenu = MAIN_MENU;
       for (int i = 0; i < getMainMenuItemsCount(); ++i) {
         if (strcmp(mainMenuItems[i], "Games") == 0) {
@@ -255,18 +236,15 @@ void handleMenuSelection() {
           break;
         }
       }
-    } else { 
-      // Game launch logic would go here
+    } else {
       Serial.printf("Selected game: %s (Not yet implemented)\n", gamesMenuItems[menuIndex]);
     }
-    // Only initialize if the menu actually changed (e.g., went back to MAIN_MENU)
-    // If a game was "launched" (but not yet implemented), currentMenu might not change.
     if (previousMenu != currentMenu) {
         initializeCurrentMenu();
     }
   } else if (currentMenu == SETTINGS_MENU) {
     int currentMax = getSettingsMenuItemsCount();
-    if (menuIndex == (currentMax - 1)) {  // "Back" selected from Settings menu
+    if (menuIndex == (currentMax - 1)) {
       currentMenu = MAIN_MENU;
       for (int i = 0; i < getMainMenuItemsCount(); ++i) {
         if (strcmp(mainMenuItems[i], "Settings") == 0) {
@@ -276,35 +254,33 @@ void handleMenuSelection() {
         }
       }
     } else if (strcmp(settingsMenuItems[menuIndex], "Wi-Fi Setup") == 0) {
-      setWifiHardwareState(true); // Turn on Wi-Fi when entering setup
-      delay(100); // Give a moment for hardware to initialize if it was off
+      setWifiHardwareState(true);
+      delay(100);
 
       currentMenu = WIFI_SETUP_MENU;
-      wifiMenuIndex = localMenuIndexForNewMenu; // Reset Wi-Fi list selection
-      int scanReturn = initiateAsyncWifiScan(); // from wifi_manager
+      wifiMenuIndex = localMenuIndexForNewMenu;
+      int scanReturn = initiateAsyncWifiScan();
       
-      if (scanReturn == WIFI_SCAN_RUNNING || scanReturn == -1) { // ESP32 uses -1 for WIFI_SCAN_RUNNING
+      if (scanReturn == WIFI_SCAN_RUNNING || scanReturn == -1) {
         wifiIsScanning = true;
-        foundWifiNetworksCount = 0; // Reset count while scanning
+        foundWifiNetworksCount = 0;
         lastWifiScanCheckTime = millis();
-      } else if (scanReturn == -3) { // Custom code for Wi-Fi disabled (from initiateAsyncWifiScan)
+      } else if (scanReturn == -3) {
         Serial.println("Wi-Fi is disabled by manager. Cannot scan.");
         wifiIsScanning = false;
-        foundWifiNetworksCount = 0; 
-        // initializeCurrentMenu will be called below and UI should reflect "Wi-Fi Off"
-      } else { // Scan failed to start or completed synchronously (less common for async)
+        foundWifiNetworksCount = 0;
+      } else {
         wifiIsScanning = false;
-        checkAndRetrieveWifiScanResults(); // Populate networks immediately
+        checkAndRetrieveWifiScanResults();
       }
-    } else { 
-      // Other settings logic
+    } else {
       Serial.printf("Selected setting: %s (Not yet implemented)\n", settingsMenuItems[menuIndex]);
     }
-    if (previousMenu != currentMenu) { // Initialize if menu changed (e.g. to WIFI_SETUP_MENU or MAIN_MENU)
+    if (previousMenu != currentMenu) {
         initializeCurrentMenu();
     }
   } else if (currentMenu == TOOL_CATEGORY_GRID) {
-    int currentMaxItemsInGrid = 0; // Determine max items for the current tool category
+    int currentMaxItemsInGrid = 0;
     switch (toolsCategoryIndex) {
       case 0: currentMaxItemsInGrid = getInjectionToolItemsCount(); break;
       case 1: currentMaxItemsInGrid = getWifiAttackToolItemsCount(); break;
@@ -314,66 +290,65 @@ void handleMenuSelection() {
       default: currentMaxItemsInGrid = 0; break;
     }
 
-    if (menuIndex == currentMaxItemsInGrid - 1 && currentMaxItemsInGrid > 0) { // "Back" selected from tool grid
+    if (menuIndex == currentMaxItemsInGrid - 1 && currentMaxItemsInGrid > 0) {
       currentMenu = TOOLS_MENU;
-      menuIndex = toolsCategoryIndex; // Restore selection in Tools menu to the category we came from
-    } else if (currentMaxItemsInGrid > 0) { 
-      // Actual tool selected
-      // Example: const char* selectedToolName = (*(getToolListPointer(toolsCategoryIndex)))[menuIndex];
-      // Serial.printf("Selected tool: %s (Not yet implemented)\n", selectedToolName);
+      menuIndex = toolsCategoryIndex;
+    } else if (currentMaxItemsInGrid > 0) {
       Serial.println("Tool selected from grid (Not yet implemented)");
     }
-    initializeCurrentMenu(); // Initialize new menu (TOOLS_MENU or refresh grid if tool selected - TBD)
+    initializeCurrentMenu();
   } else if (currentMenu == WIFI_SETUP_MENU) {
     if (!wifiHardwareEnabled) {
-        // If Wi-Fi is off, the only "selectable" item might be "Back" or an "Enable Wi-Fi"
-        // This logic assumes if Wi-Fi is off, item selection will be handled to enable it or go back.
-        // For now, let's assume if we reach here and wifiMenuIndex points to "Back" (if it's the only option)
-        if (maxMenuItems > 0 && wifiMenuIndex == maxMenuItems -1) { // Assuming "Back" is last
+        if (maxMenuItems > 0 && wifiMenuIndex == maxMenuItems -1) {
              currentMenu = SETTINGS_MENU;
              for (int i = 0; i < getSettingsMenuItemsCount(); ++i)
                 if (strcmp(settingsMenuItems[i], "Wi-Fi Setup") == 0) {
                     menuIndex = i; break;
                 }
              initializeCurrentMenu();
-        } // Else, if another item like "Enable Wi-Fi" was selected, it would handle turning Wi-Fi on.
-        return; // Don't process further if Wi-Fi is off.
+        }
+        return;
     }
 
-    if (!wifiIsScanning) { // Only handle selections if not actively scanning
-      if (wifiMenuIndex < foundWifiNetworksCount) {  // A network SSID is selected
-        strncpy(currentSsidToConnect, scannedNetworks[wifiMenuIndex].ssid, sizeof(currentSsidToConnect) - 1);
-        currentSsidToConnect[sizeof(currentSsidToConnect) - 1] = '\0';
-        selectedNetworkIsSecure = scannedNetworks[wifiMenuIndex].isSecure;
+    if (!wifiIsScanning) {
+            if (wifiMenuIndex < foundWifiNetworksCount) {
+        if (currentConnectedSsid.length() > 0 && strcmp(scannedNetworks[wifiMenuIndex].ssid, currentConnectedSsid.c_str()) == 0) {
+            strncpy(currentSsidToConnect, scannedNetworks[wifiMenuIndex].ssid, sizeof(currentSsidToConnect) - 1);
+            currentSsidToConnect[sizeof(currentSsidToConnect) - 1] = '\0';
+            
+            showWifiDisconnectOverlay = true;
+            disconnectOverlaySelection = 0; // Default to Cancel (X)
+            
+            // Start animation
+            disconnectOverlayAnimatingIn = true;
+            disconnectOverlayCurrentScale = 0.1f; // Start from a small scale
+            disconnectOverlayTargetScale = 1.0f;
+            disconnectOverlayAnimStartTime = millis();
+            
+            return; 
+        } else {
+            // Not connected to this one, or no active connection; proceed with connection attempt
+            strncpy(currentSsidToConnect, scannedNetworks[wifiMenuIndex].ssid, sizeof(currentSsidToConnect) - 1);
+            currentSsidToConnect[sizeof(currentSsidToConnect) - 1] = '\0';
+            selectedNetworkIsSecure = scannedNetworks[wifiMenuIndex].isSecure;
 
-        KnownWifiNetwork* knownNet = findKnownNetwork(currentSsidToConnect);
+            KnownWifiNetwork* knownNet = findKnownNetwork(currentSsidToConnect);
 
-        if (selectedNetworkIsSecure) {
-            if (knownNet && knownNet->failCount < MAX_WIFI_FAIL_ATTEMPTS && strlen(knownNet->password) > 0) {
-                // Found known secure network, fail count is acceptable, and has a password
-                Serial.printf("Attempting connection to SECURE network %s using stored password.\n", currentSsidToConnect);
-                attemptWpaWifiConnection(currentSsidToConnect, knownNet->password);
+            if (selectedNetworkIsSecure) {
+                if (knownNet && knownNet->failCount < MAX_WIFI_FAIL_ATTEMPTS && strlen(knownNet->password) > 0) {
+                    attemptWpaWifiConnection(currentSsidToConnect, knownNet->password);
+                    currentMenu = WIFI_CONNECTING;
+                } else {
+                    currentMenu = WIFI_PASSWORD_INPUT;
+                    wifiPasswordInput[0] = '\0';
+                    wifiPasswordInputCursor = 0;
+                }
+            } else { // Open network
+                attemptDirectWifiConnection(currentSsidToConnect);
                 currentMenu = WIFI_CONNECTING;
-            } else {
-                 // Not known, or fail count too high, or no password stored (should not happen for secure known net if logic is correct)
-                 if (knownNet && knownNet->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
-                    Serial.printf("Stored password for %s failed %d times. Asking for new password.\n", currentSsidToConnect, knownNet->failCount);
-                 } else if (knownNet && strlen(knownNet->password) == 0 && selectedNetworkIsSecure) { // Should ideally not happen
-                    Serial.printf("Known network %s is secure but has no password stored. Asking for password.\n", currentSsidToConnect);
-                 } else if (!knownNet) {
-                    Serial.printf("Network %s is not known. Asking for password.\n", currentSsidToConnect);
-                 }
-                currentMenu = WIFI_PASSWORD_INPUT;
-                wifiPasswordInput[0] = '\0';  // Clear password buffer for new input
-                wifiPasswordInputCursor = 0;
             }
-        } else { // Open network
-            Serial.printf("Attempting connection to OPEN network %s.\n", currentSsidToConnect);
-            attemptDirectWifiConnection(currentSsidToConnect); // This will also add/update it as known with empty pass
-            currentMenu = WIFI_CONNECTING;
+            initializeCurrentMenu(); // Initialize for WIFI_CONNECTING or WIFI_PASSWORD_INPUT state
         }
-        initializeCurrentMenu(); // Initialize for WIFI_CONNECTING or WIFI_PASSWORD_INPUT state
-
       } else if (wifiMenuIndex == foundWifiNetworksCount) {  // "Scan Again" selected
         Serial.println("Re-initiating Wi-Fi scan...");
         int scanReturn = initiateAsyncWifiScan();
@@ -389,42 +364,39 @@ void handleMenuSelection() {
           wifiIsScanning = false;
           checkAndRetrieveWifiScanResults();
         }
-        initializeCurrentMenu(); // Re-initialize menu with scanning status or new results
-        wifiMenuIndex = 0; // Reset selection to the top of the new/updated list
-        targetWifiListScrollOffset_Y = 0; // Reset scroll
+        initializeCurrentMenu();
+        wifiMenuIndex = 0;
+        targetWifiListScrollOffset_Y = 0;
         currentWifiListScrollOffset_Y_anim = 0;
-        if (currentMenu == WIFI_SETUP_MENU) { // Ensure animation targets are set for the new list
+        if (currentMenu == WIFI_SETUP_MENU) {
              wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
         }
 
-      } else if (wifiMenuIndex == foundWifiNetworksCount + 1) {  // "Back" selected from Wi-Fi list
+      } else if (wifiMenuIndex == foundWifiNetworksCount + 1) {  // "Back" selected
         currentMenu = SETTINGS_MENU;
         for (int i = 0; i < getSettingsMenuItemsCount(); ++i)
           if (strcmp(settingsMenuItems[i], "Wi-Fi Setup") == 0) {
-            menuIndex = i; // Restore selection in settings menu
+            menuIndex = i;
             break;
           }
-        initializeCurrentMenu();
+        initializeCurrentMenu(); 
       }
     }
   } else if (currentMenu == UTILITIES_MENU) {
     const char* selectedItem = utilitiesMenuItems[menuIndex];
-    bool menuChanged = false; // Flag to check if we need to re-initialize the menu
+    bool menuChanged = false;
     if (strcmp(selectedItem, "Vibration") == 0) {
       vibrationOn = !vibrationOn;
       setOutputOnPCF0(MOTOR_PIN_PCF0, vibrationOn);
-      // No menu change, just toggle state. UI for item text might update in drawCarouselMenu.
     } else if (strcmp(selectedItem, "Laser") == 0) {
       laserOn = !laserOn;
       setOutputOnPCF0(LASER_PIN_PCF0, laserOn);
-      // No menu change.
     } else if (strcmp(selectedItem, "Flashlight") == 0) {
       currentMenu = FLASHLIGHT_MODE;
       menuChanged = true;
     } else if (strcmp(selectedItem, "Back") == 0) {
       currentMenu = MAIN_MENU;
       menuChanged = true;
-      // Restore main menu selection for "Utilities"
       for (int i = 0; i < getMainMenuItemsCount(); ++i)
         if (strcmp(mainMenuItems[i], "Utilities") == 0) {
           menuIndex = i;
@@ -432,13 +404,11 @@ void handleMenuSelection() {
           break;
         }
     }
-    if (menuChanged) { // Only re-initialize if menu itself changed (e.g. to Flashlight or Main)
+    if (menuChanged) {
         initializeCurrentMenu();
     }
   } else if (currentMenu == FLASHLIGHT_MODE) {
-    // OK press in flashlight mode typically means go back
     currentMenu = UTILITIES_MENU;
-    // Restore selection in Utilities menu to "Flashlight"
     for (int i = 0; i < getUtilitiesMenuItemsCount(); ++i)
       if (strcmp(utilitiesMenuItems[i], "Flashlight") == 0) {
         menuIndex = i;
@@ -446,71 +416,58 @@ void handleMenuSelection() {
       }
     initializeCurrentMenu();
   }
-  // Note: WIFI_PASSWORD_INPUT selection (Enter key) is handled in input_handling.cpp's handleKeyboardInput.
-  // WIFI_CONNECTING and WIFI_CONNECTION_INFO are transitional states; user "OK" presses in these
-  // states are generally ignored as the system manages transitions based on connection status.
 }
 
 void handleMenuBackNavigation() {
-  MenuState previousMenuState = currentMenu; // Store current state before changing
+  MenuState previousMenuState = currentMenu;
 
   if (currentMenu == MAIN_MENU) {
-    return;  // Cannot go back from main menu
+    return;
   } else if (currentMenu == WIFI_PASSWORD_INPUT) {
     currentMenu = WIFI_SETUP_MENU;
-    wifiPasswordInput[0] = '\0';  // Clear password buffer
+    wifiPasswordInput[0] = '\0';
     wifiPasswordInputCursor = 0;
-    // wifiMenuIndex should ideally point to the network that led to password input.
-    // initializeCurrentMenu will handle setting up the list again.
   } else if (currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO) {
-    WiFi.disconnect(); // Stop any ongoing connection attempt
-    currentMenu = WIFI_SETUP_MENU;  // Go back to the Wi-Fi list
-    // Reset wifiMenuIndex to top or last selected if that info is preserved
+    WiFi.disconnect();
+    currentMenu = WIFI_SETUP_MENU;
     wifiMenuIndex = 0; 
     targetWifiListScrollOffset_Y = 0;
     currentWifiListScrollOffset_Y_anim = 0;
   } else if (currentMenu == TOOL_CATEGORY_GRID) {
     currentMenu = TOOLS_MENU;
-    menuIndex = toolsCategoryIndex; // Restore selection to the category in Tools menu
+    menuIndex = toolsCategoryIndex;
   } else if (currentMenu == WIFI_SETUP_MENU) {
     if (wifiIsScanning) {
-      // WiFi.scanDelete(); // Optionally stop an ongoing scan if library supports immediate cancel
-      wifiIsScanning = false; // Stop checking scan results in main loop
+      wifiIsScanning = false;
     }
     currentMenu = SETTINGS_MENU;
-    // Restore selection in Settings menu to "Wi-Fi Setup"
     for (int i = 0; i < getSettingsMenuItemsCount(); ++i) {
       if (strcmp(settingsMenuItems[i], "Wi-Fi Setup") == 0) {
         menuIndex = i;
         break;
       }
     }
-    // The main loop's auto-Wi-Fi-disable logic will handle turning off Wi-Fi if appropriate
-    // or, if you want explicit turn-off here if not connected:
-    // if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
-    //   setWifiHardwareState(false);
-    // }
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Menu Back (from Wi-Fi Setup): Not connected. Disabling Wi-Fi hardware.");
+        setWifiHardwareState(false);
+    }
   } else if (currentMenu == UTILITIES_MENU) {
     currentMenu = MAIN_MENU;
-    // Restore selection in Main menu to "Utilities"
     for (int i = 0; i < getMainMenuItemsCount(); ++i)
       if (strcmp(mainMenuItems[i], "Utilities") == 0) {
         menuIndex = i;
-        mainMenuSavedIndex = i; // Ensure mainMenuSavedIndex is also updated
+        mainMenuSavedIndex = i;
         break;
       }
   } else if (currentMenu == FLASHLIGHT_MODE) {
     currentMenu = UTILITIES_MENU;
-    // Restore selection in Utilities menu to "Flashlight"
     for (int i = 0; i < getUtilitiesMenuItemsCount(); ++i)
       if (strcmp(utilitiesMenuItems[i], "Flashlight") == 0) {
         menuIndex = i;
         break;
       }
   } else if (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU) {
-    // Generic back navigation from these sub-menus to Main Menu
     currentMenu = MAIN_MENU;
-    // Restore selection in Main Menu based on which sub-menu we came from
     if (previousMenuState == GAMES_MENU) {
       for (int i = 0; i < getMainMenuItemsCount(); ++i)
         if (strcmp(mainMenuItems[i], "Games") == 0) { mainMenuSavedIndex = i; break; }
@@ -521,13 +478,10 @@ void handleMenuBackNavigation() {
       for (int i = 0; i < getMainMenuItemsCount(); ++i)
         if (strcmp(mainMenuItems[i], "Settings") == 0) { mainMenuSavedIndex = i; break; }
     }
-    menuIndex = mainMenuSavedIndex; // Apply the restored main menu index
+    menuIndex = mainMenuSavedIndex;
   }
 
-  if (previousMenuState != currentMenu) { // If the menu state actually changed
+  if (previousMenuState != currentMenu) {
     initializeCurrentMenu();
   }
-
-  // Auto-disable Wi-Fi check is now primarily in the main loop
-  // to handle various scenarios more globally.
 }

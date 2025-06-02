@@ -1,24 +1,28 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <Arduino.h> 
-#include <U8g2lib.h> 
+#include <Arduino.h>
+#include <U8g2lib.h>
 #include "keyboard_layout.h" // Make sure KeyboardLayer is known
+
+
+// === Device Settings ===
+#define DEVICE_HOSTNAME "KivaDevice" // <<< YOUR GLOBAL DEVICE HOSTNAME HERE
 
 // === I2C Multiplexer & Peripherals ===
 #define MUX_ADDR 0x70
-#define PCF0_ADDR 0x24 
-#define PCF1_ADDR 0x20 
+#define PCF0_ADDR 0x24
+#define PCF1_ADDR 0x20
 
 // --- Display MUX Channels ---
 #define MUX_CHANNEL_MAIN_DISPLAY 4
-#define MUX_CHANNEL_SECOND_DISPLAY 2 // New
+#define MUX_CHANNEL_SECOND_DISPLAY 2
 
 // --- Second Display I2C Address ---
-#define SECOND_DISPLAY_I2C_ADDR 0x3C // Common for SSD1306, 
+#define SECOND_DISPLAY_I2C_ADDR 0x3C
 
 // === Display ===
-// U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE); // Definition will be in KivaMain.ino
+// U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 // === ADC & Battery ===
 #define ADC_PIN 3
@@ -32,7 +36,7 @@
 #define ENC_BTN 0
 #define ENC_A 1
 #define ENC_B 2
-#define BTN_AI 3       // Example, adjust if used
+#define BTN_AI 3
 #define BTN_RIGHT1 4
 #define BTN_RIGHT2 5
 #define LASER_PIN_PCF0 6
@@ -42,8 +46,8 @@
 // === Navigation Buttons (PCF1) ===
 #define NAV_OK 0
 #define NAV_BACK 1
-#define NAV_A 2         // Example, if used for specific actions
-#define NAV_B 3         // Example, if used for specific actions
+#define NAV_A 2
+#define NAV_B 3
 #define NAV_LEFT 4
 #define NAV_UP 5
 #define NAV_DOWN 6
@@ -64,13 +68,13 @@ enum MenuState {
   TOOL_CATEGORY_GRID,
   WIFI_SETUP_MENU,
   FLASHLIGHT_MODE,
-  WIFI_PASSWORD_INPUT,  // <--- NEW
-  WIFI_CONNECTING,      // <--- NEW
-  WIFI_CONNECTION_INFO // <--- NEW (for displaying success/failure briefly)
-  // Add more states for actual game/tool screens later
+  WIFI_PASSWORD_INPUT,
+  WIFI_CONNECTING,
+  WIFI_CONNECTION_INFO
+  // WIFI_DISCONNECT_OVERLAY, // Not using a state, using a flag instead
 };
 
-// --- Extern Global Variables (to be defined in KivaMain.ino or a globals.cpp) ---
+// --- Extern Global Variables ---
 extern MenuState currentMenu;
 extern int menuIndex;
 extern int maxMenuItems;
@@ -82,60 +86,70 @@ extern float currentGridScrollOffset_Y_anim;
 extern bool isCharging;
 
 
-extern bool vibrationOn; // <--- NEW
-extern bool laserOn;     // <--- NEW
-extern bool wifiHardwareEnabled; // <--- ADDED (for general Wi-Fi hardware state)
+extern bool vibrationOn;
+extern bool laserOn;
+extern bool wifiHardwareEnabled;
 
-extern uint8_t pcf0Output; // For controlling outputs on PCF0
+extern uint8_t pcf0Output;
 
 // --- UI Layout Constants ---
 #define GRID_ITEM_H 18
 #define GRID_ITEM_PADDING_Y 4
 #define GRID_ITEM_PADDING_X 4
 #define STATUS_BAR_H 11
-#define WIFI_LIST_ITEM_H 18 // NEW: Height for Wi-Fi list items, e.g., 18 or 20 for more space
+#define WIFI_LIST_ITEM_H 18
 
-#define PASSWORD_INPUT_FIELD_Y 30 // Y position for password field on main display
+#define PASSWORD_INPUT_FIELD_Y 30
 #define PASSWORD_INPUT_FIELD_H 12
 #define PASSWORD_MAX_LEN 63
 
 
-      
 // === SD Card ===
 #define SD_CS_PIN 21
 
 
 // --- Wi-Fi Related Globals & Struct ---
-#define MAX_WIFI_NETWORKS 15 
-#define WIFI_SCAN_CHECK_INTERVAL 250UL // Moved from KivaMain.ino
+#define MAX_WIFI_NETWORKS 15
+#define WIFI_SCAN_CHECK_INTERVAL 250UL
 
-struct WifiNetwork {        
-  char ssid[33]; 
-  int8_t rssi;   
-  bool isSecure; 
+struct WifiNetwork {
+  char ssid[33];
+  int8_t rssi;
+  bool isSecure;
 };
-extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS]; 
-extern int foundWifiNetworksCount;                     
-extern int wifiMenuIndex;                              
+extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
+extern int foundWifiNetworksCount;
+extern int wifiMenuIndex;
 extern bool wifiIsScanning;
-extern unsigned long lastWifiScanCheckTime;   
-extern float currentWifiListScrollOffset_Y_anim; // <--- NEW: For smooth scrolling the list
-extern int targetWifiListScrollOffset_Y;         // <--- NEW: Target for the scroll
+extern unsigned long lastWifiScanCheckTime;
+extern float currentWifiListScrollOffset_Y_anim;
+extern int targetWifiListScrollOffset_Y;
 
-extern char currentSsidToConnect[33];     // <--- NEW: SSID for password input
-extern char wifiPasswordInput[PASSWORD_MAX_LEN + 1]; // <--- NEW: Buffer for password
-extern int wifiPasswordInputCursor;       // <--- NEW: Cursor position in password buffer
-extern bool selectedNetworkIsSecure;      // <--- NEW: Flag if current attempt is for secure net
+extern char currentSsidToConnect[33];
+extern char wifiPasswordInput[PASSWORD_MAX_LEN + 1];
+extern int wifiPasswordInputCursor;
+extern bool selectedNetworkIsSecure;
+
+// --- Wi-Fi Disconnect Overlay ---
+extern bool showWifiDisconnectOverlay;    // <--- NEW
+extern int disconnectOverlaySelection; // <--- NEW (0 for Cancel, 1 for Confirm)
+
+// --- Wi-Fi Disconnect Overlay Animation ---
+extern float disconnectOverlayCurrentScale;
+extern float disconnectOverlayTargetScale;
+extern unsigned long disconnectOverlayAnimStartTime;
+extern bool disconnectOverlayAnimatingIn;
+
 
 // --- Keyboard related globals ---
-extern KeyboardLayer currentKeyboardLayer; // <--- NEW
-extern int keyboardFocusRow;              // <--- NEW
-extern int keyboardFocusCol;              // <--- NEW
-extern bool capsLockActive;               // <--- NEW
+extern KeyboardLayer currentKeyboardLayer;
+extern int keyboardFocusRow;
+extern int keyboardFocusCol;
+extern bool capsLockActive;
 
 // --- Animation Constants & Structs ---
 #define MAX_ANIM_ITEMS (MAX_WIFI_NETWORKS + 2)
-#define MAX_GRID_ITEMS 20 
+#define MAX_GRID_ITEMS 20
 #define GRID_ANIM_STAGGER_DELAY 40.0f
 #define GRID_ANIM_SPEED 20.0f
 
@@ -143,7 +157,6 @@ extern float gridItemScale[MAX_GRID_ITEMS];
 extern float gridItemTargetScale[MAX_GRID_ITEMS];
 extern unsigned long gridItemAnimStartTime[MAX_GRID_ITEMS];
 extern bool gridAnimatingIn;
-
 
 
 struct QuadratureEncoder {
@@ -163,10 +176,19 @@ struct QuadratureEncoder {
 struct VerticalListAnimation {
   float itemOffsetY[MAX_ANIM_ITEMS], itemScale[MAX_ANIM_ITEMS];
   float targetOffsetY[MAX_ANIM_ITEMS], targetScale[MAX_ANIM_ITEMS];
+  
+  // New members for intro animation
+  float introStartSourceOffsetY[MAX_ANIM_ITEMS]; 
+  float introStartSourceScale[MAX_ANIM_ITEMS]; 
+  bool isIntroPhase; 
+  unsigned long introStartTime;
+  
   const float animSpd = 12.f, frmTime = 0.016f;
   const float itmSpc = 20.f;
+  const float introDuration = 350.0f; // Duration of the intro animation in milliseconds
 
   void init();
+  void startIntro(int selIdx, int total, float commonInitialYOffset, float commonInitialScale); // New method for intro
   void setTargets(int selIdx, int total);
   bool update();
 };
@@ -198,7 +220,7 @@ extern bool marqueeScrollLeft;
 
 extern VerticalListAnimation mainMenuAnim;
 extern CarouselAnimation subMenuAnim;
-extern VerticalListAnimation wifiListAnim; // <--- ADDED
+extern VerticalListAnimation wifiListAnim;
 
 // --- Shared Buffer for truncateText ---
 extern char SBUF[32];

@@ -2,12 +2,11 @@
 #define WIFI_MANAGER_H
 
 #include "config.h"
-#include <WiFi.h>   // ESP32 WiFi library, provides wl_status_t, WIFI_SCAN_RUNNING etc.
+#include <WiFi.h>
 
-#define MAX_KNOWN_WIFI_NETWORKS 20 // Max number of Wi-Fi networks to store
-#define MAX_WIFI_FAIL_ATTEMPTS 2   // Max connection failures before asking for password again
+#define MAX_KNOWN_WIFI_NETWORKS 20
+#define MAX_WIFI_FAIL_ATTEMPTS 2
 
-// Enum for detailed connection status
 enum WifiConnectionStatus {
     WIFI_STATUS_IDLE,
     WIFI_CONNECTING_IN_PROGRESS,
@@ -16,24 +15,24 @@ enum WifiConnectionStatus {
     WIFI_FAILED_WRONG_PASSWORD,
     WIFI_FAILED_TIMEOUT,
     WIFI_FAILED_OTHER,
-    KIVA_WIFI_SCAN_FAILED,  // <--- RENAMED: From checkAndRetrieveWifiScanResults if scan hardware fails
-    KIVA_WIFI_SCAN_RUNNING  // <--- RENAMED: From checkAndRetrieveWifiScanResults if scan is ongoing
+    KIVA_WIFI_SCAN_FAILED,
+    KIVA_WIFI_SCAN_RUNNING
 };
 
 
-// Structure to hold known Wi-Fi network details
 struct KnownWifiNetwork {
     char ssid[33];
-    char password[PASSWORD_MAX_LEN + 1]; // From config.h
+    char password[PASSWORD_MAX_LEN + 1];
     int failCount;
 };
 
-// Extern declarations for known networks list
+// Extern declarations for global variables defined in KivaMain.ino
 extern String currentConnectedSsid;
 extern KnownWifiNetwork knownNetworksList[MAX_KNOWN_WIFI_NETWORKS];
 extern int knownNetworksCount;
+// extern bool wifiHardwareEnabled; // Already in config.h -> KivaMain.ino
 
-// Function declarations (existing and new)
+// Function declarations
 void setupWifi();
 int initiateAsyncWifiScan();
 int checkAndRetrieveWifiScanResults();
@@ -45,18 +44,15 @@ void attemptWpaWifiConnection(const char* ssid, const char* password);
 WifiConnectionStatus checkWifiConnectionProgress();
 WifiConnectionStatus getCurrentWifiConnectionStatus();
 const char* getWifiStatusMessage();
+void updateWifiStatusOnDisconnect(); // <--- NEW
 
-// New functions for managing known networks
 bool loadKnownWifiNetworks();
 bool saveKnownWifiNetworks();
 KnownWifiNetwork* findKnownNetwork(const char* ssid);
 bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetFailCountOnUpdate);
-bool incrementSsidFailCount(const char* ssid); // Renamed for clarity
-bool resetSsidFailCount(const char* ssid);     // Renamed for clarity
+bool incrementSsidFailCount(const char* ssid);
+bool resetSsidFailCount(const char* ssid);
 
-// New function for explicit Wi-Fi power control
-void setWifiHardwareState(bool enable); 
-
-
+void setWifiHardwareState(bool enable);
 
 #endif // WIFI_MANAGER_H

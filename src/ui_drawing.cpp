@@ -2,23 +2,30 @@
 #include "battery_monitor.h"
 #include "menu_logic.h"
 #include "pcf_utils.h"
-#include "keyboard_layout.h" // For keyboard structures and definitions
-#include "wifi_manager.h"    // For getWifiStatusMessage()
+#include "keyboard_layout.h"
+#include "wifi_manager.h"
 #include <Arduino.h>
+#include <math.h>
 
 // Externs for Wi-Fi data (defined in KivaMain.ino)
 extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
 extern int foundWifiNetworksCount;
-extern int wifiMenuIndex; // Used to highlight selected Wi-Fi network
+extern int wifiMenuIndex;
 
 
-// Animation struct methods
+// Animation struct methods (unchanged)
 void VerticalListAnimation::init() {
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
         itemOffsetY[i] = 0; itemScale[i] = 0.0f;
         targetOffsetY[i] = 0; targetScale[i] = 0.0f;
+        // Reset intro-specific members
+        introStartSourceOffsetY[i] = 0.0f; 
+        introStartSourceScale[i] = 0.0f;
     }
+    isIntroPhase = false;
+    introStartTime = 0;
 }
+
 void VerticalListAnimation::setTargets(int selIdx, int total) {
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
         if (i < total) {
@@ -32,17 +39,99 @@ void VerticalListAnimation::setTargets(int selIdx, int total) {
         }
     }
 }
-bool VerticalListAnimation::update() {
-    bool anim = false;
+
+void VerticalListAnimation::startIntro(int selIdx, int total, float commonInitialYOffset, float commonInitialScale) {
+    isIntroPhase = true;
+    introStartTime = millis();
+
+    // Set the source values for the intro animation AND current values to this start
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
-        float oD = targetOffsetY[i] - itemOffsetY[i];
-        if (abs(oD) > 0.01f) { itemOffsetY[i] += oD * animSpd * frmTime; anim = true; }
-        else { itemOffsetY[i] = targetOffsetY[i]; }
-        float sD = targetScale[i] - itemScale[i];
-        if (abs(sD) > 0.001f) { itemScale[i] += sD * animSpd * frmTime; anim = true; }
-        else { itemScale[i] = targetScale[i]; }
+        if (i < total) {
+            introStartSourceOffsetY[i] = commonInitialYOffset;
+            introStartSourceScale[i] = commonInitialScale;
+            itemOffsetY[i] = introStartSourceOffsetY[i]; // Current value is the start of intro
+            itemScale[i] = introStartSourceScale[i];     // Current value is the start of intro
+        } else { // Items not part of the list remain at 0 scale
+            introStartSourceOffsetY[i] = commonInitialYOffset; 
+            introStartSourceScale[i] = 0.0f;
+            itemOffsetY[i] = introStartSourceOffsetY[i];
+            itemScale[i] = 0.0f;
+        }
     }
-    return anim;
+
+    // Set target state (final list appearance) - this is where items will animate TO
+    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+        if (i < total) {
+            int rP = i - selIdx; // relativePosition
+            targetOffsetY[i] = rP * itmSpc;
+            if (i == selIdx) targetScale[i] = 1.3f;
+            else if (abs(rP) == 1) targetScale[i] = 1.f;
+            else targetScale[i] = 0.8f;
+        } else {
+            // For items beyond 'total', target is effectively to be invisible
+            targetOffsetY[i] = (i - selIdx) * itmSpc; 
+            targetScale[i] = 0.f; 
+        }
+    }
+}
+
+// UPDATED VerticalListAnimation::update()
+bool VerticalListAnimation::update() {
+    bool animActive = false;
+    unsigned long currentTime = millis();
+
+    if (isIntroPhase) {
+        float progress = 0.0f;
+        if (introStartTime > 0 && currentTime > introStartTime && introDuration > 0) {
+            progress = (float)(currentTime - introStartTime) / introDuration;
+        }
+        
+        if (progress < 0.0f) progress = 0.0f; // Should not happen, but defensive
+
+        // Ease-out cubic function for smoother animation: f(t) = 1 - (1-t)^3
+        float easedProgress = 1.0f - pow(1.0f - progress, 3);
+
+        if (progress >= 1.0f) {
+            easedProgress = 1.0f; // Ensure it ends exactly at 1.0
+        }
+
+        for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+            // Interpolate from introStartSource to target using easedProgress
+            itemOffsetY[i] = introStartSourceOffsetY[i] + (targetOffsetY[i] - introStartSourceOffsetY[i]) * easedProgress;
+            itemScale[i]   = introStartSourceScale[i]   + (targetScale[i]   - introStartSourceScale[i])   * easedProgress;
+        }
+
+        if (progress >= 1.0f) {
+            isIntroPhase = false; // Intro finished
+            // Snap to final target values to ensure precision
+            for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+                itemOffsetY[i] = targetOffsetY[i];
+                itemScale[i] = targetScale[i];
+            }
+            animActive = false; 
+        } else {
+            animActive = true;
+        }
+    } else { // Regular scrolling animation (targets are updated by setTargets)
+        for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+            float oD = targetOffsetY[i] - itemOffsetY[i];
+            if (abs(oD) > 0.01f) { 
+                itemOffsetY[i] += oD * animSpd * frmTime; 
+                animActive = true; 
+            } else { 
+                itemOffsetY[i] = targetOffsetY[i]; 
+            }
+
+            float sD = targetScale[i] - itemScale[i];
+            if (abs(sD) > 0.001f) { 
+                itemScale[i] += sD * animSpd * frmTime; 
+                animActive = true; 
+            } else { 
+                itemScale[i] = targetScale[i]; 
+            }
+        }
+    }
+    return animActive;
 }
 
 void CarouselAnimation::init() {
@@ -81,196 +170,160 @@ bool CarouselAnimation::update() {
 
 
 void drawWifiSignalStrength(int x, int y_icon_top, int8_t rssi) {
-    // Caller is responsible for u8g2.setDrawColor().
-    // x: top-left X of the icon area
-    // y_icon_top: top-left Y of the icon area (assuming an 8px high icon area)
-
     int num_bars_to_draw = 0;
+    if (rssi >= -55)      num_bars_to_draw = 4;
+    else if (rssi >= -80) num_bars_to_draw = 3;
+    else if (rssi >= -90) num_bars_to_draw = 2;
+    else if (rssi >= -100) num_bars_to_draw = 1;
 
-    // --- Calculate num_bars_to_draw based on RSSI ---
-    // **IMPORTANT**: Ensure your thresholds here are correct based on actual RSSI values you debug!
-    // Example thresholds (adjust these after checking Serial output for raw RSSI):
-    if (rssi >= -55)      num_bars_to_draw = 4; 
-    else if (rssi >= -80) num_bars_to_draw = 3; 
-    else if (rssi >= -90) num_bars_to_draw = 2; 
-    else if (rssi >= -100) num_bars_to_draw = 1; 
-    // else num_bars_to_draw = 0; // No bars will be drawn if very weak
-
-    // --- Bar geometry ---
     int bar_width = 2;
     int bar_spacing = 1;
-    int first_bar_height = 2;       // Height of the shortest bar (bar 0)
-    int bar_height_increment = 2;   // Each subsequent bar is taller by this amount
-    int max_icon_height = first_bar_height + (4 - 1) * bar_height_increment; // e.g., 2 + 3*2 = 8px
+    int first_bar_height = 2;
+    int bar_height_increment = 2;
+    int max_icon_height = first_bar_height + (4 - 1) * bar_height_increment;
 
-    // --- Render ONLY the number of bars indicated by num_bars_to_draw ---
-    for (int i = 0; i < num_bars_to_draw; i++) { // Loop ONLY up to num_bars_to_draw
+    for (int i = 0; i < num_bars_to_draw; i++) {
         int current_bar_height = first_bar_height + i * bar_height_increment;
-        
-        // Calculate X position for the current bar
         int bar_x_position = x + i * (bar_width + bar_spacing);
-        
-        // Calculate Y position for the top of the current bar
         int y_pos_for_drawing_this_bar = y_icon_top + (max_icon_height - current_bar_height);
-
-        // Draw this bar as a filled box
         u8g2.drawBox(bar_x_position, y_pos_for_drawing_this_bar, bar_width, current_bar_height);
     }
-    // No need to draw empty frames for the remaining bar positions.
 }
 
 
 void drawWifiSetupScreen() {
+    // ... (Implementation unchanged) ...
     const int list_start_y_abs = STATUS_BAR_H + 1;
     const int list_visible_height = u8g2.getDisplayHeight() - list_start_y_abs;
     const int item_row_h = WIFI_LIST_ITEM_H;
-    const int item_padding_x = 2; 
-    const int content_padding_x = 4; // Padding for content within each item row
+    const int item_padding_x = 2;
+    const int content_padding_x = 4;
 
-    // Set a clipping window for the list area to prevent drawing over status bar or below screen
     u8g2.setClipWindow(0, list_start_y_abs, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
     
-    // Smooth scroll animation logic (target calculation and easing)
     float target_scroll_for_centering = 0;
-    if (maxMenuItems > 0 && (maxMenuItems * item_row_h > list_visible_height)) { // Only scroll if content exceeds visible area
+    if (maxMenuItems > 0 && (maxMenuItems * item_row_h > list_visible_height)) {
         target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
-        // Clamp scroll value
         if (target_scroll_for_centering < 0) target_scroll_for_centering = 0;
         float max_scroll_val = (maxMenuItems * item_row_h) - list_visible_height;
-        if (max_scroll_val < 0) max_scroll_val = 0; // Handles case where list is shorter
+        if (max_scroll_val < 0) max_scroll_val = 0;
         if (target_scroll_for_centering > max_scroll_val) {
             target_scroll_for_centering = max_scroll_val;
         }
     }
-    // Apply easing to scroll animation
     float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
     if (abs(scrollDiff) > 0.1f) {
-        currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f; // Using GRID_ANIM_SPEED, adjust if needed
+        currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
     } else {
         currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
     }
 
 
-    if (!wifiHardwareEnabled) { // If Wi-Fi hardware is globally disabled
-        u8g2.setFont(u8g2_font_6x10_tf); 
-        u8g2.setDrawColor(1); // White text
-        const char* offMsg = getWifiStatusMessage(); // Should be "Wi-Fi Off"
-        int msgWidth = u8g2.getStrWidth(offMsg);
-        // Center the message vertically and horizontally in the list area
-        int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
-        u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, offMsg);
-        // No list items to draw if Wi-Fi is off. "Back" handled by physical button.
-        // If an "Enable Wi-Fi" item were added, it would be handled by the loop below.
-    } else if (wifiIsScanning) { // If Wi-Fi is on and actively scanning
+    if (!wifiHardwareEnabled) {
         u8g2.setFont(u8g2_font_6x10_tf); 
         u8g2.setDrawColor(1);
-        const char* scanMsg = getWifiStatusMessage(); // Should be "Scanning..."
+        const char* offMsg = getWifiStatusMessage();
+        int msgWidth = u8g2.getStrWidth(offMsg);
+        int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
+        u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, offMsg);
+    } else if (wifiIsScanning) {
+        u8g2.setFont(u8g2_font_6x10_tf); 
+        u8g2.setDrawColor(1);
+        const char* scanMsg = getWifiStatusMessage();
         int msgWidth = u8g2.getStrWidth(scanMsg);
         int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
         u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, scanMsg);
-    } else { // Wi-Fi is on, not scanning, so draw the list of networks (or "No Networks")
-        wifiListAnim.update(); // Update item scale/position animations
-        u8g2.setFont(u8g2_font_6x10_tf); // Font for list items
+    } else {
+        wifiListAnim.update();
+        u8g2.setFont(u8g2_font_6x10_tf);
 
-        if (foundWifiNetworksCount == 0 && maxMenuItems <= 2) { // maxMenuItems includes Scan Again & Back
+        if (foundWifiNetworksCount == 0 && maxMenuItems <= 2) {
             u8g2.setDrawColor(1);
-            const char* noNetMsg = getWifiStatusMessage(); // Should be "No Networks" or similar
+            const char* noNetMsg = getWifiStatusMessage();
             int msgWidth = u8g2.getStrWidth(noNetMsg);
             int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
             u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, noNetMsg);
-            // Still need to draw "Scan Again" and "Back" if they are part of maxMenuItems
-            // The loop below will handle them if maxMenuItems is set correctly.
-            // If foundWifiNetworksCount is 0, loop for 'i < maxMenuItems' will still run for Scan/Back.
         }
 
 
         for (int i = 0; i < maxMenuItems; i++) {
-            // Calculate Y position for the current item, considering scroll offset
             int item_center_y_in_full_list = (i * item_row_h) + (item_row_h / 2);
             int item_center_on_screen_y = list_start_y_abs + item_center_y_in_full_list - (int)currentWifiListScrollOffset_Y_anim;
             int item_top_on_screen_y = item_center_on_screen_y - item_row_h / 2;
 
-            // Cull items that are completely off-screen
             if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) {
                 continue;
             }
 
             bool is_selected_item = (i == wifiMenuIndex);
             
-            // Draw selection highlight
             if (is_selected_item) {
-                u8g2.setDrawColor(1); // White background for selected item
-                drawRndBox(item_padding_x, item_top_on_screen_y, u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 2, true); // Filled
-                u8g2.setDrawColor(0); // Black text on selected item
+                u8g2.setDrawColor(1);
+                drawRndBox(item_padding_x, item_top_on_screen_y, u8g2.getDisplayWidth() - 2 * item_padding_x, item_row_h, 2, true);
+                u8g2.setDrawColor(0);
             } else {
-                u8g2.setDrawColor(1); // White text for non-selected items
+                u8g2.setDrawColor(1);
             }
             
             const char* currentItemTextPtr = nullptr;
             bool isNetworkItem = false;
             int8_t currentRssi = 0; 
             bool currentIsSecure = false; 
-            int action_icon_type = -1; // For icons like "Scan" or "Back"
-            String displayText; // Use String for prepending "*" to connected SSID
+            int action_icon_type = -1;
+            String displayText;
 
-            if (i < foundWifiNetworksCount) { // This is a scanned network item
-                // Check if this is the currently connected SSID
+            if (i < foundWifiNetworksCount) {
                 if (currentConnectedSsid.length() > 0 && currentConnectedSsid.equals(scannedNetworks[i].ssid)) {
-                    displayText = "* "; // Prepend asterisk and space
+                    displayText = "* ";
                     displayText += scannedNetworks[i].ssid;
                 } else {
                     displayText = scannedNetworks[i].ssid;
                 }
-                currentItemTextPtr = displayText.c_str(); // Get char* for drawing functions
+                currentItemTextPtr = displayText.c_str();
 
                 currentRssi = scannedNetworks[i].rssi;
                 currentIsSecure = scannedNetworks[i].isSecure;
                 isNetworkItem = true;
-            } else if (i == foundWifiNetworksCount) { // This is "Scan Again"
+            } else if (i == foundWifiNetworksCount) {
                 currentItemTextPtr = "Scan Again"; 
-                action_icon_type = 16; // Refresh/Rescan icon
-            } else if (i == foundWifiNetworksCount + 1) { // This is "Back"
+                action_icon_type = 16;
+            } else if (i == foundWifiNetworksCount + 1) {
                 currentItemTextPtr = "Back"; 
-                action_icon_type = 8; // Back arrow icon
+                action_icon_type = 8;
             }
 
-            if (currentItemTextPtr == nullptr || currentItemTextPtr[0] == '\0') continue; // Should not happen
+            if (currentItemTextPtr == nullptr || currentItemTextPtr[0] == '\0') continue;
             
-            // Calculate X positions for icons and text
-            int current_content_x = content_padding_x + item_padding_x; // Start X for icons/text
-            int icon_y_center_for_draw = item_center_on_screen_y; // Base Y for vertical centering of icons
+            int current_content_x = content_padding_x + item_padding_x;
+            int icon_y_center_for_draw = item_center_on_screen_y;
 
             if (isNetworkItem) {
-                // Draw Wi-Fi signal strength icon (small version)
-                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi); // -4 to align 8px icon
-                current_content_x += 12; // Approx width of signal icon + spacing
+                drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi);
+                current_content_x += 12;
                 
-                if(currentIsSecure) { // Draw lock icon if secure
-                    // Simple lock icon (adjust coordinates as needed for 8px height alignment)
+                if(currentIsSecure) {
                     int lock_body_start_x = current_content_x; 
-                    int body_top_y = icon_y_center_for_draw - 3; // Centering a ~6px high lock
-                    u8g2.drawBox(lock_body_start_x, body_top_y, 4, 4); // Lock body 
-                    u8g2.drawHLine(lock_body_start_x + 1, body_top_y - 2, 2); // Top of shackle
+                    int body_top_y = icon_y_center_for_draw - 3;
+                    u8g2.drawBox(lock_body_start_x, body_top_y, 4, 4); 
+                    u8g2.drawHLine(lock_body_start_x + 1, body_top_y - 2, 2);
                     u8g2.drawPixel(lock_body_start_x, body_top_y - 1); 
                     u8g2.drawPixel(lock_body_start_x + 3, body_top_y - 1);
-                    current_content_x += 6; // Approx width of lock icon + spacing
-                } else { // No lock icon, just add spacing
+                    current_content_x += 6;
+                } else {
                     current_content_x += 6; 
                 }
-            } else if (action_icon_type != -1) { // For "Scan Again" or "Back"
-                drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false); // Small icon
-                current_content_x += 10; // Approx width of small icon + spacing
-            } else { // Fallback spacing if no icon
+            } else if (action_icon_type != -1) {
+                drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false);
+                current_content_x += 10;
+            } else {
                 current_content_x += 10; 
             }
 
-            // Calculate position and available width for text
             int text_x_start = current_content_x;
             int text_available_width = u8g2.getDisplayWidth() - text_x_start - content_padding_x - item_padding_x;
             int text_baseline_y = item_center_on_screen_y - (u8g2.getAscent() + u8g2.getDescent())/2 + u8g2.getAscent();
 
-            // Marquee for selected network SSID, static for others
-            if (is_selected_item && isNetworkItem) { // Only marquee for selected network items
+            if (is_selected_item && isNetworkItem) {
                 updateMarquee(text_available_width, currentItemTextPtr); 
                 if (marqueeActive) {
                     u8g2.drawStr(text_x_start + (int)marqueeOffset, text_baseline_y, marqueeText);
@@ -278,24 +331,24 @@ void drawWifiSetupScreen() {
                     char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2); 
                     u8g2.drawStr(text_x_start, text_baseline_y, truncated); 
                 }
-            } else { // Non-selected items or non-network items (Scan, Back)
+            } else {
                 char* truncated = truncateText(currentItemTextPtr, text_available_width, u8g2);
                 u8g2.drawStr(text_x_start, text_baseline_y, truncated);
             }
         }
     }
-    u8g2.setDrawColor(1); // Reset draw color
-    u8g2.setMaxClipWindow(); // Reset clipping window
+    u8g2.setDrawColor(1);
+    u8g2.setMaxClipWindow();
 }
 
 void drawPasswordInputScreen() {
+    // ... (Implementation unchanged) ...
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.setDrawColor(1);
 
-    // Display SSID
     char ssidTitle[40];
     snprintf(ssidTitle, sizeof(ssidTitle), "Enter Pass for:");
-    u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle); // Adjusted Y for status bar
+    u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle);
 
     char truncatedSsid[22];
     strncpy(truncatedSsid, currentSsidToConnect, sizeof(truncatedSsid)-1);
@@ -307,10 +360,7 @@ void drawPasswordInputScreen() {
     }
     u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, 19 + STATUS_BAR_H, truncatedSsid);
 
-
-    // Password Input Field
     int fieldX = 5;
-    // Assuming status bar is NOT drawn on WIFI_PASSWORD_INPUT screen for more space
     int fieldY = PASSWORD_INPUT_FIELD_Y;
     int fieldW = u8g2.getDisplayWidth() - 10;
     int fieldH = PASSWORD_INPUT_FIELD_H;
@@ -350,89 +400,78 @@ void drawPasswordInputScreen() {
         u8g2.drawVLine(cursorX, fieldY + 2, fieldH - 4);
     }
 
-    // Instruction Text - with Marquee
-    u8g2.setFont(u8g2_font_5x7_tf); // Set font for instruction text
-    const char* instrOriginal = "See aux display for keyboard"; // Corrected spelling
-    int instrY = u8g2.getDisplayHeight() - 2; // Position at the bottom
-    int availableInstrWidth = u8g2.getDisplayWidth() - 4; // Small padding
+    u8g2.setFont(u8g2_font_5x7_tf);
+    const char* instrOriginal = "See aux display for keyboard";
+    int instrY = u8g2.getDisplayHeight() - 2;
+    int availableInstrWidth = u8g2.getDisplayWidth() - 4;
 
-    // We need a dedicated marquee state for this instruction text
-    // For simplicity, let's reuse the global marquee variables.
-    // This means only one marquee can be active at a time. If another marquee was active,
-    // this will take over.
-    updateMarquee(availableInstrWidth, instrOriginal); // updateMarquee uses global marqueeText, marqueeOffset etc.
+    updateMarquee(availableInstrWidth, instrOriginal);
 
-    if (marqueeActive && strcmp(marqueeText, instrOriginal) == 0) { // Ensure this marquee is the one running
-        // Center the marquee text horizontally if it's shorter than available width (when not scrolling yet)
+    if (marqueeActive && strcmp(marqueeText, instrOriginal) == 0) {
         int text_render_x = (u8g2.getDisplayWidth() - u8g2.getStrWidth(marqueeText)) / 2;
-        if (marqueeTextLenPx > availableInstrWidth) { // Only apply offset if text is actually scrolling
-             text_render_x = 2 + (int)marqueeOffset; // Apply marquee offset from left padding
+        if (marqueeTextLenPx > availableInstrWidth) {
+             text_render_x = 2 + (int)marqueeOffset;
         }
         u8g2.drawStr(text_render_x, instrY, marqueeText);
     } else {
-        // If not active or a different marquee is running, draw statically (truncated if needed)
         char* truncatedInstr = truncateText(instrOriginal, availableInstrWidth, u8g2);
         u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedInstr)) / 2, instrY, truncatedInstr);
     }
 }
 
 void drawKeyboardOnSmallDisplay() {
+    // ... (Implementation unchanged) ...
     u8g2_small.clearBuffer();
-    u8g2_small.setFont(u8g2_font_5x7_tf); // Small font for keys
+    u8g2_small.setFont(u8g2_font_5x7_tf);
 
     const KeyboardKey* currentLayout = getCurrentKeyboardLayout(currentKeyboardLayer);
     if (!currentLayout) return;
 
-    // Define key geometry on the 128x32 display
-    const int keyHeight = 8; // 32px / 4 rows
-    const int keyWidthBase = 12; // Approx 128px / 10-11 cols, leaves some margin
+    const int keyHeight = 8;
+    const int keyWidthBase = 12;
     const int interKeySpacingX = 1;
-    const int interKeySpacingY = 0; // Keys are tight vertically
+    const int interKeySpacingY = 0;
 
     int currentX, currentY = 0;
 
     for (int r = 0; r < KB_ROWS; ++r) {
         currentX = 0;
         currentY = r * keyHeight;
-        for (int c = 0; c < KB_LOGICAL_COLS; ) { // c is incremented by colSpan
+        for (int c = 0; c < KB_LOGICAL_COLS; ) {
             const KeyboardKey& key = getKeyFromLayout(currentLayout, r, c);
-            if (key.value == KB_KEY_NONE && key.displayChar == 0) { // Skip truly empty placeholder
+            if (key.value == KB_KEY_NONE && key.displayChar == 0) {
                  c++; continue;
             }
-            if (key.colSpan == 0) { // Also skip colSpan 0 placeholders used for wide keys
+            if (key.colSpan == 0) {
                 c++; continue;
             }
 
-
             int actualKeyWidth = key.colSpan * keyWidthBase + (key.colSpan - 1) * interKeySpacingX;
             if (currentX + actualKeyWidth > u8g2_small.getDisplayWidth()) {
-                // This key would overflow, might indicate layout error or need for smaller base width
                 actualKeyWidth = u8g2_small.getDisplayWidth() - currentX;
             }
             if (actualKeyWidth <=0) {c += key.colSpan; continue;}
 
-
             bool isFocused = (r == keyboardFocusRow && c == keyboardFocusCol);
 
             if (isFocused) {
-                u8g2_small.setDrawColor(1); // White background
+                u8g2_small.setDrawColor(1);
                 u8g2_small.drawBox(currentX, currentY, actualKeyWidth, keyHeight);
-                u8g2_small.setDrawColor(0); // Black text
+                u8g2_small.setDrawColor(0);
             } else {
-                u8g2_small.setDrawColor(1); // White text/frame
+                u8g2_small.setDrawColor(1);
                 u8g2_small.drawFrame(currentX, currentY, actualKeyWidth, keyHeight);
             }
 
-            // Determine display char for special keys
             char displayCharStr[2] = {0};
-            if (key.displayChar != 0) { // If a specific display char is provided
+            if (key.displayChar != 0) {
                 displayCharStr[0] = key.displayChar;
-            } else { // Fallback for special keys without explicit display char
+            } else {
                 switch(key.value) {
                     case KB_KEY_BACKSPACE: displayCharStr[0] = '<'; break;
-                    case KB_KEY_ENTER:     displayCharStr[0] = 'E'; break; // Compact 'Ent'
+                    case KB_KEY_ENTER:     displayCharStr[0] = 'E'; break;
                     case KB_KEY_SHIFT:     displayCharStr[0] = (capsLockActive || (currentKeyboardLayer == KB_LAYER_UPPERCASE && !capsLockActive)) ? 's' : 'S'; break;
-                    case KB_KEY_SPACE:     /* Handled by wider box, no char needed or draw "Spc" */ break;
+                    case KB_KEY_SPACE:     break;
                     case KB_KEY_TO_NUM:    displayCharStr[0] = '1'; break;
                     case KB_KEY_TO_SYM:    displayCharStr[0] = '%'; break;
                     case KB_KEY_TO_LOWER:
@@ -444,20 +483,20 @@ void drawKeyboardOnSmallDisplay() {
             if (displayCharStr[0] != 0) {
                 int charWidth = u8g2_small.getStrWidth(displayCharStr);
                 int textX = currentX + (actualKeyWidth - charWidth) / 2;
-                // For 5x7 font (height 6), in an 8px key, baseline is y + 6 or y + (8-6)/2 + 5 = y+1+5 = y+6
                 int textY = currentY + 6;
                 u8g2_small.drawStr(textX, textY, displayCharStr);
             }
             currentX += actualKeyWidth + interKeySpacingX;
-            c += key.colSpan; // Advance by the number of logical columns this key took
+            c += key.colSpan;
         }
     }
-    u8g2_small.setDrawColor(1); // Reset color
+    u8g2_small.setDrawColor(1);
     u8g2_small.sendBuffer();
 }
 
 
 void drawWifiConnectingStatusScreen() {
+    // ... (Implementation unchanged) ...
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.setDrawColor(1);
     const char* msg1 = "Connecting to:";
@@ -473,8 +512,6 @@ void drawWifiConnectingStatusScreen() {
     }
      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, 32, truncatedSsid);
 
-
-    // Simple animated ellipsis
     int dots = (millis() / 300) % 4;
     char ellipsis[4] = "";
     for(int i=0; i<dots; ++i) ellipsis[i] = '.';
@@ -486,21 +523,147 @@ void drawWifiConnectingStatusScreen() {
 }
 
 void drawWifiConnectionResultScreen() {
+    // ... (Implementation unchanged) ...
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.setDrawColor(1);
 
-    const char* resultMsg = getWifiStatusMessage(); // From wifi_manager
+    const char* resultMsg = getWifiStatusMessage();
 
     int msgWidth = u8g2.getStrWidth(resultMsg);
     u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, 32, resultMsg);
 
     WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
     if (lastStatus == WIFI_CONNECTED_SUCCESS) {
-        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 3, true); // Info icon (example, replace with checkmark if available)
+        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 3, true);
     } else {
-        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 11, true); // Jamming/Error icon (example, replace with X if available)
+        drawCustomIcon(u8g2.getDisplayWidth()/2 - 8, 10, 11, true);
     }
 }
+
+void drawWifiDisconnectOverlay() {
+    // --- Animation Update ---
+    if (disconnectOverlayAnimatingIn) {
+        float diff = disconnectOverlayTargetScale - disconnectOverlayCurrentScale;
+        if (abs(diff) > 0.01f) {
+            // Using a slightly faster animation speed for the overlay pop-up
+            disconnectOverlayCurrentScale += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f;
+            if ((diff > 0 && disconnectOverlayCurrentScale > disconnectOverlayTargetScale) ||
+                (diff < 0 && disconnectOverlayCurrentScale < disconnectOverlayTargetScale)) {
+                disconnectOverlayCurrentScale = disconnectOverlayTargetScale;
+            }
+        } else {
+            disconnectOverlayCurrentScale = disconnectOverlayTargetScale;
+            disconnectOverlayAnimatingIn = false; // Animation finished
+        }
+    }
+
+    if (disconnectOverlayCurrentScale <= 0.05f && !disconnectOverlayAnimatingIn) return; // Don't draw if effectively invisible and not animating
+
+    // --- Base (Final) Dimensions & Position ---
+    int baseOverlayWidth = 100;
+    int baseOverlayHeight = 50; // Slightly increased height for better spacing
+    int baseOverlayX = (u8g2.getDisplayWidth() - baseOverlayWidth) / 2;
+    int baseOverlayY = (u8g2.getDisplayHeight() - baseOverlayHeight) / 2;
+    
+    // Ensure it's below the status bar
+    int minOverlayY = STATUS_BAR_H + 3; // 3px margin below status bar
+    baseOverlayY = max(baseOverlayY, minOverlayY);
+    
+    // --- Animated Dimensions & Positions (scaling from center) ---
+    int animatedOverlayWidth = (int)(baseOverlayWidth * disconnectOverlayCurrentScale);
+    int animatedOverlayHeight = (int)(baseOverlayHeight * disconnectOverlayCurrentScale);
+    if (animatedOverlayWidth < 1 || animatedOverlayHeight < 1) return; // Don't draw if too small
+
+    int drawX = baseOverlayX + (baseOverlayWidth - animatedOverlayWidth) / 2;
+    int drawY = baseOverlayY + (baseOverlayHeight - animatedOverlayHeight) / 2;
+
+    // --- Drawing ---
+    int padding = 4;
+    u8g2.setFont(u8g2_font_6x10_tf);
+    int fontAscent = u8g2.getAscent();
+    int textLineHeight = fontAscent + 3; // Ascent + small gap
+
+    // 1. Draw the black border (slightly larger than the white box if desired, or same size)
+    // For a simple pop-out, we'll draw the white box, then a black frame around it.
+    // To make it look like a black border *around* a white box:
+    // Draw black frame, then slightly smaller white filled box.
+    // Or, simpler: draw white filled box, then black frame of same size.
+
+    // Draw filled white background
+    u8g2.setDrawColor(1); // White
+    u8g2.drawRBox(drawX, drawY, animatedOverlayWidth, animatedOverlayHeight, 3);
+
+    // Draw black border around the white box
+    u8g2.setDrawColor(0); // Black
+    u8g2.drawRFrame(drawX, drawY, animatedOverlayWidth, animatedOverlayHeight, 3);
+
+
+    // Only draw content if the overlay is mostly scaled up
+    if (disconnectOverlayCurrentScale > 0.9f) {
+        u8g2.setDrawColor(0); // Black text on white background
+
+        // Title
+        const char* title = "Disconnect";
+        int titleX = drawX + (animatedOverlayWidth - u8g2.getStrWidth(title)) / 2;
+        int titleY = drawY + padding + fontAscent;
+        u8g2.drawStr(titleX, titleY, title);
+
+        // SSID (truncated)
+        char truncatedSsid[18];
+        truncateText(currentSsidToConnect, animatedOverlayWidth - 2 * padding - 4, u8g2);
+        strncpy(truncatedSsid, SBUF, sizeof(truncatedSsid)-1);
+        truncatedSsid[sizeof(truncatedSsid)-1] = '\0';
+        int ssidX = drawX + (animatedOverlayWidth - u8g2.getStrWidth(truncatedSsid)) / 2;
+        int ssidY = titleY + textLineHeight;
+        u8g2.drawStr(ssidX, ssidY, truncatedSsid);
+
+        // Options (X and O)
+        int optionTextY = drawY + animatedOverlayHeight - padding - fontAscent - 1;
+        int optionBoxY = optionTextY - fontAscent - 2; // Top of option boxes
+
+        const char* cancelText = "X";
+        const char* confirmText = "O";
+        int cancelWidth = u8g2.getStrWidth(cancelText);
+        int confirmWidth = u8g2.getStrWidth(confirmText);
+        int optionBoxWidth = max(cancelWidth, confirmWidth) + 12;
+        int optionBoxHeight = fontAscent + 4; // Box height based on font ascent + padding
+        
+        // Calculate X positions for centered options
+        int totalOptionsWidth = 2 * optionBoxWidth + 10; // 10px spacing between options
+        int optionsStartX = drawX + (animatedOverlayWidth - totalOptionsWidth) / 2;
+
+        int cancelBoxX = optionsStartX;
+        int confirmBoxX = optionsStartX + optionBoxWidth + 10;
+
+
+        // Draw Cancel (X)
+        if (disconnectOverlaySelection == 0) { // Highlight Cancel
+            u8g2.setDrawColor(0); // Black filled box for selection
+            u8g2.drawRBox(cancelBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+            u8g2.setDrawColor(1); // White text on black selection
+            u8g2.drawStr(cancelBoxX + (optionBoxWidth - cancelWidth)/2, optionTextY, cancelText);
+        } else {
+            u8g2.setDrawColor(0); // Black frame for non-selected
+            u8g2.drawRFrame(cancelBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+            u8g2.drawStr(cancelBoxX + (optionBoxWidth - cancelWidth)/2, optionTextY, cancelText);
+        }
+
+        // Draw Confirm (O)
+        u8g2.setDrawColor(0); // Ensure black for elements on white bg before checking selection
+        if (disconnectOverlaySelection == 1) { // Highlight Confirm
+            u8g2.drawRBox(confirmBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+            u8g2.setDrawColor(1); // White text on black selection
+            u8g2.drawStr(confirmBoxX + (optionBoxWidth - confirmWidth)/2, optionTextY, confirmText);
+        } else {
+            u8g2.drawRFrame(confirmBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+            u8g2.drawStr(confirmBoxX + (optionBoxWidth - confirmWidth)/2, optionTextY, confirmText);
+        }
+    }
+    
+    // Reset draw color to white for elements outside the overlay
+    u8g2.setDrawColor(1);
+}
+
 
 void drawUI() {
   unsigned long currentTime = millis();
@@ -518,16 +681,17 @@ void drawUI() {
   }
 
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
-  drawPassiveDisplay(); // This will call drawKeyboardOnSmallDisplay if needed
+  drawPassiveDisplay();
 
   selectMux(MUX_CHANNEL_MAIN_DISPLAY);
   u8g2.clearBuffer();
+  
+  // Draw main UI elements first
   if (currentMenu != WIFI_PASSWORD_INPUT && currentMenu != WIFI_CONNECTING && currentMenu != WIFI_CONNECTION_INFO) {
-      drawStatusBar(); // Status bar might not be wanted on password/connect screens
+      drawStatusBar();
   }
 
   if (currentMenu == TOOL_CATEGORY_GRID) {
-    // ... (grid animation and drawing logic for u8g2 - main display)
     float scrollDiff = targetGridScrollOffset_Y - currentGridScrollOffset_Y_anim;
     if (abs(scrollDiff) > 0.1f) {
       currentGridScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
@@ -567,7 +731,7 @@ void drawUI() {
         gridItemScale[i] = 0.0f;
       }
     }
-    drawToolGridScreen(); // Draws on u8g2 (main display)
+    drawToolGridScreen();
   } else if (currentMenu == MAIN_MENU) {
     drawMainMenu();
   } else if (currentMenu == WIFI_SETUP_MENU) {
@@ -579,33 +743,38 @@ void drawUI() {
   } else if (currentMenu == WIFI_CONNECTION_INFO) {
     drawWifiConnectionResultScreen();
   }
-  else { // Assumed Carousel for Games, Tools (categories), Settings, Utilities
+  else {
     drawCarouselMenu();
   }
+
+  // Draw overlay on top if active
+  if (showWifiDisconnectOverlay) {
+      drawWifiDisconnectOverlay();
+  }
+
   u8g2.sendBuffer();
 }
 
+// ... (rest of ui_drawing.cpp - unchanged functions like drawPassiveDisplay, updateMarquee, truncateText, drawStatusBar, drawMainMenu, drawCarouselMenu, startGridItemAnimation, drawToolGridScreen, drawCustomIcon, drawRndBox, drawBatIcon)
 void drawPassiveDisplay() {
     if (currentMenu == WIFI_PASSWORD_INPUT) {
-        drawKeyboardOnSmallDisplay(); // Keyboard takes full small display
+        drawKeyboardOnSmallDisplay();
     } else {
-        // Default passive display content (uptime, mode)
         u8g2_small.clearBuffer();
         u8g2_small.setDrawColor(1);
 
-        // --- Uptime Clock ---
         unsigned long now = millis(); unsigned long allSeconds = now / 1000;
         int runHours = allSeconds / 3600; int secsRemaining = allSeconds % 3600;
         int runMinutes = secsRemaining / 60; int runSeconds = secsRemaining % 60;
         char timeStr[9]; sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
         u8g2_small.setFont(u8g2_font_helvB08_tr);
-        int time_y_baseline = 17; // Adjusted for helvB08 on 32px display
+        int time_y_baseline = 17;
         u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(timeStr)) / 2, time_y_baseline, timeStr);
 
-        // --- Current Mode Text ---
         const char* modeText = "---";
-        // (Logic to determine modeText based on currentMenu as before)
-        if (currentMenu == FLASHLIGHT_MODE) modeText = "Torch";
+        if (showWifiDisconnectOverlay) { // Show overlay status on small display too
+            modeText = "Disconnecting...";
+        } else if (currentMenu == FLASHLIGHT_MODE) modeText = "Torch";
         else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) modeText = mainMenuItems[menuIndex];
         else if (currentMenu == UTILITIES_MENU && menuIndex < getUtilitiesMenuItemsCount()) modeText = utilitiesMenuItems[menuIndex];
         else if (currentMenu == GAMES_MENU) modeText = "Games";
@@ -618,15 +787,15 @@ void drawPassiveDisplay() {
         } else if (currentMenu == WIFI_CONNECTING) {
             modeText = "Connecting...";
         } else if (currentMenu == WIFI_CONNECTION_INFO) {
-            modeText = getWifiStatusMessage(); // Show connection result
+            modeText = getWifiStatusMessage();
         }
 
 
-        u8g2_small.setFont(u8g2_font_6x12_tr); // Or other suitable font
+        u8g2_small.setFont(u8g2_font_6x12_tr);
         char truncatedModeText[22]; strncpy(truncatedModeText, modeText, sizeof(truncatedModeText)-1);
         truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
         if (u8g2_small.getStrWidth(truncatedModeText) > u8g2_small.getDisplayWidth() - 4) {
-            truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small); // SBUF used
+            truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small);
             strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText)-1);
             truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
         }
@@ -645,16 +814,13 @@ void updateMarquee(int cardInnerW, const char* text) {
     marqueeText[0] = '\0'; 
     return;
   }
-  // Font should be set by the caller context (drawCarouselMenu or drawToolGridScreen)
-  // before calling u8g2.getUTF8Width or drawing.
-  // For getUTF8Width here, we assume the caller set the correct font.
 
   bool shouldBeActive = u8g2.getUTF8Width(text) > cardInnerW;
 
   if (!marqueeActive && shouldBeActive) {
     strncpy(marqueeText, text, sizeof(marqueeText) - 1);
     marqueeText[sizeof(marqueeText) - 1] = '\0';
-    marqueeTextLenPx = u8g2.getUTF8Width(marqueeText); // Uses current u8g2 font
+    marqueeTextLenPx = u8g2.getUTF8Width(marqueeText);
     marqueeOffset = 0;
     marqueeActive = true;
     marqueePaused = true;
@@ -668,7 +834,7 @@ void updateMarquee(int cardInnerW, const char* text) {
     if (strncmp(marqueeText, text, sizeof(marqueeText) -1) != 0) {
         strncpy(marqueeText, text, sizeof(marqueeText) - 1);
         marqueeText[sizeof(marqueeText) - 1] = '\0';
-        marqueeTextLenPx = u8g2.getUTF8Width(marqueeText); // Uses current u8g2 font
+        marqueeTextLenPx = u8g2.getUTF8Width(marqueeText);
         marqueeOffset = 0;
         marqueePaused = true;
         marqueeScrollLeft = true;
@@ -688,11 +854,11 @@ void updateMarquee(int cardInnerW, const char* text) {
     return;
   }
 
-  if (curT - lastMarqueeTime > MARQUEE_UPDATE_INTERVAL) { // Used #define from config.h
+  if (curT - lastMarqueeTime > MARQUEE_UPDATE_INTERVAL) {
     if (marqueeScrollLeft) {
-      marqueeOffset -= MARQUEE_SCROLL_SPEED; // Used #define from config.h
+      marqueeOffset -= MARQUEE_SCROLL_SPEED;
     } else {
-      marqueeOffset += MARQUEE_SCROLL_SPEED; // Used #define from config.h
+      marqueeOffset += MARQUEE_SCROLL_SPEED;
     }
     lastMarqueeTime = curT;
 
@@ -717,47 +883,37 @@ void updateMarquee(int cardInnerW, const char* text) {
 }
 
 char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display) {
-  // SBUF is used here. Ensure it's large enough.
   int originalLen = strlen(originalText);
   if (originalLen == 0) {
     SBUF[0] = '\0';
     return SBUF;
   }
 
-  // Copy original to SBUF, ensuring space for "..." and null terminator
-  // Max text part length = sizeof(SBUF) - 1 (for null) - 3 (for "...")
   int maxTextPartLen = sizeof(SBUF) - 4;
-  if (maxTextPartLen < 1) { // Not enough space in SBUF even for one char + "..."
+  if (maxTextPartLen < 1) {
       SBUF[0] = '\0';
       return SBUF;
   }
 
   strncpy(SBUF, originalText, maxTextPartLen);
-  SBUF[maxTextPartLen] = '\0'; // Null-terminate the (potentially) shortened text part
+  SBUF[maxTextPartLen] = '\0';
 
   if (display.getUTF8Width(SBUF) <= maxWidthPixels) {
-    // If the (possibly already shortened to fit SBUF) text fits, return it.
-    // We need to ensure the original full string wasn't too long for SBUF initially.
     if (originalLen <= maxTextPartLen) {
-        // Original string fit SBUF entirely, and it also fits maxWidthPixels
-        strncpy(SBUF, originalText, sizeof(SBUF)-1); // Recopy full original
+        strncpy(SBUF, originalText, sizeof(SBUF)-1);
         SBUF[sizeof(SBUF)-1] = '\0';
         return SBUF;
     }
-    // else, SBUF already contains the maxTextPartLen portion, which fits.
     return SBUF;
   }
 
-  // If it doesn't fit, append "..." and shorten until it does
-  // SBUF currently holds up to maxTextPartLen of originalText
-  strcat(SBUF, "..."); // This is safe because we reserved space
+  strcat(SBUF, "...");
 
-  while (display.getUTF8Width(SBUF) > maxWidthPixels && strlen(SBUF) > 3) { // Ensure "..." itself isn't removed
-    SBUF[strlen(SBUF) - 4] = '\0'; // Remove char before "..."
+  while (display.getUTF8Width(SBUF) > maxWidthPixels && strlen(SBUF) > 3) {
+    SBUF[strlen(SBUF) - 4] = '\0';
     strcat(SBUF, "...");
   }
 
-  // Final check if even "..." or parts of it are too wide
   if (display.getUTF8Width(SBUF) > maxWidthPixels) { 
     if (maxWidthPixels >= display.getUTF8Width("..")) {
         strcpy(SBUF, "..");
@@ -778,18 +934,14 @@ char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display) 
   return SBUF;
 }
 
-// In drawStatusBar() in ui_drawing.cpp
+// In KivaMain/ui_drawing.cpp
+
 void drawStatusBar() {
     float v = getSmoothV(); 
     uint8_t s = batPerc(v);
     u8g2.setFont(u8g2_font_6x10_tf); 
     const char* titleText = "Kiva OS"; 
 
-    // --- Title Logic (remains the same) ---
-    if (currentMenu == TOOL_CATEGORY_GRID) { /* ... */ }
-    else if (currentMenu == WIFI_SETUP_MENU) { /* ... */ }
-    else if (currentMenu != MAIN_MENU && mainMenuSavedIndex >= 0 && mainMenuSavedIndex < getMainMenuItemsCount()) { /* ... */ }
-    // (Ensure full title logic is present from previous versions)
     if (currentMenu == TOOL_CATEGORY_GRID) { 
         if (toolsCategoryIndex >= 0 && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) { 
             titleText = toolsMenuItems[toolsCategoryIndex];
@@ -813,52 +965,50 @@ void drawStatusBar() {
         strncpy(titleBuffer, SBUF, sizeof(titleBuffer)-1); 
         titleBuffer[sizeof(titleBuffer) - 1] = '\0';
     }
+    // Text Y position (baseline) is 7, ascent for 6x10 font is typically 7 or 8.
+    // Let's assume default text position is fine, only icons move.
     u8g2.drawStr(2, 7, titleBuffer); 
 
-    // --- Battery Display Area (Right Aligned) ---
     int battery_area_right_margin = 2;
     int current_x_origin_for_battery = u8g2.getDisplayWidth() - battery_area_right_margin;
 
-    // 1. Draw Battery Icon (Simplified)
-    int bat_icon_y_top = 3; 
-    int bat_icon_width = 9;  // From drawBatIcon: body 7 + tip 1 + 1px spacing between = 9 approx
+    // --- MODIFIED PART: Battery Icon Y Position ---
+    int bat_icon_y_top = 1; // Original was 3, moved up by 3. So, 0.
+    if (bat_icon_y_top < 0) bat_icon_y_top = 0; // Ensure it doesn't go off-screen top
+    // --- END MODIFIED PART ---
+
+    int bat_icon_width = 9;
     current_x_origin_for_battery -= bat_icon_width; 
     drawBatIcon(current_x_origin_for_battery, bat_icon_y_top, s);
 
-    // 2. Draw Charging Icon (if charging) - Using Custom Icon 17
     if (isCharging) {
-        int charge_icon_width = 6; // Bounding box for our custom small lightning bolt
-        int charge_icon_height = 7; // Bounding box height
+        int charge_icon_width = 6;
+        // int charge_icon_height = 7; // Not directly used for y-pos calc here
         int charge_icon_spacing = 2;
         current_x_origin_for_battery -= (charge_icon_width + charge_icon_spacing); 
         
-        // Vertically align the custom icon. If bat_icon_y_top = 3 and icon is 7px high,
-        // and status bar font has baseline at y=7.
-        // For custom icon, y is its top-left.
-        // If bat icon top is 3, and it's 5px high, its center is ~5.5.
-        // If lightning icon is 7px high, to center it with bat icon, its top should be (3 + 5/2) - 7/2 = 3 - 1 = 2
-        int charge_icon_y_top = bat_icon_y_top -1; // Aim to make it look vertically centered with bat icon
-                                                 // (bat icon is 5px high, lightning 7px high. Difference is 2. Shift by 1)
-        if (charge_icon_y_top < 0) charge_icon_y_top = 0; // Don't draw above status bar
+        // --- MODIFIED PART: Charging Icon Y Position ---
+        // Original: int charge_icon_y_top = bat_icon_y_top - 1; (if bat_icon_y_top was 3, charge_icon_y_top was 2)
+        // New: Maintain relative position to the new bat_icon_y_top
+        int charge_icon_y_top = bat_icon_y_top - 2; // If new bat_icon_y_top is 0, this becomes -1
+        if (charge_icon_y_top < 0) charge_icon_y_top = 0; // Ensure it's at least 0
+        // --- END MODIFIED PART ---
 
-
-        // Ensure draw color is set for the icon (white on black, or black on white if status bar inverted)
-        // Assuming status bar background is black, icon should be white.
-        u8g2.setDrawColor(1); // Set to white if not already
+        u8g2.setDrawColor(1);
+        // The custom icon's internal drawing is relative to its x,y top-left.
+        // So, charge_icon_y_top should be the top of where that icon is drawn.
         drawCustomIcon(current_x_origin_for_battery, charge_icon_y_top, 17, false); 
     }
 
-    // 3. Draw Battery Percentage Text
     char batteryStr[6]; 
     snprintf(batteryStr, sizeof(batteryStr), "%u%%", s);
     int percent_text_width = u8g2.getStrWidth(batteryStr);
     int percent_text_spacing = 2;
     current_x_origin_for_battery -= (percent_text_width + percent_text_spacing); 
-    // Ensure draw color is set for text (white on black)
     u8g2.setDrawColor(1);
+    // Battery percentage text Y position remains the same (baseline 7)
     u8g2.drawStr(current_x_origin_for_battery, 7, batteryStr); 
 
-    // --- Status Bar Line ---
     u8g2.setDrawColor(1); 
     u8g2.drawLine(0, STATUS_BAR_H - 1, u8g2.getDisplayWidth() - 1, STATUS_BAR_H - 1); 
 }
@@ -907,15 +1057,14 @@ void drawMainMenu() {
 
     u8g2.setDrawColor(1); 
     
-    // Determine icon type based on item text for main menu
-    int iconType = 0; // Default/fallback icon
+    int iconType = 0;
     if (strcmp(itms[i], "Tools") == 0) iconType = 0;
     else if (strcmp(itms[i], "Games") == 0) iconType = 1;
     else if (strcmp(itms[i], "Settings") == 0) iconType = 2;
-    else if (strcmp(itms[i], "Utilities") == 0) iconType = 21; // <--- NEW ICON TYPE FOR UTILITIES
+    else if (strcmp(itms[i], "Utilities") == 0) iconType = 21;
     else if (strcmp(itms[i], "Info") == 0) iconType = 3;
     
-    drawCustomIcon(icon_x_pos, icon_y_pos, iconType, true); // Main menu uses large icons
+    drawCustomIcon(icon_x_pos, icon_y_pos, iconType, true);
 
     u8g2.setFont(u8g2_font_6x10_tf); 
     int text_width_pixels = u8g2.getStrWidth(itms[i]);
@@ -945,19 +1094,18 @@ void drawCarouselMenu() {
   const int carousel_center_y_abs = 44; 
   const int screen_center_x_abs = 64; 
   const int card_internal_padding = 3;
-  const int icon_render_size = 16; // For large icons in carousel cards
+  const int icon_render_size = 16;
   const int icon_margin_top = 3; 
   const int text_margin_from_icon = 2; 
 
-  // Set font for selected item text here, as updateMarquee relies on current font for width
   u8g2.setFont(u8g2_font_6x10_tf); 
   
   for (int i = 0; i < maxMenuItems; i++) {
     float current_item_scale = subMenuAnim.itemScale[i];
-    if (current_item_scale <= 0.05f) continue; // Skip if too small to be visible
+    if (current_item_scale <= 0.05f) continue;
 
     float current_item_offset_x = subMenuAnim.itemOffsetX[i];
-    int card_w_scaled = (int)(CarouselAnimation().cardBaseW * current_item_scale); // Access const from type
+    int card_w_scaled = (int)(CarouselAnimation().cardBaseW * current_item_scale);
     int card_h_scaled = (int)(CarouselAnimation().cardBaseH * current_item_scale);
     int card_x_abs = screen_center_x_abs + (int)current_item_offset_x - (card_w_scaled / 2);
     int card_y_abs = carousel_center_y_abs - (card_h_scaled / 2);
@@ -966,18 +1114,15 @@ void drawCarouselMenu() {
     const char** current_item_list_ptr = nullptr;
     int icon_type_for_item = 0; 
     
-    // Declare these variables here, before they are used in the UTILITIES_MENU case
-    char itemDisplayTextBuffer[25]; // Buffer for dynamic text like "Vibration: ON" (increased size)
+    char itemDisplayTextBuffer[25];
     const char* itemTextToDisplay = nullptr;
 
-
-    // Determine item list, text, and icon type based on currentMenu
     if (currentMenu == GAMES_MENU) {
       current_item_list_ptr = gamesMenuItems;
-      itemTextToDisplay = current_item_list_ptr[i]; // Standard item text
+      itemTextToDisplay = current_item_list_ptr[i];
       if (i == 0) icon_type_for_item = 4; else if (i == 1) icon_type_for_item = 5; 
       else if (i == 2) icon_type_for_item = 6; else if (i == 3) icon_type_for_item = 7; 
-      else if (i == 4 && i < getGamesMenuItemsCount()) icon_type_for_item = 8; // Back
+      else if (i == 4 && i < getGamesMenuItemsCount()) icon_type_for_item = 8;
       else continue;
 
     } else if (currentMenu == TOOLS_MENU) {
@@ -985,7 +1130,7 @@ void drawCarouselMenu() {
       itemTextToDisplay = current_item_list_ptr[i];
       if (i == 0) icon_type_for_item = 12; else if (i == 1) icon_type_for_item = 9;  
       else if (i == 2) icon_type_for_item = 10; else if (i == 3) icon_type_for_item = 9;  
-      else if (i == 4) icon_type_for_item = 11; else if (i == 5 && i < getToolsMenuItemsCount()) icon_type_for_item = 8; // Back  
+      else if (i == 4) icon_type_for_item = 11; else if (i == 5 && i < getToolsMenuItemsCount()) icon_type_for_item = 8; 
       else continue;
 
     } else if (currentMenu == SETTINGS_MENU) {
@@ -996,47 +1141,43 @@ void drawCarouselMenu() {
       else if (i == 2) icon_type_for_item = 14;  
       else if (i == 3) icon_type_for_item = 15;  
       else if (i == 4) icon_type_for_item = 3;   
-      else if (i == 5 && i < getSettingsMenuItemsCount()) icon_type_for_item = 8; // Back   
+      else if (i == 5 && i < getSettingsMenuItemsCount()) icon_type_for_item = 8;  
       else continue;
 
     } else if (currentMenu == UTILITIES_MENU) {
         current_item_list_ptr = utilitiesMenuItems;
-        // Default to the static item name, will be overridden for dynamic items
         itemTextToDisplay = current_item_list_ptr[i]; 
 
         if (strcmp(itemTextToDisplay, "Vibration") == 0) {
-            icon_type_for_item = 18; // Vibration icon
+            icon_type_for_item = 18;
             snprintf(itemDisplayTextBuffer, sizeof(itemDisplayTextBuffer), "Vibration: %s", vibrationOn ? "ON" : "OFF");
             itemTextToDisplay = itemDisplayTextBuffer;
         } else if (strcmp(itemTextToDisplay, "Laser") == 0) {
-            icon_type_for_item = 19; // Laser icon
+            icon_type_for_item = 19;
             snprintf(itemDisplayTextBuffer, sizeof(itemDisplayTextBuffer), "Laser: %s", laserOn ? "ON" : "OFF");
             itemTextToDisplay = itemDisplayTextBuffer;
         } else if (strcmp(itemTextToDisplay, "Flashlight") == 0) {
-            icon_type_for_item = 20; // Flashlight icon
-            // No dynamic text needed, itemTextToDisplay remains "Flashlight"
+            icon_type_for_item = 20;
         } else if (strcmp(itemTextToDisplay, "Back") == 0) {
-            icon_type_for_item = 8; // Back icon
-            // No dynamic text needed
+            icon_type_for_item = 8;
         } else {
-            continue; // Should not happen with defined utilitiesMenuItems
+            continue;
         }
     } else {
-      continue; // Unknown menu type for carousel
+      continue;
     }
 
-    if (card_w_scaled <= 0 || card_h_scaled <= 0) continue; // Skip if card is invisible
+    if (card_w_scaled <= 0 || card_h_scaled <= 0) continue;
 
     if (is_selected_item) {
-      u8g2.setDrawColor(1); // White background for selected card
-      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true); // Filled rounded box
+      u8g2.setDrawColor(1);
+      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true);
 
-      u8g2.setDrawColor(0); // Black color for content (icon and text) on selected card
+      u8g2.setDrawColor(0);
       int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
       int icon_y_pos = card_y_abs + icon_margin_top;
-      drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true); // Carousel uses large icons
+      drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true);
 
-      // Font for selected item text is already u8g2_font_6x10_tf (set before loop)
       int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
       int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
       int text_baseline_y_render = text_area_y_start_abs + (text_area_h_available - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent() -1;
@@ -1045,7 +1186,6 @@ void drawCarouselMenu() {
       int card_inner_content_width = card_w_scaled - 2 * card_internal_padding;
       updateMarquee(card_inner_content_width, itemTextToDisplay); 
 
-      // Clip window for text rendering inside the card
       int clip_x1 = card_x_abs + card_internal_padding;
       int clip_y1 = text_area_y_start_abs; 
       int clip_x2 = card_x_abs + card_w_scaled - card_internal_padding;
@@ -1054,7 +1194,7 @@ void drawCarouselMenu() {
       clip_y1 = max(clip_y1, card_y_abs); 
       clip_y2 = min(clip_y2, card_y_abs + card_h_scaled);
 
-      if (clip_x1 < clip_x2 && clip_y1 < clip_y2) { // Valid clip area
+      if (clip_x1 < clip_x2 && clip_y1 < clip_y2) {
         u8g2.setClipWindow(clip_x1, clip_y1, clip_x2, clip_y2);
         if (marqueeActive) {
           u8g2.drawStr(card_x_abs + card_internal_padding + (int)marqueeOffset, text_baseline_y_render, marqueeText);
@@ -1062,24 +1202,23 @@ void drawCarouselMenu() {
           int text_width_pixels = u8g2.getStrWidth(itemTextToDisplay);
           u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, itemTextToDisplay);
         }
-        u8g2.setMaxClipWindow(); // Reset clip after drawing text
+        u8g2.setMaxClipWindow();
       }
-    } else { // Not selected item
-      u8g2.setDrawColor(1); // White color for frame and text
-      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 2, false); // Frame only
+    } else {
+      u8g2.setDrawColor(1);
+      drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 2, false);
 
-      if (current_item_scale > 0.5) { // Only draw text if item is reasonably scaled
-        u8g2.setFont(u8g2_font_5x7_tf); // Smaller font for non-selected items' text
+      if (current_item_scale > 0.5) {
+        u8g2.setFont(u8g2_font_5x7_tf);
         char* display_text_truncated = truncateText(itemTextToDisplay, card_w_scaled - 2 * card_internal_padding, u8g2);
         int text_width_pixels = u8g2.getStrWidth(display_text_truncated);
-        // Center baseline for 5x7 font
         int text_baseline_y_render = card_y_abs + (card_h_scaled - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
         u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, display_text_truncated);
-        u8g2.setFont(u8g2_font_6x10_tf); // Reset to main carousel font for next iteration (selected item)
+        u8g2.setFont(u8g2_font_6x10_tf);
       }
     }
   }
-  u8g2.setDrawColor(1); // Reset default draw color after all items
+  u8g2.setDrawColor(1);
 }
 
 
@@ -1090,16 +1229,15 @@ void startGridItemAnimation() {
 
   for (int i = 0; i < MAX_GRID_ITEMS; i++) {
     if (i < currentGridItemCount) {
-      gridItemScale[i] = 0.0f; // Start from zero scale
-      gridItemTargetScale[i] = 1.0f; // Target full scale
+      gridItemScale[i] = 0.0f;
+      gridItemTargetScale[i] = 1.0f;
       int row = i / gridCols;
       int col = i % gridCols;
-      // Stagger animation: items in later rows/cols start slightly later
       gridItemAnimStartTime[i] = currentTime + (unsigned long)((row * 1.5f + col) * GRID_ANIM_STAGGER_DELAY);
     } else {
-      gridItemScale[i] = 0.0f; // Items not in current view (or beyond max)
+      gridItemScale[i] = 0.0f;
       gridItemTargetScale[i] = 0.0f; 
-      gridItemAnimStartTime[i] = currentTime; // Start their "animation to zero" (no-op if already 0)
+      gridItemAnimStartTime[i] = currentTime;
     }
   }
 }
@@ -1114,18 +1252,17 @@ void drawToolGridScreen() {
     case 2: current_tool_list_ptr = bleAttackToolItems; break;
     case 3: current_tool_list_ptr = nrfReconToolItems; break;
     case 4: current_tool_list_ptr = jammingToolItems; break;
-    default: return; // Should not happen
+    default: return;
   }
 
-  if (!current_tool_list_ptr) return; // Safety check
+  if (!current_tool_list_ptr) return;
 
   int item_box_base_width = (128 - (gridCols + 1) * GRID_ITEM_PADDING_X) / gridCols;
   const int grid_content_area_start_y_abs = STATUS_BAR_H + 1; 
   const int first_item_row_start_y_abs = grid_content_area_start_y_abs + GRID_ITEM_PADDING_Y; 
 
-  u8g2.setFont(u8g2_font_5x7_tf); // Font for grid item text
+  u8g2.setFont(u8g2_font_5x7_tf);
 
-  // MASTER CLIP WINDOW for the entire grid drawing area (below status bar)
   u8g2.setClipWindow(0, grid_content_area_start_y_abs, 127, 63);
 
   for (int i = 0; i < current_tool_count; i++) {
@@ -1139,67 +1276,58 @@ void drawToolGridScreen() {
 
     if (current_item_box_w_scaled < 1 || current_item_box_h_scaled < 1) continue;
 
-    // Absolute X position of the box (not affected by Y scroll)
     int box_x_abs = GRID_ITEM_PADDING_X + col * (item_box_base_width + GRID_ITEM_PADDING_X) + (item_box_base_width - current_item_box_w_scaled) / 2;
     
-    // Absolute Y position of the top of the box for this item if grid wasn't scrolled
     int box_y_abs_no_scroll = first_item_row_start_y_abs + row * (GRID_ITEM_H + GRID_ITEM_PADDING_Y) + (GRID_ITEM_H - current_item_box_h_scaled) / 2;
     
-    // ON-SCREEN Y position of the top of the box, after applying scroll animation
     int box_y_on_screen_top = box_y_abs_no_scroll - (int)currentGridScrollOffset_Y_anim;
 
-    // Culling: Check if the item is visible within the master clip window
     if (box_y_on_screen_top + current_item_box_h_scaled <= grid_content_area_start_y_abs || box_y_on_screen_top >= 64) {
       continue;
     }
 
     bool is_selected_item = (i == menuIndex);
 
-    // Draw the box. It will be automatically clipped by the master u8g2.setClipWindow call above.
     drawRndBox(box_x_abs, box_y_on_screen_top, current_item_box_w_scaled, current_item_box_h_scaled, 2, is_selected_item);
 
-    if (current_item_effective_scale > 0.7f) { // Only draw text if scaled enough
-      u8g2.setDrawColor(is_selected_item ? 0 : 1); // Black text on white selected, white on black unselected
+    if (current_item_effective_scale > 0.7f) {
+      u8g2.setDrawColor(is_selected_item ? 0 : 1);
 
-      // Define the text drawing area relative to the box's on-screen position
-      int text_content_x_start = box_x_abs + 2; // Small padding inside the box for text
-      // For 5x7 font, ascent is ~5.
+      int text_content_x_start = box_x_abs + 2;
       int text_content_y_baseline = box_y_on_screen_top + (current_item_box_h_scaled - u8g2.getAscent()) / 2 + u8g2.getAscent() -1; 
-      int text_available_render_width = current_item_box_w_scaled - 4; // width - padding_left - padding_right
+      int text_available_render_width = current_item_box_w_scaled - 4;
 
-      // Child clip window for the text within this specific item's box.
       int text_clip_x1 = max(box_x_abs + 1, 0); 
       int text_clip_y1 = max(box_y_on_screen_top + 1, grid_content_area_start_y_abs); 
       int text_clip_x2 = min(box_x_abs + current_item_box_w_scaled - 1, 127); 
       int text_clip_y2 = min(box_y_on_screen_top + current_item_box_h_scaled - 1, 63); 
 
-      if (text_clip_x1 < text_clip_x2 && text_clip_y1 < text_clip_y2) { // If valid clip area
+      if (text_clip_x1 < text_clip_x2 && text_clip_y1 < text_clip_y2) {
         u8g2.setClipWindow(text_clip_x1, text_clip_y1, text_clip_x2, text_clip_y2);
         
         if (is_selected_item) { 
-          updateMarquee(text_available_render_width, current_tool_list_ptr[i]); // Font is 5x7
+          updateMarquee(text_available_render_width, current_tool_list_ptr[i]);
         }
         
         if (is_selected_item && marqueeActive) {
           u8g2.drawStr(text_content_x_start + (int)marqueeOffset, text_content_y_baseline, marqueeText);
         } else {
-          char* display_text_truncated = truncateText(current_tool_list_ptr[i], text_available_render_width, u8g2); // Font is 5x7
+          char* display_text_truncated = truncateText(current_tool_list_ptr[i], text_available_render_width, u8g2);
           int text_width_pixels = u8g2.getStrWidth(display_text_truncated);
-          // Center truncated text within its available width
           u8g2.drawStr(text_content_x_start + (text_available_render_width - text_width_pixels)/2 , text_content_y_baseline, display_text_truncated);
         }
-        // Restore master clip window for the next item's box drawing (if any) or culling
         u8g2.setClipWindow(0, grid_content_area_start_y_abs, 127, 63);
       }
-      u8g2.setDrawColor(1); // Reset draw color for next item (if it's unselected)
+      u8g2.setDrawColor(1);
     }
   }
-  u8g2.setMaxClipWindow(); // Fully reset clipping at the end of the function
+  u8g2.setMaxClipWindow();
 }
 
 void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
+    // ... (Implementation unchanged) ...
   switch (iconType) {
-    case 0: // Tools Icon: Crossed Wrench and Screwdriver (Used for Main Menu "Tools")
+    case 0: // Tools Icon
       if (isLarge) { 
         u8g2.drawLine(x + 4, y + 11, x + 11, y + 4); 
         u8g2.drawBox(x + 2, y + 9, 4, 4);          
@@ -1218,8 +1346,7 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawPixel(x+5,y+6); u8g2.drawPixel(x+6,y+5);u8g2.drawPixel(x+6,y+6); 
       }
       break;
-
-    case 1: // Games Icon: Game Controller (Used for Main Menu "Games")
+    case 1: // Games Icon
       if (isLarge) { 
         u8g2.drawRFrame(x + 1, y + 4, 14, 8, 3); 
         u8g2.drawBox(x + 3, y + 6, 2, 4); 
@@ -1232,12 +1359,11 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawPixel(x + 5, y + 4);          
       }
       break;
-
-    case 2: // Settings Icon: Gear/Cog (Used for Main Menu "Settings")
+    case 2: // Settings Icon
       if (isLarge) { 
         u8g2.drawCircle(x + 8, y + 8, 5); 
         u8g2.drawCircle(x + 8, y + 8, 2); 
-        for (int k = 0; k < 8; k++) { // Renamed loop variable to avoid conflict
+        for (int k = 0; k < 8; k++) {
           float angle = k * PI / 4.0;
           int tx1 = x + 8 + round(cos(angle) * 4); 
           int ty1 = y + 8 + round(sin(angle) * 4);
@@ -1254,8 +1380,7 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawPixel(x + 1, y + 6); u8g2.drawPixel(x + 6, y + 6);
       }
       break;
-
-    case 3: // Info Icon: Letter 'i' inside a circle (Used for Main Menu "Info" and Settings "About Kiva")
+    case 3: // Info Icon
       if (isLarge) { 
         u8g2.drawCircle(x + 8, y + 8, 7); 
         u8g2.drawDisc(x + 8, y + 4, 1.5);   
@@ -1266,7 +1391,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawVLine(x + 4, y + 3, 3); 
       }
       break;
-
     case 4: // Game Icon: Snake
       if (isLarge) { 
         u8g2.drawBox(x + 2, y + 7, 3, 3); u8g2.drawBox(x + 5, y + 7, 3, 3); 
@@ -1280,7 +1404,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawPixel(x + 1, y + 3); 
       }
       break;
-
     case 5: // Game Icon: Tetris blocks
       if (isLarge) { 
         u8g2.drawBox(x + 2, y + 9, 3, 3); u8g2.drawBox(x + 2, y + 6, 3, 3);
@@ -1293,7 +1416,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawBox(x + 5, y + 1, 2, 2); u8g2.drawBox(x + 5, y + 3, 2, 2); 
       }
       break;
-
     case 6: // Game Icon: Pong paddles and ball
       if (isLarge) { 
         u8g2.drawBox(x + 2, y + 4, 2, 8);  
@@ -1305,7 +1427,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawPixel(x + 3, y + 3);    
       }
       break;
-
     case 7: // Game Icon: Maze
       if (isLarge) { 
         u8g2.drawFrame(x + 1, y + 1, 14, 14); 
@@ -1321,8 +1442,7 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawVLine(x + 5, y + 2, 6);
       }
       break;
-
-    case 8: // Navigation Icon: Modernized Back Arrow (Chevron-like)
+    case 8: // Navigation Icon: Back Arrow
       if (isLarge) { 
         u8g2.drawLine(x + 10, y + 3, x + 4, y + 8); 
         u8g2.drawLine(x + 10, y + 4, x + 5, y + 8); 
@@ -1333,7 +1453,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawLine(x + 5, y + 6, x + 2, y + 4);
       }
       break;
-
     case 9: // Network Icon: WiFi Symbol
       if (isLarge) { 
         int cx = x + 8; int cy = y + 12; 
@@ -1348,7 +1467,6 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawCircle(cx, cy, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT); 
       }
       break;
-
     case 10: // Network Icon: Bluetooth Symbol
       if (isLarge) { 
         u8g2.drawLine(x + 8, y + 1, x + 8, y + 15); 
@@ -1364,8 +1482,7 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawLine(x + 6, y + 5, x + 4, y + 7);
       }
       break;
-
-    case 11: // Tool Icon: Jamming (Lightning Bolt)
+    case 11: // Tool Icon: Jamming
       if (isLarge) { 
         u8g2.drawLine(x + 8, y + 2, x + 5, y + 7);
         u8g2.drawLine(x + 5, y + 7, x + 10, y + 6); 
@@ -1379,8 +1496,7 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawLine(x + 3, y + 6, x + 4, y + 7);
       }
       break;
-
-    case 12: // Tool Icon: Injection (Syringe)
+    case 12: // Tool Icon: Injection
       if (isLarge) { 
         u8g2.drawLine(x + 3, y + 3, x + 8, y + 8); 
         u8g2.drawLine(x + 4, y + 3, x + 8, y + 7); 
@@ -1394,122 +1510,90 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawHLine(x + 3, y + 6, 3);
       }
       break;
-    
-    case 13: // Settings Icon: Display Options (Monitor/Screen)
-      if (isLarge) { // 16x16
-        u8g2.drawRFrame(x + 2, y + 2, 12, 9, 1); // Screen
-        u8g2.drawBox(x + 5, y + 11, 6, 2);     // Stand base
-        u8g2.drawVLine(x + 7, y + 11, 2);      // Stand neck part 1
-        u8g2.drawVLine(x + 8, y + 11, 2);      // Stand neck part 2
-      } else { // 8x8
-        u8g2.drawFrame(x + 1, y + 1, 6, 4); // Screen
-        u8g2.drawBox(x + 2, y + 5, 4, 1);   // Stand
+    case 13: // Settings Icon: Display Options
+      if (isLarge) {
+        u8g2.drawRFrame(x + 2, y + 2, 12, 9, 1);
+        u8g2.drawBox(x + 5, y + 11, 6, 2);
+        u8g2.drawVLine(x + 7, y + 11, 2);
+        u8g2.drawVLine(x + 8, y + 11, 2);
+      } else {
+        u8g2.drawFrame(x + 1, y + 1, 6, 4);
+        u8g2.drawBox(x + 2, y + 5, 4, 1);
         u8g2.drawVLine(x+3, y+5, 2);
       }
       break;
-
-    case 14: // Settings Icon: Sound Setup (Speaker/Volume)
-      if (isLarge) { // 16x16
-        u8g2.drawBox(x + 3, y + 4, 5, 8); // Speaker body
-        u8g2.drawTriangle(x + 7, y + 4, x + 7, y + 11, x + 10, y + 8); // Right part of speaker
-        // Sound waves - Draw only the right half of the circles
-        u8g2.drawCircle(x + 12, y + 8, 2, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT); // <--- CORRECTED
-        u8g2.drawCircle(x + 13, y + 8, 4, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT); // <--- CORRECTED
-      } else { // 8x8
-        u8g2.drawBox(x + 1, y + 2, 3, 4); // Speaker body
-        // Sound waves (simple lines)
+    case 14: // Settings Icon: Sound Setup
+      if (isLarge) {
+        u8g2.drawBox(x + 3, y + 4, 5, 8);
+        u8g2.drawTriangle(x + 7, y + 4, x + 7, y + 11, x + 10, y + 8);
+        u8g2.drawCircle(x + 12, y + 8, 2, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+        u8g2.drawCircle(x + 13, y + 8, 4, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      } else {
+        u8g2.drawBox(x + 1, y + 2, 3, 4);
         u8g2.drawLine(x + 5, y + 3, x + 6, y + 3);
         u8g2.drawLine(x + 5, y + 5, x + 7, y + 5);
       }
       break;
-
-    case 15: // Settings Icon: System Info (Chip/CPU)
-      if (isLarge) { // 16x16
-        u8g2.drawRFrame(x + 3, y + 3, 10, 10, 1); // Chip body
-        u8g2.drawRFrame(x + 5, y + 5, 6, 6, 0);   // Inner square
-        // Pins (simplified)
-        for(int k=0; k<3; ++k) {
-            u8g2.drawHLine(x+0, y+4+(k*3), 3); // Left pins
-            u8g2.drawHLine(x+13, y+4+(k*3), 3); // Right pins
-            u8g2.drawVLine(x+4+(k*3), y+0, 3); // Top pins
-            u8g2.drawVLine(x+4+(k*3), y+13, 3); // Bottom pins
-        }
-      } else { // 8x8
-        u8g2.drawFrame(x + 1, y + 1, 6, 6); // Chip body
-        u8g2.drawFrame(x + 2, y + 2, 4, 4); // Inner
-        u8g2.drawPixel(x+0,y+3); u8g2.drawPixel(x+7,y+3); // Side pins
-        u8g2.drawPixel(x+3,y+0); u8g2.drawPixel(x+3,y+7); // Top/bottom pins
-      }
-      break;
-    
-
-    case 16: // UI Icon: Refresh / Rescan (circular arrow)
-      if (isLarge) { // 16x16 version - for main menu or larger contexts if needed
-        u8g2.drawCircle(x + 8, y + 8, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT); // 3/4 circle
-        u8g2.drawTriangle(x + 8, y + 2 -1, x + 8 - 3, y + 2 + 2, x + 8 + 3, y + 2 + 2); // Arrowhead at top pointing up-ish
-        // Correct arrowhead for top-left position opening:
-        u8g2.drawLine(x+8, y+2, x+5, y+3); // line from center of opening to point
-        u8g2.drawLine(x+5,y+3, x+6, y+5);  // left barb
-        u8g2.drawLine(x+5,y+3, x+3, y+5);  // right barb
-      } else { // 8x8 version - for lists
-        // Draw a smaller 3/4 circle
-        u8g2.drawCircle(x + 4, y + 4, 3, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT);
-        // Arrowhead at the top-left opening of the circle, pointing left-ish
-        u8g2.drawLine(x + 4, y + 1, x + 4 - 2, y + 1 + 1); // Upper part of arrowhead
-        u8g2.drawLine(x + 4, y + 1, x + 4 - 1, y + 1 + 2); // Lower part of arrowhead
-      }
-      break;
-    
-    case 17: // UI Icon: Small Lightning Bolt (for charging status) - Refined
-      // Target: Small, sharp, modern. Approx 5-6px wide, 7-8px high.
-      // 'isLarge' can provide a slightly scaled up version if needed elsewhere.
-      if (isLarge) { // Larger version (e.g., for a different UI context)
-        // Example for a ~10px wide, ~14px high bolt
-        u8g2.drawLine(x + 5, y + 0, x + 2, y + 6);  // Top-left stroke
-        u8g2.drawLine(x + 2, y + 6, x + 7, y + 5);  // Middle-right stroke (crossing)
-        u8g2.drawLine(x + 7, y + 5, x + 4, y + 13); // Bottom-left stroke
-      } else { // Small version for status bar (target ~5px width, ~7px height)
-        // Simple, sharp "N" or "Z" shape
-        // x, y is top-left of the drawing bounding box.
-        // Let's aim for a 5x7 icon bounding box.
-        // y is y_top of this box.
-
-        // Top point: (x+2, y)
-        // Mid-left: (x+0, y+3)
-        // Mid-right: (x+4, y+3)
-        // Bottom point: (x+2, y+6)
-
-        u8g2.drawLine(x + 2, y + 0, x + 0, y + 3); // Down-left
-        u8g2.drawLine(x + 0, y + 3, x + 4, y + 3); // Across to right
-        u8g2.drawLine(x + 4, y + 3, x + 2, y + 6); // Down-left to bottom point
-
-        // Alternative slightly more "jagged" Z:
-        // u8g2.drawLine(x + 3, y + 0, x + 0, y + 2); // Top part, slanted
-        // u8g2.drawLine(x + 0, y + 2, x + 4, y + 4); // Middle part, slanted
-        // u8g2.drawLine(x + 4, y + 4, x + 1, y + 6); // Bottom part, slanted
-      }
-      break;
-    
-    case 18: // UI Icon: Vibration Motor (e.g., eccentric rotating mass symbol)
+    case 15: // Settings Icon: System Info
       if (isLarge) {
-        u8g2.drawCircle(x + 8, y + 8, 6); // Outer circle
-        u8g2.drawBox(x + 8 - 1, y + 8 - 4, 2, 3); // Offset mass part 1
-        u8g2.drawDisc(x+8, y+8, 1); // Center dot
-      } else { // Small
+        u8g2.drawRFrame(x + 3, y + 3, 10, 10, 1);
+        u8g2.drawRFrame(x + 5, y + 5, 6, 6, 0);
+        for(int k=0; k<3; ++k) {
+            u8g2.drawHLine(x+0, y+4+(k*3), 3);
+            u8g2.drawHLine(x+13, y+4+(k*3), 3);
+            u8g2.drawVLine(x+4+(k*3), y+0, 3);
+            u8g2.drawVLine(x+4+(k*3), y+13, 3);
+        }
+      } else {
+        u8g2.drawFrame(x + 1, y + 1, 6, 6);
+        u8g2.drawFrame(x + 2, y + 2, 4, 4);
+        u8g2.drawPixel(x+0,y+3); u8g2.drawPixel(x+7,y+3);
+        u8g2.drawPixel(x+3,y+0); u8g2.drawPixel(x+3,y+7);
+      }
+      break;
+    case 16: // UI Icon: Refresh / Rescan
+      if (isLarge) {
+        u8g2.drawCircle(x + 8, y + 8, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT);
+        u8g2.drawLine(x+8, y+2, x+5, y+3);
+        u8g2.drawLine(x+5,y+3, x+6, y+5);
+        u8g2.drawLine(x+5,y+3, x+3, y+5);
+      } else {
+        u8g2.drawCircle(x + 4, y + 4, 3, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT);
+        u8g2.drawLine(x + 4, y + 1, x + 4 - 2, y + 1 + 1);
+        u8g2.drawLine(x + 4, y + 1, x + 4 - 1, y + 1 + 2);
+      }
+      break;
+    case 17: // UI Icon: Small Lightning Bolt
+      if (isLarge) {
+        u8g2.drawLine(x + 5, y + 0, x + 2, y + 6);
+        u8g2.drawLine(x + 2, y + 6, x + 7, y + 5);
+        u8g2.drawLine(x + 7, y + 5, x + 4, y + 13);
+      } else {
+        u8g2.drawLine(x + 2, y + 0, x + 0, y + 3);
+        u8g2.drawLine(x + 0, y + 3, x + 4, y + 3);
+        u8g2.drawLine(x + 4, y + 3, x + 2, y + 6);
+      }
+      break;
+    case 18: // UI Icon: Vibration Motor
+      if (isLarge) {
+        u8g2.drawCircle(x + 8, y + 8, 6);
+        u8g2.drawBox(x + 8 - 1, y + 8 - 4, 2, 3);
+        u8g2.drawDisc(x+8, y+8, 1);
+      } else {
         u8g2.drawCircle(x + 4, y + 4, 3);
-        u8g2.drawPixel(x + 4, y + 1); // Small indication of offset
+        u8g2.drawPixel(x + 4, y + 1);
         u8g2.drawPixel(x+4, y+4);
       }
       break;
-    case 19: // UI Icon: Laser Beam (e.g., starburst or lines)
+    case 19: // UI Icon: Laser Beam
       if (isLarge) {
-        u8g2.drawDisc(x + 8, y + 8, 2); // Center point
+        u8g2.drawDisc(x + 8, y + 8, 2);
         for (int k = 0; k < 8; k++) {
           float angle = k * PI / 4.0;
           u8g2.drawLine(x + 8 + round(cos(angle) * 3), y + 8 + round(sin(angle) * 3),
                          x + 8 + round(cos(angle) * 7), y + 8 + round(sin(angle) * 7));
         }
-      } else { // Small
+      } else {
         u8g2.drawDisc(x + 4, y + 4, 1);
         u8g2.drawLine(x + 4, y + 0, x + 4, y + 7);
         u8g2.drawLine(x + 0, y + 4, x + 7, y + 4);
@@ -1517,37 +1601,33 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
         u8g2.drawLine(x + 1, y + 6, x + 6, y + 1);
       }
       break;
-    case 20: // UI Icon: Flashlight (e.g., stylized light beam)
+    case 20: // UI Icon: Flashlight
       if (isLarge) {
-        u8g2.drawTriangle(x + 4, y + 2, x + 12, y + 2, x + 8, y + 0); // Top of lamp
-        u8g2.drawBox(x + 6, y + 2, 4, 5); // Lamp body
-        // Beams
+        u8g2.drawTriangle(x + 4, y + 2, x + 12, y + 2, x + 8, y + 0);
+        u8g2.drawBox(x + 6, y + 2, 4, 5);
         u8g2.drawLine(x + 2, y + 8, x + 6, y + 14);
         u8g2.drawLine(x + 8, y + 8, x + 8, y + 14);
         u8g2.drawLine(x + 14, y + 8, x + 10, y + 14);
-      } else { // Small
-        u8g2.drawBox(x + 2, y + 0, 4, 3); // Lamp head
+      } else {
+        u8g2.drawBox(x + 2, y + 0, 4, 3);
         u8g2.drawLine(x+0,y+4, x+3,y+7);
         u8g2.drawLine(x+4,y+4, x+4,y+7);
         u8g2.drawLine(x+7,y+4, x+5,y+7);
       }
       break;
-    
-    case 21: // UI Icon: Utilities (e.g., simple toolbox or multi-tool)
-      if (isLarge) { // 16x16
-        // Simple toolbox
-        u8g2.drawRFrame(x + 2, y + 5, 12, 8, 1); // Main box
-        u8g2.drawBox(x + 1, y + 3, 14, 2);     // Lid / Top part
-        u8g2.drawRFrame(x + 6, y + 1, 4, 3, 1); // Handle
-        u8g2.drawPixel(x+4, y+8); // latch/dot
-        u8g2.drawPixel(x+11, y+8); // latch/dot
-      } else { // 8x8
-        u8g2.drawFrame(x + 1, y + 3, 6, 4); // Box
-        u8g2.drawHLine(x + 0, y + 2, 8);   // Lid
-        u8g2.drawFrame(x + 3, y + 0, 2, 2); // Handle
+    case 21: // UI Icon: Utilities
+      if (isLarge) {
+        u8g2.drawRFrame(x + 2, y + 5, 12, 8, 1);
+        u8g2.drawBox(x + 1, y + 3, 14, 2);
+        u8g2.drawRFrame(x + 6, y + 1, 4, 3, 1);
+        u8g2.drawPixel(x+4, y+8);
+        u8g2.drawPixel(x+11, y+8);
+      } else {
+        u8g2.drawFrame(x + 1, y + 3, 6, 4);
+        u8g2.drawHLine(x + 0, y + 2, 8);
+        u8g2.drawFrame(x + 3, y + 0, 2, 2);
       }
       break;
-
     default:
       if (isLarge) {
         u8g2.drawFrame(x + 2, y + 2, 12, 12);
@@ -1559,8 +1639,8 @@ void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
 }
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill) {
-    if (w <= 0 || h <= 0) return; // Don't draw if width or height is zero or negative
-    if (w <= 2 * r || h <= 2 * r) { // If too small for radius, draw as simple box/frame
+    if (w <= 0 || h <= 0) return;
+    if (w <= 2 * r || h <= 2 * r) {
         if (fill) u8g2.drawBox(x, y, w, h);
         else u8g2.drawFrame(x, y, w, h);
         return;
@@ -1570,34 +1650,25 @@ void drawRndBox(int x, int y, int w, int h, int r, bool fill) {
 }
 
 void drawBatIcon(int x_left, int y_top, uint8_t percentage) {
-    // Draws a simplified, blocky battery icon.
-    // x_left: Leftmost X coordinate of the icon.
-    // y_top: Topmost Y coordinate of the icon.
-    // Icon total width: 9px, height: 5px (body) + 1px (tip height) = 5px overall effective height for alignment.
-
-    int body_width = 7;  // Main body
+    int body_width = 7;
     int body_height = 5;
-    int tip_width = 1;   // Tip of the battery (single pixel wide)
-    int tip_height = 3;  // Tip height (centered on body height)
+    int tip_width = 1;
+    int tip_height = 3;
 
-    // Main battery body (simple frame)
     u8g2.drawFrame(x_left, y_top, body_width, body_height);
 
-    // Battery tip (small rectangle on the right side, vertically centered)
     int tip_y = y_top + (body_height - tip_height) / 2;
-    u8g2.drawBox(x_left + body_width, tip_y, tip_width, tip_height); // Use drawBox for a solid tip
+    u8g2.drawBox(x_left + body_width, tip_y, tip_width, tip_height);
 
-    // Inner fill based on percentage
-    // Fill area is inside the body, with 1px padding
     int fill_padding_x = 1;
     int fill_padding_y = 1;
     int max_fill_width = body_width - 2 * fill_padding_x;
     int fill_width = (percentage * max_fill_width) / 100;
 
     if (fill_width > 0) {
-        u8g2.drawBox(x_left + fill_padding_x,            // X start of fill
-                       y_top + fill_padding_y,             // Y start of fill
-                       fill_width,                         // Width of fill
-                       body_height - 2 * fill_padding_y);  // Height of fill
+        u8g2.drawBox(x_left + fill_padding_x,
+                       y_top + fill_padding_y,
+                       fill_width,
+                       body_height - 2 * fill_padding_y);
     }
 }
