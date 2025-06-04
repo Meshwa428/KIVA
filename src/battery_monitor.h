@@ -4,6 +4,8 @@
 #include "config.h" // For ADC defines, BAT_SAMPLES etc.
 #include <Arduino.h> // For uint8_t
 
+#define VOLTAGE_RATIO 1.465f
+
 // Extern global variables related to battery (defined in KivaMain.ino)
 extern float batReadings[BAT_SAMPLES];
 extern int batIndex;
