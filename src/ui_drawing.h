@@ -27,7 +27,8 @@ void drawPasswordInputScreen();
 void drawKeyboardOnSmallDisplay();
 void drawWifiConnectingStatusScreen();
 void drawWifiConnectionResultScreen();
-void drawWifiDisconnectOverlay(); // <--- NEW
+void drawWifiDisconnectOverlay(); 
+void drawJammingActiveScreen(); // <--- NEW
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill);
 void drawBatIcon(int x, int y, uint8_t percentage);

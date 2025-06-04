@@ -4,6 +4,7 @@
 #include "pcf_utils.h"
 #include "keyboard_layout.h"
 #include "wifi_manager.h"
+#include "jamming.h" // <--- NEW INCLUDE
 #include <Arduino.h>
 #include <math.h>
 
@@ -675,6 +676,44 @@ void drawWifiDisconnectOverlay() {
     u8g2.setDrawColor(1);
 }
 
+void drawJammingActiveScreen() {
+    u8g2.setFont(u8g2_font_7x13B_tr); // Larger font for active status
+    u8g2.setDrawColor(1);
+
+    const char* jamStatusText = "Jamming Initializing...";
+    switch (activeJammingType) {
+        case JAM_BLE:
+            jamStatusText = "BLE Jam Active";
+            break;
+        case JAM_BT:
+            jamStatusText = "BT Jam Active";
+            break;
+        case JAM_NRF_CHANNELS:
+            jamStatusText = "NRF Channel Jam";
+            break;
+        case JAM_RF_NOISE_FLOOD:
+            jamStatusText = "RF Noise Flood";
+            break;
+        default:
+            jamStatusText = "Jammer Idle"; // Should not happen if screen is active
+            break;
+    }
+
+    int textWidth = u8g2.getStrWidth(jamStatusText);
+    int textX = (u8g2.getDisplayWidth() - textWidth) / 2;
+    int textY = u8g2.getDisplayHeight() / 2 - 5; // Centered vertically
+
+    u8g2.drawStr(textX, textY, jamStatusText);
+
+    u8g2.setFont(u8g2_font_5x7_tf);
+    const char* instruction = "Press OK or BACK to Stop";
+    textWidth = u8g2.getStrWidth(instruction);
+    textX = (u8g2.getDisplayWidth() - textWidth) / 2;
+    textY = u8g2.getDisplayHeight() - 15;
+    u8g2.drawStr(textX, textY, instruction);
+
+    // No graph or visualizer, as per request.
+}
 
 void drawUI() {
   unsigned long currentTime = millis();
@@ -698,11 +737,16 @@ void drawUI() {
   u8g2.clearBuffer();
   
   // Draw main UI elements first
-  if (currentMenu != WIFI_PASSWORD_INPUT && currentMenu != WIFI_CONNECTING && currentMenu != WIFI_CONNECTION_INFO) {
+  if (currentMenu != WIFI_PASSWORD_INPUT && 
+      currentMenu != WIFI_CONNECTING && 
+      currentMenu != WIFI_CONNECTION_INFO &&
+      currentMenu != JAMMING_ACTIVE_SCREEN) { // Don't draw status bar on jam screen
       drawStatusBar();
   }
 
-  if (currentMenu == TOOL_CATEGORY_GRID) {
+  if (currentMenu == JAMMING_ACTIVE_SCREEN) {
+    drawJammingActiveScreen();
+  } else if (currentMenu == TOOL_CATEGORY_GRID) {
     float scrollDiff = targetGridScrollOffset_Y - currentGridScrollOffset_Y_anim;
     if (abs(scrollDiff) > 0.1f) {
       currentGridScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
@@ -766,7 +810,6 @@ void drawUI() {
   u8g2.sendBuffer();
 }
 
-// ... (rest of ui_drawing.cpp - unchanged functions like drawPassiveDisplay, updateMarquee, truncateText, drawStatusBar, drawMainMenu, drawCarouselMenu, startGridItemAnimation, drawToolGridScreen, drawCustomIcon, drawRndBox, drawBatIcon)
 void drawPassiveDisplay() {
     if (currentMenu == WIFI_PASSWORD_INPUT) {
         drawKeyboardOnSmallDisplay();
@@ -774,24 +817,55 @@ void drawPassiveDisplay() {
         u8g2_small.clearBuffer();
         u8g2_small.setDrawColor(1);
 
-        unsigned long now = millis(); unsigned long allSeconds = now / 1000;
-        int runHours = allSeconds / 3600; int secsRemaining = allSeconds % 3600;
-        int runMinutes = secsRemaining / 60; int runSeconds = secsRemaining % 60;
-        char timeStr[9]; sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
-        u8g2_small.setFont(u8g2_font_helvB08_tr);
-        int time_y_baseline = 17;
-        u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(timeStr)) / 2, time_y_baseline, timeStr);
+        // REMOVED UPTIME CLOCK
+        // unsigned long now = millis(); unsigned long allSeconds = now / 1000;
+        // int runHours = allSeconds / 3600; int secsRemaining = allSeconds % 3600;
+        // int runMinutes = secsRemaining / 60; int runSeconds = secsRemaining % 60;
+        // char timeStr[9]; sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
+        // u8g2_small.setFont(u8g2_font_helvB08_tr);
+        // int time_y_baseline = 17;
+        // u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(timeStr)) / 2, time_y_baseline, timeStr);
+
+        // Battery Info Section (moved up slightly since time is removed)
+        float v_bat = currentBatteryVoltage; // Use the globally updated smooth voltage
+        uint8_t s_bat = batPerc(v_bat);
+        char batInfoStr[15];
+        snprintf(batInfoStr, sizeof(batInfoStr), "%.2fV %s%d%%", v_bat, isCharging ? "+" : "", s_bat);
+        u8g2_small.setFont(u8g2_font_5x7_tf);
+        int bat_info_y = u8g2_small.getAscent() + 2; // Top part of display
+        u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(batInfoStr)) / 2, bat_info_y, batInfoStr);
+
 
         const char* modeText = "---";
-        if (showWifiDisconnectOverlay) { // Show overlay status on small display too
+        if (isJammingOperationActive) { // <--- NEW: Show jamming status
+            switch(activeJammingType) {
+                case JAM_BLE: modeText = "BLE Jamming"; break;
+                case JAM_BT: modeText = "BT Jamming"; break;
+                case JAM_NRF_CHANNELS: modeText = "NRF Jamming"; break;
+                case JAM_RF_NOISE_FLOOD: modeText = "RF Flooding"; break;
+                default: modeText = "Jammer Active"; break;
+            }
+        } else if (showWifiDisconnectOverlay) { 
             modeText = "Disconnecting...";
+        // ... (rest of modeText logic unchanged for other Kiva states) ...
         } else if (currentMenu == FLASHLIGHT_MODE) modeText = "Torch";
         else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) modeText = mainMenuItems[menuIndex];
         else if (currentMenu == UTILITIES_MENU && menuIndex < getUtilitiesMenuItemsCount()) modeText = utilitiesMenuItems[menuIndex];
-        else if (currentMenu == GAMES_MENU) modeText = "Games";
-        else if (currentMenu == TOOLS_MENU) modeText = "Tools";
-        else if (currentMenu == SETTINGS_MENU) modeText = "Settings";
-        else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) modeText = toolsMenuItems[toolsCategoryIndex];
+        else if (currentMenu == GAMES_MENU && menuIndex < getGamesMenuItemsCount() && strcmp(gamesMenuItems[menuIndex], "Back") != 0 ) modeText = gamesMenuItems[menuIndex];
+        else if (currentMenu == TOOLS_MENU && menuIndex < getToolsMenuItemsCount() && strcmp(toolsMenuItems[menuIndex], "Back") != 0) modeText = toolsMenuItems[menuIndex];
+        else if (currentMenu == SETTINGS_MENU && menuIndex < getSettingsMenuItemsCount() && strcmp(settingsMenuItems[menuIndex], "Back") != 0) modeText = settingsMenuItems[menuIndex];
+        else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) {
+             // Check if it's the "Jamming" category
+            if (strcmp(toolsMenuItems[toolsCategoryIndex], "Jamming") == 0) {
+                if (menuIndex < getJammingToolItemsCount() && strcmp(jammingToolItems[menuIndex], "Back")!=0) {
+                    modeText = jammingToolItems[menuIndex];
+                } else {
+                     modeText = "Jamming Tools";
+                }
+            } else { // Other tool categories
+                 modeText = toolsMenuItems[toolsCategoryIndex];
+            }
+        }
         else if (currentMenu == WIFI_SETUP_MENU) {
             if (wifiIsScanning) modeText = "Scanning WiFi";
             else modeText = "Wi-Fi Setup";
@@ -802,15 +876,15 @@ void drawPassiveDisplay() {
         }
 
 
-        u8g2_small.setFont(u8g2_font_6x12_tr);
+        u8g2_small.setFont(u8g2_font_6x12_tr); // Slightly larger font for mode text
         char truncatedModeText[22]; strncpy(truncatedModeText, modeText, sizeof(truncatedModeText)-1);
         truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
         if (u8g2_small.getStrWidth(truncatedModeText) > u8g2_small.getDisplayWidth() - 4) {
-            truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small);
+            truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small); // SBUF is used here
             strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText)-1);
             truncatedModeText[sizeof(truncatedModeText)-1] = '\0';
         }
-        int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2;
+        int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2; // Bottom part of display
         u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(truncatedModeText)) / 2, mode_text_y_baseline, truncatedModeText);
 
         u8g2_small.sendBuffer();
@@ -949,7 +1023,7 @@ void drawStatusBar() {
     float v = getSmoothV(); 
     uint8_t s = batPerc(v);
     u8g2.setFont(u8g2_font_6x10_tf); 
-    const char* titleText = "Kiva OS"; 
+    const char* titleText = "Kiva"; 
 
     if (currentMenu == TOOL_CATEGORY_GRID) { 
         if (toolsCategoryIndex >= 0 && toolsCategoryIndex < (getToolsMenuItemsCount() -1) ) { 
@@ -979,7 +1053,7 @@ void drawStatusBar() {
     int current_x_origin_for_battery = u8g2.getDisplayWidth() - battery_area_right_margin;
 
     // Battery icon Y position (top edge of the icon)
-    int bat_icon_y_top = (STATUS_BAR_H - 5) / 2; // Center icon vertically in status bar (5 is body_height)
+    int bat_icon_y_top = ((STATUS_BAR_H - 5) / 2) - 2; // Center icon vertically in status bar (5 is body_height)
     if (bat_icon_y_top < 0) bat_icon_y_top = 0;
 
     int bat_icon_width = 9; // 7 for body + 1 for tip + 1 for spacing
@@ -993,7 +1067,7 @@ void drawStatusBar() {
         current_x_origin_for_battery -= (charge_icon_width + charge_icon_spacing); 
         
         // Charging icon Y position (top edge)
-        int charge_icon_y_top = (STATUS_BAR_H - charge_icon_height) / 2;
+        int charge_icon_y_top = ((STATUS_BAR_H - charge_icon_height) / 2) - 2;
         if (charge_icon_y_top < 0) charge_icon_y_top = 0;
 
         u8g2.setDrawColor(1);
@@ -1127,11 +1201,13 @@ void drawCarouselMenu() {
     } else if (currentMenu == TOOLS_MENU) {
       current_item_list_ptr = toolsMenuItems;
       itemTextToDisplay = current_item_list_ptr[i];
-      if (i == 0) icon_type_for_item = 12; else if (i == 1) icon_type_for_item = 9;  
-      else if (i == 2) icon_type_for_item = 10; else if (i == 3) icon_type_for_item = 9;  
-      else if (i == 4) icon_type_for_item = 11; else if (i == 5 && i < getToolsMenuItemsCount()) icon_type_for_item = 8; 
+      if (strcmp(itemTextToDisplay, "Injection") == 0) icon_type_for_item = 12;
+      else if (strcmp(itemTextToDisplay, "Wi-Fi Attacks") == 0) icon_type_for_item = 9;  
+      else if (strcmp(itemTextToDisplay, "BLE/BT Attacks") == 0) icon_type_for_item = 10; 
+      else if (strcmp(itemTextToDisplay, "NRF Recon") == 0) icon_type_for_item = 15; // Using System Info icon for recon
+      else if (strcmp(itemTextToDisplay, "Jamming") == 0) icon_type_for_item = 11; // Jamming icon
+      else if (strcmp(itemTextToDisplay, "Back") == 0) icon_type_for_item = 8; 
       else continue;
-
     } else if (currentMenu == SETTINGS_MENU) {
       current_item_list_ptr = settingsMenuItems; 
       itemTextToDisplay = current_item_list_ptr[i];

@@ -1,6 +1,6 @@
 #include <Wire.h>
 #include "config.h"
-#include "keyboard_layout.h" // Include for KeyboardLayer enum and layouts
+#include "keyboard_layout.h" 
 #include "pcf_utils.h"
 #include "input_handling.h"
 #include "battery_monitor.h"
@@ -8,6 +8,7 @@
 #include "menu_logic.h"
 #include "wifi_manager.h"
 #include "sd_card_manager.h"
+#include "jamming.h" // <--- NEW INCLUDE
 
 // ... (Bitmap Data) ...
 #define im_width 128
@@ -161,8 +162,8 @@ bool capsLockActive = false;
 unsigned long wifiStatusMessageTimeout = 0;
 
 // --- Wi-Fi Disconnect Overlay ---
-bool showWifiDisconnectOverlay = false; 
-int disconnectOverlaySelection = 0;  
+bool showWifiDisconnectOverlay = false;
+int disconnectOverlaySelection = 0;
 
 // --- Wi-Fi Disconnect Overlay Animation ---
 float disconnectOverlayCurrentScale = 0.0f;
@@ -170,30 +171,34 @@ float disconnectOverlayTargetScale = 0.0f;
 unsigned long disconnectOverlayAnimStartTime = 0;
 bool disconnectOverlayAnimatingIn = false;
 
+// --- Jamming Related Global Variable DEFINITIONS ---
+bool isJammingOperationActive = false;
+JammingType activeJammingType = JAM_NONE;
+unsigned long lastJammingInputCheckTime = 0; // Used for input polling in both modes
+unsigned long currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
+unsigned long currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
+int lastSelectedJammingToolGridIndex = 0; // Definition for extern in config.h
 
-// === Small Display Boot Log Globals === (no change)
+
+// === Small Display Boot Log Globals ===
 #define MAX_LOG_LINES_SMALL_DISPLAY 4
 #define MAX_LOG_LINE_LENGTH_SMALL_DISPLAY 32
 char smallDisplayLogBuffer[MAX_LOG_LINES_SMALL_DISPLAY][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
 
-// === Boot Progress Globals (MODIFIED) ===
+// === Boot Progress Globals ===
 int totalBootSteps = 0;
 int currentBootStep = 0;
-float currentProgressBarFillPx_anim = 0.0f; // Current animated fill width in pixels
-
-// Variables for per-segment animation
-unsigned long segmentAnimStartTime = 0;     // When the current segment animation began
-float segmentAnimDurationMs_float = 300.0f; // Duration of one segment's animation (matches stepDisplayDurationMs)
-float segmentAnimStartPx = 0.0f;            // Fill Px at the start of current segment animation
-float segmentAnimTargetPx = 0.0f;           // Target Fill Px for the current segment
-
-const int PROGRESS_ANIM_UPDATE_INTERVAL_MS = 16; // Approx 60 FPS updates for animation
+float currentProgressBarFillPx_anim = 0.0f;
+unsigned long segmentAnimStartTime = 0;
+float segmentAnimDurationMs_float = 300.0f;
+float segmentAnimStartPx = 0.0f;
+float segmentAnimTargetPx = 0.0f;
+const int PROGRESS_ANIM_UPDATE_INTERVAL_MS = 16;
 
 
 void updateMainDisplayBootProgress() {
     selectMux(MUX_CHANNEL_MAIN_DISPLAY);
 
-    // --- Smooth Easing Animation Logic for Progress Bar ---
     unsigned long currentTime = millis();
     float elapsedSegmentTime = 0;
 
@@ -201,39 +206,41 @@ void updateMainDisplayBootProgress() {
         elapsedSegmentTime = (float)(currentTime - segmentAnimStartTime);
     }
 
-    float progress_t = 0.0f; // Time progress for current segment (0.0 to 1.0)
+    float progress_t = 0.0f;
     if (segmentAnimDurationMs_float > 0) {
         progress_t = elapsedSegmentTime / segmentAnimDurationMs_float;
     }
-    
+
     if (progress_t < 0.0f) progress_t = 0.0f;
     if (progress_t > 1.0f) progress_t = 1.0f;
 
-    // Ease-Out Cubic function: f(t) = 1 - (1-t)^3
-    // Gives a nice effect of starting faster and slowing down.
     float eased_t = 1.0f - pow(1.0f - progress_t, 3);
-
     currentProgressBarFillPx_anim = segmentAnimStartPx + (segmentAnimTargetPx - segmentAnimStartPx) * eased_t;
-    // --- End Smooth Easing Animation Logic ---
 
     u8g2.firstPage();
     do {
-        if (sizeof(im_bits) > 1) {
+        // ****** MODIFIED BITMAP RENDERING LOGIC ******
+        // Ensure 'im_bits' is defined above. If it's not (e.g., only a comment placeholder),
+        // this 'if' condition might behave unexpectedly or lead to compile errors
+        // if 'im_bits' isn't declared at all.
+        // The original check `sizeof(im_bits) > 1` assumes im_bits is a valid array.
+        if (sizeof(im_bits) > 1) { // Reverted to your simpler check
             u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
         } else {
             u8g2.setFont(u8g2_font_ncenB10_tr);
-            u8g2.drawStr((128 - u8g2.getStrWidth("KIVA")) / 2, 35, "KIVA");
+            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("KIVA")) / 2, 35, "KIVA");
         }
+        // ****** END OF MODIFIED BITMAP LOGIC ******
 
         int progressBarY = im_height - 12 + 2;
         int progressBarHeight = 7;
-        int progressBarWidth = im_width - 40;
-        int progressBarX = (im_width - progressBarWidth) / 2;
+        int progressBarWidth = u8g2.getDisplayWidth() - 40; // Use display width
+        int progressBarX = (u8g2.getDisplayWidth() - progressBarWidth) / 2;
         int progressBarDrawableWidth = progressBarWidth - 2;
 
         u8g2.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1);
 
-        int fillWidthToDraw = (int)round(currentProgressBarFillPx_anim); // Round for pixel drawing
+        int fillWidthToDraw = (int)round(currentProgressBarFillPx_anim);
         if (fillWidthToDraw > progressBarDrawableWidth) fillWidthToDraw = progressBarDrawableWidth;
         if (fillWidthToDraw < 0) fillWidthToDraw = 0;
 
@@ -247,36 +254,29 @@ void updateMainDisplayBootProgress() {
 void logToSmallDisplay(const char* message, const char* status) {
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
   u8g2_small.setFont(u8g2_font_5x7_tf);
-
   char fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
-  fullMessage[0] = '\0'; 
-
+  fullMessage[0] = '\0';
   int charsWritten = 0;
   if (status && strlen(status) > 0) {
     charsWritten = snprintf(fullMessage, sizeof(fullMessage), "[%s] ", status);
   }
-
-  if (charsWritten < sizeof(fullMessage) - 1) { 
-    snprintf(fullMessage + charsWritten, sizeof(fullMessage) - charsWritten, "%.*s", 
+  if (charsWritten < sizeof(fullMessage) - 1) {
+    snprintf(fullMessage + charsWritten, sizeof(fullMessage) - charsWritten, "%.*s",
              (int)(sizeof(fullMessage) - charsWritten - 1), message);
   }
-  fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY - 1] = '\0'; 
-
+  fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY - 1] = '\0';
   for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY - 1; ++i) {
     strncpy(smallDisplayLogBuffer[i], smallDisplayLogBuffer[i+1], MAX_LOG_LINE_LENGTH_SMALL_DISPLAY -1);
     smallDisplayLogBuffer[i][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY - 1] = '\0';
   }
   strncpy(smallDisplayLogBuffer[MAX_LOG_LINES_SMALL_DISPLAY - 1], fullMessage, MAX_LOG_LINE_LENGTH_SMALL_DISPLAY -1);
   smallDisplayLogBuffer[MAX_LOG_LINES_SMALL_DISPLAY - 1][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY -1] = '\0';
-  
   u8g2_small.clearBuffer();
   u8g2_small.setDrawColor(1);
-
-  const int lineHeight = 8; 
-  int yPos = u8g2_small.getAscent(); 
-
+  const int lineHeight = 8;
+  int yPos = u8g2_small.getAscent();
   for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
-    u8g2_small.drawStr(2, yPos + (i * lineHeight), smallDisplayLogBuffer[i]); 
+    u8g2_small.drawStr(2, yPos + (i * lineHeight), smallDisplayLogBuffer[i]);
   }
   u8g2_small.sendBuffer();
 }
@@ -286,9 +286,13 @@ void setup() {
   for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
     smallDisplayLogBuffer[i][0] = '\0';
   }
-
   Serial.begin(115200);
   Wire.begin();
+
+  // keep this here, and display the placeholder boot log below
+  // To turn off the laser and vibration motor as quick as possible when we boot.
+  selectMux(0);
+  writePCF(PCF0_ADDR, pcf0Output);
 
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
   u8g2_small.begin();
@@ -300,83 +304,71 @@ void setup() {
   u8g2.begin();
   u8g2.enableUTF8Print();
 
-  totalBootSteps = 9;
+  totalBootSteps = 9; // Adjusted for Jamming System
   currentBootStep = 0;
-  currentProgressBarFillPx_anim = 0.0f; // Start animation from 0
+  currentProgressBarFillPx_anim = 0.0f;
   segmentAnimStartPx = 0.0f;
   segmentAnimTargetPx = 0.0f;
-  segmentAnimStartTime = 0; // Will be set before first animation
-
-  // This duration will be used for each segment's animation.
-  const int stepDisplayDurationMs = 350; // How long each *logical* step message is shown AND animated for
+  segmentAnimStartTime = 0;
+  const int stepDisplayDurationMs = 350;
   segmentAnimDurationMs_float = (float)stepDisplayDurationMs;
 
-
-  updateMainDisplayBootProgress(); // Initial draw (empty bar)
+  updateMainDisplayBootProgress();
   delay(100);
 
-  // --- Helper lambda to manage a single boot step's animation ---
   auto runBootStepAnimation = [&](const char* logMsg, const char* logStatus) {
     logToSmallDisplay(logMsg, logStatus);
     currentBootStep++;
-    
-    segmentAnimStartPx = currentProgressBarFillPx_anim; // Start animation from where the bar currently is
-    int progressBarTotalDrawableWidth = (im_width - 40 - 2);
+    segmentAnimStartPx = currentProgressBarFillPx_anim;
+    int progressBarTotalDrawableWidth = (u8g2.getDisplayWidth() - 40 - 2); // Assuming im_width is u8g2.getDisplayWidth()
     segmentAnimTargetPx = (totalBootSteps > 0) ? (float)(progressBarTotalDrawableWidth * currentBootStep) / totalBootSteps : 0.0f;
-    
     segmentAnimStartTime = millis();
     unsigned long currentSegmentLoopStartTime = millis();
-
     while (millis() - currentSegmentLoopStartTime < stepDisplayDurationMs) {
         updateMainDisplayBootProgress();
         delay(PROGRESS_ANIM_UPDATE_INTERVAL_MS);
     }
-    // Ensure the animation finishes at the exact target for this step
-    currentProgressBarFillPx_anim = segmentAnimTargetPx; 
-    updateMainDisplayBootProgress(); // Final draw for this step
+    currentProgressBarFillPx_anim = segmentAnimTargetPx;
+    updateMainDisplayBootProgress();
   };
 
-  // --- Step-by-Step Initialization using the helper ---
   runBootStepAnimation("Kiva Boot Agent v1.0", NULL);
   runBootStepAnimation("I2C Bus Initialized", "OK");
-  
-  selectMux(0);
-  writePCF(PCF0_ADDR, pcf0Output);
+
   runBootStepAnimation("PCF0 & MUX Setup", "OK");
 
   bool sdInitializedResult = setupSdCard();
   runBootStepAnimation("SD Card Mounted", sdInitializedResult ? "PASS" : "FAIL");
 
   analogReadResolution(12);
-  #if defined(ESP32) || defined(ESP_PLATFORM)
-  // analogSetPinAttenuation((uint8_t)ADC_PIN, ADC_11DB);
-  #endif
   setupBatteryMonitor();
   runBootStepAnimation("Battery Service", "OK");
 
   setupInputs();
   runBootStepAnimation("Input Handler", "OK");
-  
+
   setupWifi();
   runBootStepAnimation("WiFi Subsystem", "INIT");
 
+  setupJamming();
+  runBootStepAnimation("Jamming System", "INIT"); // New boot step
   runBootStepAnimation("Main Display OK", "READY");
 
-  // For the last step, "KivaOS Loading...", give it a bit more visual time
   logToSmallDisplay("KivaOS Loading...", NULL);
   currentBootStep++;
   segmentAnimStartPx = currentProgressBarFillPx_anim;
-  int progressBarTotalDrawableWidth = (im_width - 40 - 2);
+  int progressBarTotalDrawableWidth = (u8g2.getDisplayWidth() - 40 - 2);
   segmentAnimTargetPx = (totalBootSteps > 0) ? (float)(progressBarTotalDrawableWidth * currentBootStep) / totalBootSteps : 0.0f;
   segmentAnimStartTime = millis();
   unsigned long finalStepLoopStartTime = millis();
-  while (millis() - finalStepLoopStartTime < (stepDisplayDurationMs + 200)) { // Slightly longer
+
+  while (millis() - finalStepLoopStartTime < (stepDisplayDurationMs + 200)) {
       updateMainDisplayBootProgress();
       delay(PROGRESS_ANIM_UPDATE_INTERVAL_MS);
   }
   currentProgressBarFillPx_anim = segmentAnimTargetPx;
   updateMainDisplayBootProgress();
-  delay(300); // Pause to show the full bar
+  delay(300);
 
   initializeCurrentMenu();
   wifiPasswordInput[0] = '\0';
@@ -384,85 +376,144 @@ void setup() {
 
 
 void loop() {
-  updateInputs();
+  unsigned long currentTime = millis();
 
-  if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
-    bool inRelevantWifiMenu = (currentMenu == WIFI_SETUP_MENU ||
-                               currentMenu == WIFI_PASSWORD_INPUT ||
-                               currentMenu == WIFI_CONNECTING ||
-                               currentMenu == WIFI_CONNECTION_INFO ||
-                               showWifiDisconnectOverlay); 
+  if (isJammingOperationActive) {
+    runJammerCycle(); // Run the NRF modules for one jamming cycle
 
-    WifiConnectionStatus currentManagerStatus = getCurrentWifiConnectionStatus();
+    if (currentTime - lastJammingInputCheckTime > currentInputPollInterval) {
+      updateInputs(); // Poll inputs less frequently
 
-    bool isActivelyTrying = (wifiIsScanning ||
-                             currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS ||
-                             currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);
+      // Check for NAV_BACK or ENC_BTN to stop jamming
+      if (btnPress1[NAV_BACK] || btnPress0[ENC_BTN]) {
+        if (btnPress1[NAV_BACK]) btnPress1[NAV_BACK] = false;
+        if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
 
-    if (!inRelevantWifiMenu && !isActivelyTrying) {
-        Serial.println("Loop: Wi-Fi ON, Not Connected, Not in Wi-Fi Menu/Overlay, Not Actively Trying. Disabling Wi-Fi.");
-        setWifiHardwareState(false);
-    }
-  }
+        stopActiveJamming(); // This sets isJammingOperationActive = false, activeJammingType = JAM_NONE
 
+        // Restore normal operation speeds
+        currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
+        currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
 
-  if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning && !showWifiDisconnectOverlay) { 
-    if (millis() - lastWifiScanCheckTime > WIFI_SCAN_CHECK_INTERVAL) {
-      int scanCompleteResult = WiFi.scanComplete();
+        // Return to the jamming selection grid in Tools menu
+        currentMenu = TOOL_CATEGORY_GRID;
 
-      if (scanCompleteResult >= 0) {
-        wifiIsScanning = false;
-        checkAndRetrieveWifiScanResults();
-        initializeCurrentMenu();
-        wifiMenuIndex = 0;
-        targetWifiListScrollOffset_Y = 0;
-        currentWifiListScrollOffset_Y_anim = 0;
-        if (currentMenu == WIFI_SETUP_MENU) {
-             wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
+        // Ensure toolsCategoryIndex is correctly set to "Jamming"
+        bool foundJammingCategory = false;
+        for(int i=0; i < getToolsMenuItemsCount(); ++i) {
+            if(strcmp(toolsMenuItems[i], "Jamming") == 0) {
+                toolsCategoryIndex = i;
+                foundJammingCategory = true;
+                break;
+            }
         }
-      } else if (scanCompleteResult == WIFI_SCAN_FAILED) {
-        Serial.println("Loop: Scan failed as per WiFi.scanComplete()");
-        wifiIsScanning = false;
-        foundWifiNetworksCount = 0;
-        checkAndRetrieveWifiScanResults();
-        initializeCurrentMenu();
-        wifiMenuIndex = 0; targetWifiListScrollOffset_Y = 0; currentWifiListScrollOffset_Y_anim = 0;
-        if(currentMenu == WIFI_SETUP_MENU) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
+        if (!foundJammingCategory) {
+            // This should not happen if menu items are consistent. Fallback or error.
+            Serial.println("CRITICAL ERROR: 'Jamming' category not found in toolsMenuItems!");
+            // Default to a known index for Jamming if programmatic find fails (e.g. 4 based on comments)
+            // This is a safeguard; ideally, the string comparison should always work.
+             for(int i=0; i < getToolsMenuItemsCount(); ++i) { // Find the default index for "Jamming"
+                if(strcmp(toolsMenuItems[i], "Jamming") == 0) { toolsCategoryIndex = i; break;}
+            }
+        }
+
+        menuIndex = lastSelectedJammingToolGridIndex; // Restore the last selected jamming tool
+
+        // Validate menuIndex against the items in the Jamming category
+        int numJammingItems = getJammingToolItemsCount();
+        if (numJammingItems > 0) {
+            menuIndex = constrain(menuIndex, 0, numJammingItems - 1);
+        } else {
+            menuIndex = 0; // No items, index must be 0
+        }
+
+        initializeCurrentMenu(); // Re-initialize menu state for drawing
+        drawUI(); // Draw the UI once to reflect the change
       }
-      lastWifiScanCheckTime = millis();
+      lastJammingInputCheckTime = currentTime;
     }
-  } else if (currentMenu == WIFI_CONNECTING && !showWifiDisconnectOverlay) { 
-      WifiConnectionStatus status = checkWifiConnectionProgress();
-      if (status != WIFI_CONNECTING_IN_PROGRESS) {
-          currentMenu = WIFI_CONNECTION_INFO;
-          wifiStatusMessageTimeout = millis() + 3000;
-          initializeCurrentMenu();
-      }
-  } else if (currentMenu == WIFI_CONNECTION_INFO && !showWifiDisconnectOverlay) { 
-      if (millis() > wifiStatusMessageTimeout) {
-          WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
-          if (lastStatus == WIFI_CONNECTED_SUCCESS) {
-              currentMenu = WIFI_SETUP_MENU;
-          } else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) {
-              KnownWifiNetwork* net = findKnownNetwork(currentSsidToConnect);
-              if (net && net->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
-                  currentMenu = WIFI_PASSWORD_INPUT;
-              } else {
-                  currentMenu = WIFI_SETUP_MENU;
-              }
-          } else {
-              currentMenu = WIFI_SETUP_MENU;
-          }
-          initializeCurrentMenu();
-      }
-  }
+    // No regular UI drawing or other updates while actively jamming to maximize NRF performance
+  } else {
+    // --- Normal Operation Loop ---
+    if (currentTime - lastJammingInputCheckTime > currentInputPollInterval) {
+        updateInputs();
+        lastJammingInputCheckTime = currentTime;
+    }
 
+    // Battery update logic
+    if (batteryNeedsUpdate || (currentTime - lastBatteryCheck >= currentBatteryCheckInterval)) {
+        getSmoothV();
+    }
 
-  if (!showWifiDisconnectOverlay) { 
+    // Wi-Fi auto-disable logic (from your provided KivaMain.ino)
+    if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
+        bool inRelevantWifiMenu = (currentMenu == WIFI_SETUP_MENU ||
+                                   currentMenu == WIFI_PASSWORD_INPUT ||
+                                   currentMenu == WIFI_CONNECTING ||
+                                   currentMenu == WIFI_CONNECTION_INFO ||
+                                   showWifiDisconnectOverlay);
+
+        WifiConnectionStatus currentManagerStatus = getCurrentWifiConnectionStatus();
+
+        bool isActivelyTrying = (wifiIsScanning ||
+                                 currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS ||
+                                 currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);
+
+        if (!inRelevantWifiMenu && !isActivelyTrying) {
+            Serial.println("Loop: Wi-Fi ON, Not Connected, Not in Wi-Fi Menu/Overlay, Not Actively Trying. Disabling Wi-Fi.");
+            setWifiHardwareState(false); // This will also update UI/menu state if needed
+        }
+    }
+
+    // Wi-Fi scan check (modified for clarity and to rely on checkAndRetrieveWifiScanResults)
+    if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning && !showWifiDisconnectOverlay) {
+      if (currentTime - lastWifiScanCheckTime >= WIFI_SCAN_CHECK_INTERVAL) {
+        int result = checkAndRetrieveWifiScanResults(); // This function now handles WiFi.scanComplete()
+
+        // wifiIsScanning is set to false by checkAndRetrieveWifiScanResults if scan is done/failed.
+        if (!wifiIsScanning) {
+          initializeCurrentMenu(); // Re-initialize menu for new item count, title, etc.
+          // Reset scroll and animation for the list as it's re-populated
+          wifiMenuIndex = 0;
+          targetWifiListScrollOffset_Y = 0;
+          currentWifiListScrollOffset_Y_anim = 0;
+          if (maxMenuItems > 0) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems); // Update animation targets
+        }
+        lastWifiScanCheckTime = currentTime; // Update check time
+      }
+    } else if (currentMenu == WIFI_CONNECTING && !showWifiDisconnectOverlay) {
+        WifiConnectionStatus status = checkWifiConnectionProgress();
+        if (status != WIFI_CONNECTING_IN_PROGRESS) {
+            currentMenu = WIFI_CONNECTION_INFO;
+            wifiStatusMessageTimeout = millis() + 3000; // Show result for 3 seconds
+            initializeCurrentMenu();
+        }
+    } else if (currentMenu == WIFI_CONNECTION_INFO && !showWifiDisconnectOverlay) {
+        if (millis() > wifiStatusMessageTimeout) {
+            WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
+            if (lastStatus == WIFI_CONNECTED_SUCCESS) {
+                currentMenu = WIFI_SETUP_MENU; // Go back to Wi-Fi list
+            } else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) {
+                // If known password failed multiple times, go to password input
+                KnownWifiNetwork* net = findKnownNetwork(currentSsidToConnect);
+                if (net && net->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
+                    currentMenu = WIFI_PASSWORD_INPUT;
+                } else {
+                    currentMenu = WIFI_SETUP_MENU; // Otherwise, back to list
+                }
+            } else { // Other failures, or open network failure
+                currentMenu = WIFI_SETUP_MENU;
+            }
+            initializeCurrentMenu();
+        }
+    }
+
+    // Menu Navigation and Selection (from your provided KivaMain.ino)
+    if (!showWifiDisconnectOverlay) {
       if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
         if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false;
         if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
-        if (currentMenu != WIFI_PASSWORD_INPUT) {
+        if (currentMenu != WIFI_PASSWORD_INPUT) { // Keyboard OK is handled in updateInputs
             handleMenuSelection();
         }
       }
@@ -471,31 +522,43 @@ void loop() {
         btnPress1[NAV_BACK] = false;
         handleMenuBackNavigation();
       }
-  }
+    }
 
-
-  for (int i = 0; i < 8; ++i) {
+    // Clear button press flags (from your provided KivaMain.ino, slightly adapted)
+    for (int i = 0; i < 8; ++i) {
+      // ENC_BTN (pcf0[0]) is handled specially for keyboard and overlay confirmation.
+      // It's consumed in updateInputs for keyboard, and in main loop for overlay.
+      // If it reaches here and wasn't consumed, it means it's for a general menu OK.
+      // General menu OK (ENC_BTN) is cleared when handleMenuSelection is called (or if not used).
+      // So, explicit clearing of btnPress0[ENC_BTN] here might be redundant or could interfere
+      // if it's meant to be processed by handleMenuSelection.
+      // Let's keep your original logic for now, but it's a point of attention.
       if ((currentMenu == WIFI_PASSWORD_INPUT || showWifiDisconnectOverlay) && i == ENC_BTN) {
-          // Don't clear ENC_BTN
+          // Don't clear ENC_BTN if it's for keyboard or overlay, it's handled there
       } else {
-          btnPress0[i] = false;
+          btnPress0[i] = false; // Clear other PCF0 buttons
       }
-      if (!showWifiDisconnectOverlay || (i != NAV_OK && i != NAV_BACK && i != NAV_LEFT && i != NAV_RIGHT)) {
-        // This logic for btnPress1 seems a bit off, as it's not indexed by i directly for NAV buttons.
-        // The below specific clear for NAV_UP/DOWN etc. is more targeted.
-      }
-  }
-  
-  if (!showWifiDisconnectOverlay && currentMenu != WIFI_PASSWORD_INPUT) {
-    // These are cleared if their one-shot press isn't consumed by keyboard or scrollAct for non-repeated scroll
-    btnPress1[NAV_UP] = false;
-    btnPress1[NAV_DOWN] = false;
-    btnPress1[NAV_LEFT] = false; 
-    btnPress1[NAV_RIGHT] = false; 
-  }
-  // NAV_OK and NAV_BACK flags are cleared where they are handled (menu selection, overlay, keyboard)
+    }
 
+    if (!showWifiDisconnectOverlay && currentMenu != WIFI_PASSWORD_INPUT) {
+      // These directional flags are for one-shot presses.
+      // If scrollAct consumes them, fine. If not, they are cleared here.
+      // Auto-repeat logic in updateInputs uses direct pin state, not these flags.
+      btnPress1[NAV_UP] = false;
+      btnPress1[NAV_DOWN] = false;
+      btnPress1[NAV_LEFT] = false;
+      btnPress1[NAV_RIGHT] = false;
+    }
+    // NAV_OK and NAV_BACK (btnPress1[NAV_OK] and btnPress1[NAV_BACK]) are cleared
+    // where they are handled (menu selection/back, overlay confirmation/cancel).
 
-  drawUI();
-  delay(16);
+    drawUI(); // Draw the full UI in normal operation
+  }
+
+  // Conditional delay
+  if (!isJammingOperationActive) {
+    delay(16); // Approx 60 FPS for UI
+  } else {
+    delay(JAMMER_CYCLE_DELAY_MS); // Small delay to allow some system tasks if needed during jamming
+  }
 }

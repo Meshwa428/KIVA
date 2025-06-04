@@ -4,10 +4,19 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include "keyboard_layout.h" // Make sure KeyboardLayer is known
+#include "jamming.h" // <--- INCLUDE jamming.h HERE
 
 
 // === Device Settings ===
 #define DEVICE_HOSTNAME "KivaDevice" // <<< YOUR GLOBAL DEVICE HOSTNAME HERE
+
+// === NRF24L01 Jamming Pins & Config === <--- NEW SECTION
+#define NRF1_CE_PIN 1  // Example GPIO, change as per your wiring
+#define NRF1_CSN_PIN 2 // Example GPIO
+#define NRF2_CE_PIN 43 // Example GPIO
+#define NRF2_CSN_PIN 44// Example GPIO
+#define SPI_SPEED_NRF 16000000 // SPI speed for NRF modules
+
 
 // === I2C Multiplexer & Peripherals ===
 #define MUX_ADDR 0x70
@@ -30,7 +39,10 @@
 #define ADC_RES 4095
 #define VOLTAGE_RATIO (70.0f / 50.0f)
 #define BAT_SAMPLES 20
-#define BATTERY_CHECK_INTERVAL 1000UL // ms
+#define BATTERY_CHECK_INTERVAL 1000UL         // Original, can be fallback
+#define BATTERY_CHECK_INTERVAL_NORMAL 1000UL  // ms
+#define BATTERY_CHECK_INTERVAL_JAMMING 5000UL // ms
+
 
 // === Buttons (PCF0) ===
 #define ENC_BTN 0
@@ -57,6 +69,9 @@
 #define DEBOUNCE_DELAY 50UL // ms
 #define REPEAT_INIT_DELAY 400UL // ms
 #define REPEAT_INT 150UL // ms
+#define INPUT_POLL_INTERVAL_NORMAL 16UL     // ms <--- MAKE SURE THIS IS PRESENT
+#define INPUT_POLL_INTERVAL_JAMMING 200UL  // ms <--- MAKE SURE THIS IS PRESENT
+#define JAMMER_CYCLE_DELAY_MS 1             // ms, delay in jamming loop <--- MAKE SURE THIS IS PRESENT
 
 // === Menu System ===
 enum MenuState {
@@ -70,7 +85,8 @@ enum MenuState {
   FLASHLIGHT_MODE,
   WIFI_PASSWORD_INPUT,
   WIFI_CONNECTING,
-  WIFI_CONNECTION_INFO
+  WIFI_CONNECTION_INFO,
+  JAMMING_ACTIVE_SCREEN // <--- NEW
   // WIFI_DISCONNECT_OVERLAY, // Not using a state, using a flag instead
 };
 
@@ -92,6 +108,11 @@ extern bool wifiHardwareEnabled;
 
 extern uint8_t pcf0Output;
 
+// --- NEW EXTERN DECLARATIONS FOR INTERVALS ---
+extern unsigned long currentBatteryCheckInterval;
+extern unsigned long currentInputPollInterval;
+extern int lastSelectedJammingToolGridIndex; // <--- NEW EXTERN
+
 // --- UI Layout Constants ---
 #define GRID_ITEM_H 18
 #define GRID_ITEM_PADDING_Y 4
@@ -111,6 +132,7 @@ extern uint8_t pcf0Output;
 // --- Wi-Fi Related Globals & Struct ---
 #define MAX_WIFI_NETWORKS 15
 #define WIFI_SCAN_CHECK_INTERVAL 250UL
+#define WIFI_CONNECTION_TIMEOUT_MS 15000UL
 
 struct WifiNetwork {
   char ssid[33];

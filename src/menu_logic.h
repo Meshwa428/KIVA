@@ -11,22 +11,21 @@ extern const char* injectionToolItems[];
 extern const char* wifiAttackToolItems[];
 extern const char* bleAttackToolItems[];
 extern const char* nrfReconToolItems[];
-extern const char* jammingToolItems[];
+extern const char* jammingToolItems[]; // <--- Ensure this matches the new definition
 extern const char* settingsMenuItems[];
-extern const char* utilitiesMenuItems[]; // <--- NEW
+extern const char* utilitiesMenuItems[];
 
 // --- Getter Functions for Menu Item Counts ---
 int getMainMenuItemsCount();
 int getGamesMenuItemsCount();
 int getToolsMenuItemsCount();
 int getSettingsMenuItemsCount();
-int getUtilitiesMenuItemsCount(); // <--- NEW
+int getUtilitiesMenuItemsCount();
 int getInjectionToolItemsCount();
 int getWifiAttackToolItemsCount();
 int getBleAttackToolItemsCount();
 int getNrfReconToolItemsCount();
-int getJammingToolItemsCount();
-// Add more getters if other arrays need their size externally
+int getJammingToolItemsCount(); // <--- Ensure this matches the new definition
 
 // Function declarations for menu actions
 void handleMenuSelection();
