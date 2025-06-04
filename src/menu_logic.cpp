@@ -73,20 +73,17 @@ void initializeCurrentMenu() {
       if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems > 0 ? maxMenuItems -1 : 0;
       if (menuIndex < 0) menuIndex = 0;
       // ---- MODIFIED PART ----
-      // Old way:
-      // mainMenuAnim.init();
-      // mainMenuAnim.setTargets(menuIndex, maxMenuItems);
-      // New way: Start the intro animation
-      // Items will start at Y-offset 0 (center of animation area) and Scale 0 (invisible)
-      mainMenuAnim.startIntro(menuIndex, maxMenuItems, 0.0f, 0.0f); 
+      // mainMenuAnim.startIntro(menuIndex, maxMenuItems, 0.0f, 0.0f); // Old call
+      mainMenuAnim.startIntro(menuIndex, maxMenuItems); // New call with modified signature
       // ---- END MODIFIED PART ----
       gridAnimatingIn = false;
       break;
+    // ... (rest of the cases remain the same) ...
     case GAMES_MENU:
       maxMenuItems = getGamesMenuItemsCount();
       if (menuIndex >= maxMenuItems) menuIndex = maxMenuItems > 0 ? maxMenuItems -1 : 0;
       if (menuIndex < 0) menuIndex = 0;
-      subMenuAnim.init();
+      subMenuAnim.init(); // Assuming subMenuAnim does not need the same complex intro for now
       subMenuAnim.setTargets(menuIndex, maxMenuItems);
       gridAnimatingIn = false;
       break;
@@ -132,21 +129,21 @@ void initializeCurrentMenu() {
       break;
     case WIFI_SETUP_MENU:
       if (!wifiHardwareEnabled) {
-         maxMenuItems = 2;
+         maxMenuItems = 2; // "Enable Wi-Fi", "Back" or similar
       } else if (wifiIsScanning) {
-        maxMenuItems = 0;
+        maxMenuItems = 0; // "Scanning..."
       } else {
-        maxMenuItems = foundWifiNetworksCount + 2;
+        maxMenuItems = foundWifiNetworksCount + 2; // Networks + "Scan Again" + "Back"
       }
 
-      wifiListAnim.init();
+      wifiListAnim.init(); // wifiListAnim uses its own drawing, not directly itemOffsetY/Scale from this struct for layout
       if (maxMenuItems > 0) {
         if (wifiMenuIndex >= maxMenuItems) wifiMenuIndex = maxMenuItems - 1;
         if (wifiMenuIndex < 0) wifiMenuIndex = 0;
       } else {
         wifiMenuIndex = 0;
       }
-      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
+      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems); // Still set targets for potential future use or if its update() is called
       targetWifiListScrollOffset_Y = 0;
       currentWifiListScrollOffset_Y_anim = 0;
       gridAnimatingIn = false;
@@ -180,7 +177,6 @@ void initializeCurrentMenu() {
     }
   }
 }
-
 
 void handleMenuSelection() {
   MenuState previousMenu = currentMenu;

@@ -13,12 +13,11 @@ extern int foundWifiNetworksCount;
 extern int wifiMenuIndex;
 
 
-// Animation struct methods (unchanged)
+// Animation struct methods
 void VerticalListAnimation::init() {
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
         itemOffsetY[i] = 0; itemScale[i] = 0.0f;
         targetOffsetY[i] = 0; targetScale[i] = 0.0f;
-        // Reset intro-specific members
         introStartSourceOffsetY[i] = 0.0f; 
         introStartSourceScale[i] = 0.0f;
     }
@@ -30,7 +29,7 @@ void VerticalListAnimation::setTargets(int selIdx, int total) {
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
         if (i < total) {
             int rP = i - selIdx;
-            targetOffsetY[i] = rP * itmSpc;
+            targetOffsetY[i] = rP * itmSpc; // itmSpc will be the adjusted value
             if (i == selIdx) targetScale[i] = 1.3f;
             else if (abs(rP) == 1) targetScale[i] = 1.f;
             else targetScale[i] = 0.8f;
@@ -40,42 +39,57 @@ void VerticalListAnimation::setTargets(int selIdx, int total) {
     }
 }
 
-void VerticalListAnimation::startIntro(int selIdx, int total, float commonInitialYOffset, float commonInitialScale) {
+void VerticalListAnimation::startIntro(int selIdx, int total) { // Removed commonInitialYOffset, commonInitialScale params
     isIntroPhase = true;
     introStartTime = millis();
+    const float initial_scale = 0.0f;
+    // How much each item is initially offset from its final Y, towards the center of the animation.
+    // A positive value means items above final target start lower, items below final target start higher.
+    const float initial_y_offset_factor_from_final = 0.25f; // e.g. 25% of their final offset from center, but towards center
 
-    // Set the source values for the intro animation AND current values to this start
     for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
         if (i < total) {
-            introStartSourceOffsetY[i] = commonInitialYOffset;
-            introStartSourceScale[i] = commonInitialScale;
-            itemOffsetY[i] = introStartSourceOffsetY[i]; // Current value is the start of intro
-            itemScale[i] = introStartSourceScale[i];     // Current value is the start of intro
-        } else { // Items not part of the list remain at 0 scale
-            introStartSourceOffsetY[i] = commonInitialYOffset; 
+            int rP = i - selIdx; // relativePosition to selected item
+
+            // Calculate final target state for this item
+            float finalTargetOffsetY = rP * itmSpc;
+            float finalTargetScale;
+            if (i == selIdx) finalTargetScale = 1.3f;
+            else if (abs(rP) == 1) finalTargetScale = 1.f;
+            else finalTargetScale = 0.8f;
+
+            // Set intro start sources (where the animation begins for this item)
+            // Initial Y: Start closer to the center (y=0 in relative terms) and then expand outwards.
+            // If finalTargetOffsetY is -20, and factor is 0.25, it means it starts 0.25*(-20) = -5 from *itself* towards center.
+            // So, if finalTargetOffsetY is negative (item is above center), initial_y_offset_factor_from_final * finalTargetOffsetY is positive.
+            // Example: finalY = -18. It starts at -18 + (0.25 * 18) = -18 + 4.5 = -13.5 (closer to 0)
+            // Example: finalY = 18. It starts at 18 - (0.25 * 18) = 18 - 4.5 = 13.5 (closer to 0)
+            introStartSourceOffsetY[i] = finalTargetOffsetY * (1.0f - initial_y_offset_factor_from_final);
+            
+            // For the selected item (rP=0), its finalTargetOffsetY is 0, so introStartSourceOffsetY remains 0. It scales in place.
+            // This creates an effect of items expanding from the selected item's line.
+
+            introStartSourceScale[i] = initial_scale;
+
+            // Set current animation values to these starting points
+            itemOffsetY[i] = introStartSourceOffsetY[i];
+            itemScale[i] = introStartSourceScale[i];
+
+            // Store the calculated final targets (where items will animate TO)
+            targetOffsetY[i] = finalTargetOffsetY;
+            targetScale[i] = finalTargetScale;
+
+        } else { // Items not part of the active list should remain invisible
+            introStartSourceOffsetY[i] = (i - selIdx) * itmSpc; // Keep some consistent off-screen Y
             introStartSourceScale[i] = 0.0f;
             itemOffsetY[i] = introStartSourceOffsetY[i];
-            itemScale[i] = 0.0f;
-        }
-    }
-
-    // Set target state (final list appearance) - this is where items will animate TO
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
-        if (i < total) {
-            int rP = i - selIdx; // relativePosition
-            targetOffsetY[i] = rP * itmSpc;
-            if (i == selIdx) targetScale[i] = 1.3f;
-            else if (abs(rP) == 1) targetScale[i] = 1.f;
-            else targetScale[i] = 0.8f;
-        } else {
-            // For items beyond 'total', target is effectively to be invisible
-            targetOffsetY[i] = (i - selIdx) * itmSpc; 
-            targetScale[i] = 0.f; 
+            itemScale[i] = introStartSourceScale[i];
+            targetOffsetY[i] = (i - selIdx) * itmSpc;
+            targetScale[i] = 0.0f;
         }
     }
 }
 
-// UPDATED VerticalListAnimation::update()
 bool VerticalListAnimation::update() {
     bool animActive = false;
     unsigned long currentTime = millis();
@@ -86,25 +100,22 @@ bool VerticalListAnimation::update() {
             progress = (float)(currentTime - introStartTime) / introDuration;
         }
         
-        if (progress < 0.0f) progress = 0.0f; // Should not happen, but defensive
+        if (progress < 0.0f) progress = 0.0f;
 
-        // Ease-out cubic function for smoother animation: f(t) = 1 - (1-t)^3
-        float easedProgress = 1.0f - pow(1.0f - progress, 3);
+        float easedProgress = 1.0f - pow(1.0f - progress, 3); // Ease-out cubic
 
         if (progress >= 1.0f) {
-            easedProgress = 1.0f; // Ensure it ends exactly at 1.0
+            easedProgress = 1.0f; 
         }
 
         for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
-            // Interpolate from introStartSource to target using easedProgress
             itemOffsetY[i] = introStartSourceOffsetY[i] + (targetOffsetY[i] - introStartSourceOffsetY[i]) * easedProgress;
             itemScale[i]   = introStartSourceScale[i]   + (targetScale[i]   - introStartSourceScale[i])   * easedProgress;
         }
 
         if (progress >= 1.0f) {
-            isIntroPhase = false; // Intro finished
-            // Snap to final target values to ensure precision
-            for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+            isIntroPhase = false; 
+            for (int i = 0; i < MAX_ANIM_ITEMS; i++) { // Snap to final target values
                 itemOffsetY[i] = targetOffsetY[i];
                 itemScale[i] = targetScale[i];
             }
@@ -112,7 +123,7 @@ bool VerticalListAnimation::update() {
         } else {
             animActive = true;
         }
-    } else { // Regular scrolling animation (targets are updated by setTargets)
+    } else { 
         for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
             float oD = targetOffsetY[i] - itemOffsetY[i];
             if (abs(oD) > 0.01f) { 
@@ -934,8 +945,6 @@ char* truncateText(const char* originalText, int maxWidthPixels, U8G2 &display) 
   return SBUF;
 }
 
-// In KivaMain/ui_drawing.cpp
-
 void drawStatusBar() {
     float v = getSmoothV(); 
     uint8_t s = batPerc(v);
@@ -955,7 +964,6 @@ void drawStatusBar() {
         titleText = mainMenuItems[mainMenuSavedIndex];
     }
 
-
     char titleBuffer[14]; 
     strncpy(titleBuffer, titleText, sizeof(titleBuffer) - 1);
     titleBuffer[sizeof(titleBuffer) - 1] = '\0';
@@ -965,38 +973,30 @@ void drawStatusBar() {
         strncpy(titleBuffer, SBUF, sizeof(titleBuffer)-1); 
         titleBuffer[sizeof(titleBuffer) - 1] = '\0';
     }
-    // Text Y position (baseline) is 7, ascent for 6x10 font is typically 7 or 8.
-    // Let's assume default text position is fine, only icons move.
-    u8g2.drawStr(2, 7, titleBuffer); 
+    u8g2.drawStr(2, 7, titleBuffer); // Text Y baseline is 7
 
     int battery_area_right_margin = 2;
     int current_x_origin_for_battery = u8g2.getDisplayWidth() - battery_area_right_margin;
 
-    // --- MODIFIED PART: Battery Icon Y Position ---
-    int bat_icon_y_top = 1; // Original was 3, moved up by 3. So, 0.
-    if (bat_icon_y_top < 0) bat_icon_y_top = 0; // Ensure it doesn't go off-screen top
-    // --- END MODIFIED PART ---
+    // Battery icon Y position (top edge of the icon)
+    int bat_icon_y_top = (STATUS_BAR_H - 5) / 2; // Center icon vertically in status bar (5 is body_height)
+    if (bat_icon_y_top < 0) bat_icon_y_top = 0;
 
-    int bat_icon_width = 9;
+    int bat_icon_width = 9; // 7 for body + 1 for tip + 1 for spacing
     current_x_origin_for_battery -= bat_icon_width; 
     drawBatIcon(current_x_origin_for_battery, bat_icon_y_top, s);
 
     if (isCharging) {
         int charge_icon_width = 6;
-        // int charge_icon_height = 7; // Not directly used for y-pos calc here
+        int charge_icon_height = 7; // From drawCustomIcon case 17 (small bolt)
         int charge_icon_spacing = 2;
         current_x_origin_for_battery -= (charge_icon_width + charge_icon_spacing); 
         
-        // --- MODIFIED PART: Charging Icon Y Position ---
-        // Original: int charge_icon_y_top = bat_icon_y_top - 1; (if bat_icon_y_top was 3, charge_icon_y_top was 2)
-        // New: Maintain relative position to the new bat_icon_y_top
-        int charge_icon_y_top = bat_icon_y_top - 2; // If new bat_icon_y_top is 0, this becomes -1
-        if (charge_icon_y_top < 0) charge_icon_y_top = 0; // Ensure it's at least 0
-        // --- END MODIFIED PART ---
+        // Charging icon Y position (top edge)
+        int charge_icon_y_top = (STATUS_BAR_H - charge_icon_height) / 2;
+        if (charge_icon_y_top < 0) charge_icon_y_top = 0;
 
         u8g2.setDrawColor(1);
-        // The custom icon's internal drawing is relative to its x,y top-left.
-        // So, charge_icon_y_top should be the top of where that icon is drawn.
         drawCustomIcon(current_x_origin_for_battery, charge_icon_y_top, 17, false); 
     }
 
@@ -1006,8 +1006,7 @@ void drawStatusBar() {
     int percent_text_spacing = 2;
     current_x_origin_for_battery -= (percent_text_width + percent_text_spacing); 
     u8g2.setDrawColor(1);
-    // Battery percentage text Y position remains the same (baseline 7)
-    u8g2.drawStr(current_x_origin_for_battery, 7, batteryStr); 
+    u8g2.drawStr(current_x_origin_for_battery, 7, batteryStr); // Y baseline 7
 
     u8g2.setDrawColor(1); 
     u8g2.drawLine(0, STATUS_BAR_H - 1, u8g2.getDisplayWidth() - 1, STATUS_BAR_H - 1); 

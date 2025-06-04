@@ -177,18 +177,22 @@ struct VerticalListAnimation {
   float itemOffsetY[MAX_ANIM_ITEMS], itemScale[MAX_ANIM_ITEMS];
   float targetOffsetY[MAX_ANIM_ITEMS], targetScale[MAX_ANIM_ITEMS];
   
-  // New members for intro animation
   float introStartSourceOffsetY[MAX_ANIM_ITEMS]; 
   float introStartSourceScale[MAX_ANIM_ITEMS]; 
   bool isIntroPhase; 
   unsigned long introStartTime;
   
-  const float animSpd = 12.f, frmTime = 0.016f;
-  const float itmSpc = 20.f;
-  const float introDuration = 350.0f; // Duration of the intro animation in milliseconds
+  // --- MODIFIED VALUES ---
+  static constexpr float animSpd = 12.f; // Made static constexpr for in-class init
+  static constexpr float frmTime = 0.016f;
+  static constexpr float itmSpc = 18.f;      // WAS 20.f - Key change for clipping
+  static constexpr float introDuration = 500.0f; // WAS 350.0f - For smoother new intro
+  // --- END MODIFIED VALUES ---
+
 
   void init();
-  void startIntro(int selIdx, int total, float commonInitialYOffset, float commonInitialScale); // New method for intro
+  // void startIntro(int selIdx, int total, float commonInitialYOffset, float commonInitialScale); // Old signature
+  void startIntro(int selIdx, int total); // New signature for enhanced intro
   void setTargets(int selIdx, int total);
   bool update();
 };
