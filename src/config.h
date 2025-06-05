@@ -69,8 +69,8 @@
 #define DEBOUNCE_DELAY 50UL // ms
 #define REPEAT_INIT_DELAY 400UL // ms
 #define REPEAT_INT 150UL // ms
-#define INPUT_POLL_INTERVAL_NORMAL 16UL     // ms <--- MAKE SURE THIS IS PRESENT
-#define INPUT_POLL_INTERVAL_JAMMING 200UL  // ms <--- MAKE SURE THIS IS PRESENT
+#define INPUT_POLL_INTERVAL_NORMAL 8UL     // ms <--- MAKE SURE THIS IS PRESENT
+#define INPUT_POLL_INTERVAL_JAMMING 2000UL  // ms <--- MAKE SURE THIS IS PRESENT
 #define JAMMER_CYCLE_DELAY_MS 1             // ms, delay in jamming loop <--- MAKE SURE THIS IS PRESENT
 
 // === Menu System ===
@@ -186,7 +186,7 @@ struct QuadratureEncoder {
   int lastState;
   unsigned long lastValidTime;
   int consecutiveValid;
-  const unsigned long minInterval = 1;
+  const unsigned long minInterval = 5;
   const int requiredConsecutive = 2;
   const int cwTable[4] = {1, 3, 0, 2};
   const int ccwTable[4] = {2, 0, 3, 1};

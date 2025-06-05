@@ -15,35 +15,52 @@ static bool isBtnHeld1[8] = { 0 };
 
 
 // QuadratureEncoder methods (unchanged)
-// ...
 void QuadratureEncoder::init(int iA, int iB) {
   position = 0;
   lastState = (iB << 1) | iA;
   lastValidTime = millis();
   consecutiveValid = 0;
 }
+
 bool QuadratureEncoder::update(int cA, int cB) {
-  int curSt = (cB << 1) | cA;
-  unsigned long n = millis();
-  if (curSt == lastState) return false;
-  if ((n - lastValidTime) < minInterval && consecutiveValid == 0) {}
-  bool vCW = (curSt == cwTable[lastState]);
-  bool vCCW = (curSt == ccwTable[lastState]);
-  if (vCW || vCCW) {
-    consecutiveValid++;
-    if (consecutiveValid >= requiredConsecutive) {
-      if (vCW) position++;
-      else position--;
-      lastValidTime = n;
-      consecutiveValid = 0;
-      lastState = curSt;
-      return true;
-    }
-  } else {
-    consecutiveValid = 0;
+  int currentState = (cB << 1) | cA; // Combine current A and B states
+  // unsigned long currentTime = millis(); // Only needed if using minInterval for full tick rate limiting
+
+  if (currentState == lastState) {
+    return false; // No change in encoder state, do nothing
   }
-  lastState = curSt;
-  return false;
+
+  // Determine if the transition is valid CW or CCW based on the previous state
+  bool validCW = (currentState == cwTable[lastState]);
+  bool validCCW = (currentState == ccwTable[lastState]);
+
+  if (validCW || validCCW) {
+    // This is a valid micro-step in a known direction.
+    lastState = currentState; // CRITICAL: Update lastState on every valid micro-step
+    consecutiveValid++;
+
+    if (consecutiveValid >= requiredConsecutive) {
+      // Enough consecutive valid steps have occurred to register a full tick.
+      if (validCW) {
+        position++;
+      } else { // validCCW
+        position--;
+      }
+      // lastValidTime = currentTime; // Update if minInterval logic for full ticks is used
+      consecutiveValid = 0;      // Reset for the next full tick
+      return true;               // A full tick was registered
+    }
+    // Not enough consecutive steps yet for a full tick, but this step was valid.
+    return false; // No full tick registered yet
+  } else {
+    // This is an invalid transition (e.g., bounce, or skipped state due to very fast turn).
+    // Reset the count of valid steps.
+    consecutiveValid = 0;
+    // Crucially, update lastState to the new currentState to re-synchronize.
+    // This allows the system to correctly interpret subsequent states.
+    lastState = currentState;
+    return false; // No full tick registered
+  }
 }
 
 // setupInputs (unchanged)
@@ -54,7 +71,6 @@ void setupInputs() {
 }
 
 // handleKeyboardInput (unchanged)
-// ...
 void handleKeyboardInput(int keyPressedValue) {
     if (wifiPasswordInputCursor < PASSWORD_MAX_LEN && keyPressedValue > 0 && keyPressedValue < 127) { // Printable ASCII
         wifiPasswordInput[wifiPasswordInputCursor++] = (char)keyPressedValue;
