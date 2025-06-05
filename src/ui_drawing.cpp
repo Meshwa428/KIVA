@@ -706,7 +706,7 @@ void drawJammingActiveScreen() {
     u8g2.drawStr(textX, textY, jamStatusText);
 
     u8g2.setFont(u8g2_font_5x7_tf);
-    const char* instruction = "Press OK or BACK to Stop";
+    const char* instruction = "Hold BACK to Stop";
     textWidth = u8g2.getStrWidth(instruction);
     textX = (u8g2.getDisplayWidth() - textWidth) / 2;
     textY = u8g2.getDisplayHeight() - 15;

@@ -225,7 +225,7 @@ void updateMainDisplayBootProgress() {
         // if 'im_bits' isn't declared at all.
         // The original check `sizeof(im_bits) > 1` assumes im_bits is a valid array.
         if (sizeof(im_bits) > 1) { // Reverted to your simpler check
-            u8g2.drawXBM(0, 0, im_width, im_height, im_bits);
+            u8g2.drawXBM(0, -2, im_width, im_height, im_bits);
         } else {
             u8g2.setFont(u8g2_font_ncenB10_tr);
             u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth("KIVA")) / 2, 35, "KIVA");
