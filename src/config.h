@@ -11,10 +11,10 @@
 #define DEVICE_HOSTNAME "KivaDevice" // <<< YOUR GLOBAL DEVICE HOSTNAME HERE
 
 // === NRF24L01 Jamming Pins & Config === <--- NEW SECTION
-#define NRF1_CE_PIN 1  // Example GPIO, change as per your wiring
-#define NRF1_CSN_PIN 2 // Example GPIO
-#define NRF2_CE_PIN 43 // Example GPIO
-#define NRF2_CSN_PIN 44// Example GPIO
+#define NRF1_CE_PIN 1
+#define NRF1_CSN_PIN 2 
+#define NRF2_CE_PIN 43 
+#define NRF2_CSN_PIN 44
 #define SPI_SPEED_NRF 16000000 // SPI speed for NRF modules
 
 
