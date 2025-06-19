@@ -76,6 +76,7 @@
 // === OTA Specific Constants ===
 #define OTA_WEB_SERVER_PORT 80
 #define OTA_HOSTNAME "kiva-device"
+#define OTA_HTML_PAGE_PATH "/system/ota_page.html" // Example path on SD card
 #define FIRMWARE_DIR_PATH "/firmware" // For storing .bin and .kfw files
 #define SYSTEM_INFO_DIR_PATH "/system" // For system related info like current firmware
 #define CURRENT_FIRMWARE_INFO_FILENAME (SYSTEM_INFO_DIR_PATH "/current_fw.json")
@@ -133,7 +134,7 @@ extern String otaStatusMessage;
 extern bool otaIsUndoingChanges;
 extern bool basicOtaStarted;
 extern bool webOtaActive;
-extern char otaDisplayIpAddress[16];
+extern char otaDisplayIpAddress[40];
 // extern struct FirmwareInfo currentRunningFirmware; // Forward declaration or include firmware_metadata.h
 // extern struct FirmwareInfo availableSdFirmwares[MAX_FIRMWARES_ON_SD]; // Forward declaration
 // extern int availableSdFirmwareCount; // Forward declaration

@@ -254,7 +254,7 @@ void handleMenuSelection() {
       needsReinit = true;
     } else if (strcmp(settingsMenuItems[menuIndex], "Wi-Fi Setup") == 0) {
       // PHASE 2: Prompt for Wi-Fi will go here
-      setWifiHardwareState(true, WIFI_MODE_STA); // Explicitly request STA mode
+      setWifiHardwareState(true, WIFI_MODE_STA);  // Explicitly request STA mode
       delay(100);
       currentMenu = WIFI_SETUP_MENU;
       wifiMenuIndex = newMenuIndexForSubMenu;
@@ -295,16 +295,11 @@ void handleMenuSelection() {
       }  // otaStatusMessage is set by startWebOtaUpdate
     } else if (strcmp(selectedOtaItem, "Update from SD") == 0) {
       otaStartAttempted = true;
-      if (prepareSdFirmwareList()) {
-        nextMenuTarget = FIRMWARE_SD_LIST_MENU;
-        wifiMenuIndex = newMenuIndexForSubMenu;
-      }  // otaStatusMessage is set by prepareSdFirmwareList
+      nextMenuTarget = FIRMWARE_SD_LIST_MENU;
+      wifiMenuIndex = newMenuIndexForSubMenu;
     } else if (strcmp(selectedOtaItem, "Basic OTA (IDE)") == 0) {
       otaStartAttempted = true;
-      // PHASE 2: Wi-Fi Redirect Prompt will go here
-      if (startBasicOtaUpdate()) {
-        nextMenuTarget = OTA_BASIC_ACTIVE;
-      }  // otaStatusMessage is set by startBasicOtaUpdate
+      nextMenuTarget = OTA_BASIC_ACTIVE;
     } else if (strcmp(selectedOtaItem, "Back") == 0) {
       nextMenuTarget = SETTINGS_MENU;
       for (int i = 0; i < getSettingsMenuItemsCount(); ++i) {
@@ -328,18 +323,27 @@ void handleMenuSelection() {
     }
   } else if (currentMenu == FIRMWARE_SD_LIST_MENU) {
     if (availableSdFirmwareCount > 0 && wifiMenuIndex < availableSdFirmwareCount) {
-      performSdUpdate(availableSdFirmwares[wifiMenuIndex]);
-      currentMenu = OTA_SD_STATUS;
-    } else {
+      g_firmwareToInstallFromSd = availableSdFirmwares[wifiMenuIndex]; // Store the selection
+
+      resetOtaState(); // Clean slate before setting "Preparing"
+      otaStatusMessage = "Preparing: " + String(g_firmwareToInstallFromSd.version).substring(0,15);
+      otaProgress = 5; // Small progress indicating preparation (e.g., "Preparing")
+      
+      currentMenu = OTA_SD_STATUS; // Switch to the status screen
+      // Set a flag or a sub-state for OTA_SD_STATUS to indicate "pending actual update"
+      // Let's use a specific otaProgress value for this phase, e.g., otaProgress = 1 (PENDING_SD_UPDATE_START)
+      otaProgress = OTA_PROGRESS_PENDING_SD_START; // Define this as 1, for example.
+
+    } else { // "Back" was selected or invalid index
       currentMenu = FIRMWARE_UPDATE_GRID;
       for (int i = 0; i < getOtaMenuItemsCount(); ++i) {
         if (strcmp(otaMenuItems[i], "Update from SD") == 0) {
-          menuIndex = i;
+          menuIndex = i; // Select "Update from SD" in the previous menu
           break;
         }
       }
     }
-    needsReinit = true;
+    needsReinit = true; // Reinitialize the new menu
   } else if (currentMenu == TOOL_CATEGORY_GRID) {
     int currentMaxItemsInGrid = 0;
     bool isJammingCat = false;

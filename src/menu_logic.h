@@ -2,6 +2,7 @@
 #define MENU_LOGIC_H
 
 #include "config.h" 
+#include "firmware_metadata.h" // For FirmwareInfo
 
 // Extern Menu Item Arrays (defined in menu_logic.cpp)
 extern const char* mainMenuItems[];
@@ -15,6 +16,8 @@ extern const char* jammingToolItems[];
 extern const char* settingsMenuItems[];
 extern const char* utilitiesMenuItems[];
 extern const char* otaMenuItems[]; // <--- NEW
+extern FirmwareInfo g_firmwareToInstallFromSd; // Make it accessible to menu_logic.cpp
+
 
 // --- Getter Functions for Menu Item Counts ---
 int getMainMenuItemsCount();

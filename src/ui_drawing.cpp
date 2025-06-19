@@ -767,109 +767,213 @@ void drawOtaStatusScreen() {
   else if (currentMenu == OTA_SD_STATUS) title = "SD Card Update";
   else if (currentMenu == OTA_BASIC_ACTIVE) title = "Basic OTA (IDE)";
 
-  // Calculate vertical starting position dynamically
-  // Start drawing below the status bar if it's drawn, otherwise near the top
-  int currentY = STATUS_BAR_H + 6;  // Default starting Y if status bar is present
-  // If status bar is not drawn for these screens, adjust:
+  int currentY = STATUS_BAR_H + 6;
   bool statusBarWasDrawn = !(currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || currentMenu == JAMMING_ACTIVE_SCREEN || currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE);
   if (!statusBarWasDrawn) {
-    currentY = 8;  // Closer to top if no status bar
+    currentY = 8;
   }
-
 
   int titleWidth = u8g2.getStrWidth(title);
   u8g2.drawStr((u8g2.getDisplayWidth() - titleWidth) / 2, currentY, title);
-  currentY += 12;  // Space after title
+  currentY += 12;
 
-  if ((currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_BASIC_ACTIVE) && strlen(otaDisplayIpAddress) > 0) {
+  // --- Display IP and Password (if Web OTA AP mode) ---
+  if (currentMenu == OTA_WEB_ACTIVE && strlen(otaDisplayIpAddress) > 0) {
+    String fullInfo = otaDisplayIpAddress;
+    String ipLine = "";
+    String passwordLine = "";
+    int pColonPos = fullInfo.indexOf(" P: ");
+
+    if (pColonPos != -1) { // "IP_ADDRESS P: PASSWORD" format found
+      ipLine = fullInfo.substring(0, pColonPos);
+      passwordLine = fullInfo.substring(pColonPos + 1); // " P: PASSWORD"
+    } else { // Not the special format, display as single line (might be just IP or hostname)
+      ipLine = fullInfo;
+    }
+
+    // Display IP Line
+    int ipLineWidth = u8g2.getStrWidth(ipLine.c_str());
+    // Center the IP line, or apply marquee if too long (less likely for IP)
+    if (ipLineWidth > u8g2.getDisplayWidth() - 4) {
+        updateMarquee(u8g2.getDisplayWidth() - 4, ipLine.c_str()); // Use SBUF for marquee
+        if (marqueeActive && strcmp(marqueeText, ipLine.c_str())==0) { // Check if marquee is for this text
+            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+        } else {
+            char* truncatedIp = truncateText(ipLine.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
+        }
+    } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - ipLineWidth) / 2, currentY, ipLine.c_str());
+    }
+    currentY += 10;
+
+    // Display Password Line (if it exists)
+    if (passwordLine.length() > 0) {
+      // For the password line, we want to ensure "P: XXXXXXXX" is visible.
+      // The available width is the full display width.
+      int passwordLineWidth = u8g2.getStrWidth(passwordLine.c_str());
+      int availablePasswordWidth = u8g2.getDisplayWidth() - 4; // 2px padding each side
+
+      if (passwordLineWidth > availablePasswordWidth) {
+        // If the whole " P: XXXXXXXX" is too long, activate marquee for it
+        updateMarquee(availablePasswordWidth, passwordLine.c_str());
+         if (marqueeActive && strcmp(marqueeText, passwordLine.c_str())==0) {
+            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+        } else { // Should not happen if updateMarquee correctly sets marqueeText
+            char* truncatedPass = truncateText(passwordLine.c_str(), availablePasswordWidth, u8g2);
+            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedPass)) / 2, currentY, truncatedPass);
+        }
+      } else {
+        // If it fits, center it
+        marqueeActive = false; // Ensure marquee is off if text fits
+        u8g2.drawStr((u8g2.getDisplayWidth() - passwordLineWidth) / 2, currentY, passwordLine.c_str());
+      }
+      currentY += 2; // Less space after the password line
+    }
+    currentY += 10; // Space after IP/Password block
+  } else if (currentMenu == OTA_BASIC_ACTIVE && strlen(otaDisplayIpAddress) > 0) {
+    // For Basic OTA, otaDisplayIpAddress usually just contains the IP
     int ipWidth = u8g2.getStrWidth(otaDisplayIpAddress);
-    u8g2.drawStr((u8g2.getDisplayWidth() - ipWidth) / 2, currentY, otaDisplayIpAddress);
-    currentY += 12;  // Space after IP
+    if (ipWidth > u8g2.getDisplayWidth() - 4) {
+        updateMarquee(u8g2.getDisplayWidth() - 4, otaDisplayIpAddress);
+        if (marqueeActive && strcmp(marqueeText, otaDisplayIpAddress)==0) {
+            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+        } else {
+            char* truncatedIp = truncateText(otaDisplayIpAddress, u8g2.getDisplayWidth() - 4, u8g2);
+            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
+        }
+    } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - ipWidth) / 2, currentY, otaDisplayIpAddress);
+    }
+    currentY += 12;
   }
 
+
+  // --- Display otaStatusMessage (handles multi-line and truncation) ---
   if (otaStatusMessage.length() > 0) {
     String line1 = "", line2 = "";
-    int maxWidthChars = (u8g2.getDisplayWidth() - 8) / u8g2.getMaxCharWidth();  // Approx chars that fit
-    if (otaStatusMessage.length() > maxWidthChars) {
+    // Approx max chars that fit comfortably. MaxCharWidth can be small for 'i', wider for 'W'.
+    // A better estimate would be pixel-based.
+    int maxCharsPerLine = (u8g2.getDisplayWidth() - 8) / u8g2.getStrWidth("W"); // Estimate with a wide char
+
+    if (otaStatusMessage.length() > maxCharsPerLine && u8g2.getStrWidth(otaStatusMessage.c_str()) > u8g2.getDisplayWidth() - 8) {
       int breakPoint = -1;
       // Try to break at a space or hyphen for better readability
-      for (int i = maxWidthChars; i > 0; --i) {
-        if (otaStatusMessage.charAt(i) == ' ' || otaStatusMessage.charAt(i) == '-' || otaStatusMessage.charAt(i) == ':') {
-          breakPoint = i;
-          break;
-        }
+      // Search backward from an estimated char count, or a pixel width
+      int estimatedPixelBreak = u8g2.getDisplayWidth() - 8; // Target pixel width for line 1
+      int currentPixelWidth = 0;
+      int lastGoodBreak = -1;
+
+      for (int k=0; k < otaStatusMessage.length(); ++k) {
+          char tempStr[2] = {otaStatusMessage.charAt(k), '\0'};
+          currentPixelWidth += u8g2.getStrWidth(tempStr);
+          if (currentPixelWidth > estimatedPixelBreak) {
+              if (lastGoodBreak != -1) {
+                  breakPoint = lastGoodBreak;
+              } else { // No good break found, force break
+                  breakPoint = k -1; // Break before char that exceeded width
+              }
+              break;
+          }
+          if (otaStatusMessage.charAt(k) == ' ' || otaStatusMessage.charAt(k) == '-' || otaStatusMessage.charAt(k) == ':') {
+              lastGoodBreak = k;
+          }
       }
-      if (breakPoint != -1 && breakPoint > 0) {                 // Ensure breakpoint is valid
-        line1 = otaStatusMessage.substring(0, breakPoint + 1);  // Include the space/hyphen if preferred
-        line2 = otaStatusMessage.substring(breakPoint + 1);
-        line2.trim();  // Remove leading space from line2 if break char was space
-      } else {         // Hard break if no good spot found
-        line1 = otaStatusMessage.substring(0, maxWidthChars);
-        line2 = otaStatusMessage.substring(maxWidthChars);
-      }
-    } else {
+       if (breakPoint == -1 && currentPixelWidth <= estimatedPixelBreak) { // Message fits one line
+           line1 = otaStatusMessage;
+       } else if (breakPoint != -1) {
+           line1 = otaStatusMessage.substring(0, breakPoint + 1);
+           line2 = otaStatusMessage.substring(breakPoint + 1);
+           line2.trim();
+       } else { // Fallback hard break
+           line1 = otaStatusMessage.substring(0, maxCharsPerLine);
+           line2 = otaStatusMessage.substring(maxCharsPerLine);
+       }
+
+    } else { // Fits on one line or short enough not to worry about smart breaking
       line1 = otaStatusMessage;
     }
 
+    // Draw line1 (status message)
     int status1Width = u8g2.getStrWidth(line1.c_str());
-    u8g2.drawStr((u8g2.getDisplayWidth() - status1Width) / 2, currentY, line1.c_str());
-    if (line2.length() > 0) {
-      currentY += 10;  // Space for second line of status
-      int status2Width = u8g2.getStrWidth(line2.c_str());
-      u8g2.drawStr((u8g2.getDisplayWidth() - status2Width) / 2, currentY, line2.c_str());
+    if (status1Width > u8g2.getDisplayWidth() - 4) {
+        updateMarquee(u8g2.getDisplayWidth() - 4, line1.c_str());
+        if (marqueeActive && strcmp(marqueeText, line1.c_str())==0) {
+            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+        } else {
+            char* truncatedMsg1 = truncateText(line1.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg1)) / 2, currentY, truncatedMsg1);
+        }
+    } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - status1Width) / 2, currentY, line1.c_str());
     }
-    currentY += 12;  // Extra space after status message before potential progress bar
+
+    // Draw line2 (status message continuation)
+    if (line2.length() > 0) {
+      currentY += 10;
+      int status2Width = u8g2.getStrWidth(line2.c_str());
+       if (status2Width > u8g2.getDisplayWidth() - 4) {
+            updateMarquee(u8g2.getDisplayWidth() - 4, line2.c_str());
+            if (marqueeActive && strcmp(marqueeText, line2.c_str())==0) {
+                u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+            } else {
+                char* truncatedMsg2 = truncateText(line2.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+                u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg2)) / 2, currentY, truncatedMsg2);
+            }
+        } else {
+            u8g2.drawStr((u8g2.getDisplayWidth() - status2Width) / 2, currentY, line2.c_str());
+        }
+    }
+    currentY += 12; // Extra space after status message
   }
 
-  // Determine if progress bar should be drawn
+
+  // --- Progress Bar Logic (same as before) ---
   bool shouldDrawProgressBar = false;
   if (currentMenu == OTA_WEB_ACTIVE) {
-    // For Web OTA, only show progress if upload has actually started (otaProgress > 0)
-    // or if it's completed and rebooting. otaProgress = 0 means server is up, waiting.
-    if (otaProgress > 0 && otaProgress <= 100) {
+    if (otaProgress > 0 && otaProgress <= 100) { // Show for 1-100%
       shouldDrawProgressBar = true;
     }
   } else if (currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE) {
-    // For SD and Basic, progress 0 is a valid starting point of the process.
-    if (otaProgress >= 0 && otaProgress <= 100) {
-      shouldDrawProgressBar = true;
+    if (otaProgress >= OTA_PROGRESS_PENDING_SD_START && otaProgress <= 100) { // Show for 1-100% (or any positive progress)
+        // Note: OTA_PROGRESS_PENDING_SD_START is 1.
+        // For these modes, 0 could also be a valid "just started" state.
+        // Let's show bar if progress is >= 0 (and not an error state like -1 or -3)
+        if (otaProgress >=0 && otaProgress <=100) {
+            shouldDrawProgressBar = true;
+        }
     }
   }
 
-  // Position for bottom elements (progress bar or error text)
-  int bottomElementY = u8g2.getDisplayHeight() - 15;  // Y for top of bar/error text
+  int bottomElementY = u8g2.getDisplayHeight() - 15;
   int barH = 7;
-
-  // Adjust bottomElementY if text content (currentY) is too close or overlaps
   if (currentY > bottomElementY - barH - 2) {
-    bottomElementY = currentY + 2;  // Move bar below text
-    // Ensure bar still fits on screen
+    bottomElementY = currentY + 2;
     if (bottomElementY + barH > u8g2.getDisplayHeight() - 2) {
       bottomElementY = u8g2.getDisplayHeight() - barH - 2;
     }
   }
 
-
   if (shouldDrawProgressBar) {
     int barX = 10;
     int barW = u8g2.getDisplayWidth() - 20;
     u8g2.drawFrame(barX, bottomElementY, barW, barH);
-    int fillW = (barW - 2) * otaProgress / 100;
-    // Clamp fillW to prevent underflow/overflow visually
+    int fillW = 0;
+    if (otaProgress > 0) { // Only fill if progress is positive
+        fillW = (barW - 2) * otaProgress / 100;
+    }
     if (fillW < 0) fillW = 0;
     if (fillW > barW - 2) fillW = barW - 2;
-
     if (fillW > 0) {
       u8g2.drawBox(barX + 1, bottomElementY + 1, fillW, barH - 2);
     }
-  } else if (otaProgress == -1) {              // Error occurred
-    const char* errorText = "Error Occurred";  // Generic, otaStatusMessage should have details
+  } else if (otaProgress == -1) { // Error
+    const char* errorText = "Error Occurred";
     int errorTextWidth = u8g2.getStrWidth(errorText);
-    // Draw error text centered vertically in the space normally for the bar
     u8g2.drawStr((u8g2.getDisplayWidth() - errorTextWidth) / 2, bottomElementY + (barH - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent(), errorText);
   }
-  // If otaProgress is -2 (idle/default) or -3 (already up-to-date for web), no bar or error text is drawn for the bar area.
-  // The otaStatusMessage itself will convey "Already up to date".
+  // If otaProgress is -2 (idle), -3 (already up-to-date), or 0 (for WebOTA initial state), no bar or specific error text here.
+  // The otaStatusMessage handles these.
 }
 
 // NEW Function: drawSDFirmwareListScreen

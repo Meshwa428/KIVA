@@ -12,6 +12,11 @@
 #include <Stream.h>
 #include <WiFi.h>
 
+#define OTA_PROGRESS_PENDING_SD_START 1 // A special progress value
+#define OTA_AP_PASSWORD_FILE "/system/ota_ap_passwd.txt"
+#define MIN_AP_PASSWORD_LEN 8 // Minimum length for a valid password from file
+#define MAX_AP_PASSWORD_LEN 63 // Maximum length (WiFi standard)
+
 // Extern global variables (defined in KivaMain.ino)
 extern WebServer otaWebServer;
 extern int otaProgress;
@@ -19,7 +24,7 @@ extern String otaStatusMessage;
 extern bool otaIsUndoingChanges;
 extern bool basicOtaStarted;
 extern bool webOtaActive;
-extern char otaDisplayIpAddress[16];
+extern char otaDisplayIpAddress[40];
 
 // Externs related to firmware info (defined in KivaMain.ino)
 extern FirmwareInfo currentRunningFirmware;

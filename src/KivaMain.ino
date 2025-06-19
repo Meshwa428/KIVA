@@ -103,6 +103,8 @@ CarouselAnimation subMenuAnim;
 VerticalListAnimation wifiListAnim;
 WebServer otaWebServer(OTA_WEB_SERVER_PORT); // Unchanged
 
+FirmwareInfo g_firmwareToInstallFromSd;
+
 // === Global Variable Definitions ===
 MenuState currentMenu = MAIN_MENU;
 int menuIndex = 0;
@@ -210,7 +212,7 @@ String otaStatusMessage = "";
 bool otaIsUndoingChanges = false;
 bool basicOtaStarted = false;
 bool webOtaActive = false;
-char otaDisplayIpAddress[16] = "";
+char otaDisplayIpAddress[40] = "";
 FirmwareInfo currentRunningFirmware; // <--- NEW DEFINITION
 
 
@@ -421,8 +423,21 @@ void loop() {
       drawUI(); delay(2000); ESP.restart();
     }
   } else if (currentMenu == OTA_SD_STATUS) {
+    // Check if we are in the "pending start" phase for SD update
+    if (otaProgress == OTA_PROGRESS_PENDING_SD_START) {
+      // The "Preparing..." message has been shown by drawUI() in the previous loop iteration.
+      // Now, perform the actual update.
+      performSdUpdate(g_firmwareToInstallFromSd); // This will update otaProgress and otaStatusMessage further
+      // performSdUpdate sets otaProgress to other values (e.g., 5, 10, -1, 100, -3)
+    }
+    
+    // Standard check for reboot after completion (or handling "already up-to-date")
     if (otaProgress == 100 && otaStatusMessage.indexOf("Rebooting") != -1) {
       drawUI(); delay(2000); ESP.restart();
+    } else if (otaProgress == -3) { // "Already up to date"
+      // UI will display this message. User can press BACK.
+    } else if (otaProgress == -1) { // Error
+      // UI will display this message. User can press BACK.
     }
   }
 
@@ -489,14 +504,21 @@ void loop() {
                                    currentMenu == WIFI_CONNECTING ||
                                    currentMenu == WIFI_CONNECTION_INFO ||
                                    showWifiDisconnectOverlay);
-        bool inOtaStaMenu = (currentMenu == OTA_BASIC_ACTIVE);
+        
+        // MODIFIED: Add condition for OTA_BASIC_ACTIVE when it's in an error state
+        // due to no Wi-Fi connection.
+        bool inOtaStaMenuWithError = (currentMenu == OTA_BASIC_ACTIVE && otaProgress == -1 && 
+                                     (otaStatusMessage.indexOf("Connect to Wi-Fi") != -1 || otaStatusMessage.indexOf("Failed to enable Wi-Fi") != -1) );
+
+        bool inOtaStaMenuReady = (currentMenu == OTA_BASIC_ACTIVE && basicOtaStarted && otaProgress == 0); // Ready and waiting for IDE
+
         WifiConnectionStatus currentManagerStatus = getCurrentWifiConnectionStatus();
-        bool isActivelyTrying = (wifiIsScanning ||
+        bool isActivelyTryingToConnect = (wifiIsScanning ||
                                  currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS ||
                                  currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);
 
-        if (!inRelevantWifiMenu && !isActivelyTrying && !inOtaStaMenu && !webOtaActive) {
-            Serial.println("Loop: Wi-Fi ON, Not Connected, Not in Wi-Fi/OTA Menu, Not Actively Trying. Disabling Wi-Fi.");
+        if (!inRelevantWifiMenu && !isActivelyTryingToConnect && !inOtaStaMenuReady && !inOtaStaMenuWithError && !webOtaActive) {
+            Serial.println("Loop: Wi-Fi ON, Not Connected, Not in critical Wi-Fi/OTA Menu/State. Disabling Wi-Fi.");
             setWifiHardwareState(false);
         }
     }

@@ -3,73 +3,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include "sd_card_manager.h"
-#include <esp_wifi.h>  // <--- ADD THIS LINE
-
-// Define WebServer HTML and Favicon data from user's example
-const char* indexHtml = R"literal(
-  <!DOCTYPE html>
-  <link rel='icon' href='/favicon.ico' sizes='any'>
-  <body style='width:480px'>
-    <h2>Kiva Firmware Update</h2>
-    <p>Ensure the device remains powered on during the update.</p>
-    <form method='POST' enctype='multipart/form-data' id='upload-form'>
-      <input type='file' id='file' name='update'>
-      <input type='submit' value='Update'>
-    </form>
-    <br>
-    <div id='prg_container' style='width:100%; background-color:#ccc; border-radius: 5px; overflow: hidden;'>
-        <div id='prg' style='width:0; background-color:blue; color:white; text-align:center; line-height: 20px; height:20px; border-radius: 5px;'>0%</div>
-    </div>
-    <p id='status_msg'></p>
-  </body>
-  <script>
-    var prg = document.getElementById('prg');
-    var prgContainer = document.getElementById('prg_container');
-    var statusMsg = document.getElementById('status_msg');
-    var form = document.getElementById('upload-form');
-
-    form.addEventListener('submit', el=>{
-      prg.style.backgroundColor = 'blue';
-      statusMsg.innerHTML = 'Uploading...';
-      el.preventDefault();
-      var data = new FormData(form);
-      var req = new XMLHttpRequest();
-      var fsize = document.getElementById('file').files[0].size;
-      req.open('POST', '/update?size=' + fsize);
-      req.upload.addEventListener('progress', p=>{
-        let w = Math.round(p.loaded/p.total*100) + '%';
-          if(p.lengthComputable){
-             prg.innerHTML = w;
-             prg.style.width = w;
-          }
-          if(w == '100%') {
-            prg.style.backgroundColor = 'green';
-            statusMsg.innerHTML = 'Upload complete. Processing update...';
-          }
-      });
-      req.addEventListener('load', function(e) {
-        if (req.status == 200) {
-            statusMsg.innerHTML = 'Update successful! Device is rebooting... Page will refresh.';
-            prg.style.backgroundColor = 'green';
-            setTimeout(function(){ window.location.reload(); }, 10000); // Refresh after 10s
-        } else if (req.status == 307) { // Redirect, often implies success and reboot
-            statusMsg.innerHTML = 'Update successful! Device is rebooting... Page will redirect.';
-             prg.style.backgroundColor = 'green';
-            // Browser will handle redirect from server.
-        }
-        else {
-            statusMsg.innerHTML = 'Update failed: ' + req.responseText + ' (Status: ' + req.status + ')';
-            prg.style.backgroundColor = 'red';
-        }
-      });
-      req.addEventListener('error', function(e) {
-        statusMsg.innerHTML = 'Update request failed. Check connection or console.';
-        prg.style.backgroundColor = 'red';
-      });
-      req.send(data);
-     });
-  </script>
-)literal";
+#include <esp_wifi.h>
 
 const char favicon_ico_gz[] = {
   0x1f, 0x8b, 0x08, 0x08, 0x13, 0xb6, 0xa5, 0x62, 0x00, 0x03, 0x66, 0x61, 0x76, 0x69, 0x63, 0x6f, 0x6e, 0x2e, 0x69, 0x63, 0x6f, 0x00, 0xa5, 0x53, 0x69, 0x48,
@@ -195,10 +129,10 @@ void handleWebUpdateUpload() {
   HTTPUpload& upload = otaWebServer.upload();
   static File tempFwFile;
   static FirmwareInfo pendingWebFwInfo;
-  static bool upload_error_this_session = false; // Tracks error within the current upload attempt
+  static bool upload_error_this_session = false;  // Tracks error within the current upload attempt
 
   if (upload.status == UPLOAD_FILE_START) {
-    upload_error_this_session = false; // Reset for a new upload
+    upload_error_this_session = false;  // Reset for a new upload
     Serial.printf("WebOTA: Receiving Update (HTTP): %s, Expected Size: %s\n", upload.filename.c_str(), otaWebServer.arg("size").c_str());
     otaProgress = 0;
     otaStatusMessage = "Receiving file...";
@@ -214,61 +148,57 @@ void handleWebUpdateUpload() {
       otaProgress = -1;
       upload_error_this_session = true;
       Serial.println(otaStatusMessage);
-      return; // WebServer calls handleWebUpdateEnd next
+      return;  // WebServer calls handleWebUpdateEnd next
     }
     pendingWebFwInfo = FirmwareInfo();
 
   } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (upload_error_this_session) { // If an error (like file open) already occurred
+    if (upload_error_this_session) {
       return;
     }
-
-    if (tempFwFile) { // Ensure file object is valid
+    if (tempFwFile) {
       size_t bytesWritten = tempFwFile.write(upload.buf, upload.currentSize);
       if (bytesWritten != upload.currentSize) {
         otaStatusMessage = "Error: SD: Write failed to temp file.";
         otaProgress = -1;
         upload_error_this_session = true;
         Serial.println(otaStatusMessage);
-        if (tempFwFile) tempFwFile.close(); // Close file on error
-        return; // WebServer calls handleWebUpdateEnd
+        if (tempFwFile) tempFwFile.close();
+        return;
       } else {
-        // Progress calculation
         if (otaWebServer.hasArg("size")) {
           size_t totalSize = otaWebServer.arg("size").toInt();
           if (totalSize > 0) {
             otaProgress = (tempFwFile.position() * 100) / totalSize;
-          } else { // Fallback if size is 0 or invalid
-            otaProgress = (otaProgress < 80) ? otaProgress + 2 : 80; // Slow arbitrary progress
+          } else {
+            otaProgress = (otaProgress < 80) ? otaProgress + 2 : 80;
           }
-        } else { // Fallback if "size" arg is missing
-          otaProgress = (otaProgress < 80) ? otaProgress + 2 : 80; // Slow arbitrary progress
+        } else {
+          otaProgress = (otaProgress < 80) ? otaProgress + 2 : 80;
         }
-        // UI status message is updated by client-side JS; server side only for major states/errors
       }
-    } else { // tempFwFile is not valid - should have been caught by UPLOAD_FILE_START error
+    } else {
       otaStatusMessage = "Error: Temp file invalid during write.";
       otaProgress = -1;
       upload_error_this_session = true;
       Serial.println(otaStatusMessage);
       return;
     }
-    yield(); // CRITICAL: Allow other tasks (network) to run
+    yield();
 
   } else if (upload.status == UPLOAD_FILE_END) {
-    if (tempFwFile && tempFwFile.operator bool()) { // Ensure file is valid before closing
+    if (tempFwFile && tempFwFile.operator bool()) {
       tempFwFile.close();
     }
 
     if (upload_error_this_session || otaProgress == -1) {
       Serial.println("WebOTA: UPLOAD_FILE_END reached with prior error state.");
-      // otaStatusMessage and otaProgress should already reflect the error.
-      return; // WebServer calls handleWebUpdateEnd
+      return;
     }
 
     otaStatusMessage = "Verifying upload...";
     otaProgress = 85;
-    yield(); // Allow UI update and background tasks
+    yield();
 
     String uploadedFilePath = String(FIRMWARE_DIR_PATH) + "/web_upload_pending.bin";
     String uploadedFileChecksum = calculateFileMD5(SD, uploadedFilePath);
@@ -276,7 +206,7 @@ void handleWebUpdateUpload() {
     if (uploadedFileChecksum.isEmpty()) {
       otaStatusMessage = "Error: MD5 calculation failed.";
       otaProgress = -1;
-      upload_error_this_session = true; // Mark error for this session
+      upload_error_this_session = true;
       Serial.println(otaStatusMessage);
       return;
     }
@@ -287,32 +217,83 @@ void handleWebUpdateUpload() {
 
     if (currentRunningFirmware.isValid && uploadedFileChecksum.equals(currentRunningFirmware.checksum_md5)) {
       otaStatusMessage = "Already running this version.";
-      otaProgress = -3; // Special code for "already up to date"
+      otaProgress = -3;
       Serial.println(otaStatusMessage);
       if (SD.exists(uploadedFilePath)) SD.remove(uploadedFilePath);
       return;
     }
 
-    // Prepare FirmwareInfo for the uploaded file
     pendingWebFwInfo.isValid = true;
-    time_t now_ts;
-    time(&now_ts);
-    struct tm* p_tm = localtime(&now_ts);
-    char tempVersionStr[FW_VERSION_MAX_LEN];
-    snprintf(tempVersionStr, FW_VERSION_MAX_LEN, "web-%04d%02d%02d-%02d%02d",
-             p_tm->tm_year + 1900, p_tm->tm_mon + 1, p_tm->tm_mday, p_tm->tm_hour, p_tm->tm_min);
-    strlcpy(pendingWebFwInfo.version, tempVersionStr, FW_VERSION_MAX_LEN);
-    strftime(pendingWebFwInfo.build_date, FW_BUILD_DATE_MAX_LEN, "%Y-%m-%dT%H:%M:%SZ", p_tm);
+    String clientTimestampStr = otaWebServer.arg("client_timestamp");  // Try "client_timestamp" from form data
+    if (clientTimestampStr.isEmpty()) {
+      clientTimestampStr = otaWebServer.arg("ts");  // Fallback to "ts" from query param
+    }
+    bool clientTimeUsed = false;
+
+    if (clientTimestampStr.length() > 0) {
+      int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+      if (sscanf(clientTimestampStr.c_str(), "%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &minute, &second) == 6) {
+        if (year > 2020 && year < 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59) {
+          snprintf(pendingWebFwInfo.version, FW_VERSION_MAX_LEN, "web-%04d%02d%02d-%02d%02d%02d",  // Added seconds to version for more uniqueness
+                   year, month, day, hour, minute, second);
+          strlcpy(pendingWebFwInfo.build_date, clientTimestampStr.c_str(), FW_BUILD_DATE_MAX_LEN);
+          clientTimeUsed = true;
+          Serial.printf("WebOTA: Using client-provided timestamp for metadata: %s\n", clientTimestampStr.c_str());
+        } else {
+          Serial.printf("WebOTA: Client timestamp '%s' parsed but values out of range. Falling back.\n", clientTimestampStr.c_str());
+        }
+      } else {
+        Serial.printf("WebOTA: Failed to parse client timestamp: %s. Falling back.\n", clientTimestampStr.c_str());
+      }
+    }
+
+    if (!clientTimeUsed) {
+      time_t now_ts;
+      time(&now_ts);
+      struct tm* p_tm = localtime(&now_ts);
+      // Check if system time is valid (not epoch)
+      if (p_tm->tm_year + 1900 < 2023) {  // If time is clearly epoch or uninitialized
+        Serial.println("WebOTA: System time appears to be epoch/uninitialized. Using placeholder for version/date.");
+        // Use a generic placeholder version if time is bad
+        char placeholderVersion[FW_VERSION_MAX_LEN];
+        uint32_t pseudo_random_id = esp_random() % 10000;  // Get a pseudo-random number
+        snprintf(placeholderVersion, FW_VERSION_MAX_LEN, "web-notime-%04u", pseudo_random_id);
+        strlcpy(pendingWebFwInfo.version, placeholderVersion, FW_VERSION_MAX_LEN);
+        strcpy(pendingWebFwInfo.build_date, "N/A - Time Unset");
+      } else {
+        snprintf(pendingWebFwInfo.version, FW_VERSION_MAX_LEN, "web-%04d%02d%02d-%02d%02d%02d",  // Added seconds
+                 p_tm->tm_year + 1900, p_tm->tm_mon + 1, p_tm->tm_mday, p_tm->tm_hour, p_tm->tm_min, p_tm->tm_sec);
+        strftime(pendingWebFwInfo.build_date, FW_BUILD_DATE_MAX_LEN, "%Y-%m-%dT%H:%M:%SZ", p_tm);
+      }
+      Serial.println("WebOTA: Using system time for metadata (may be epoch if NTP not synced).");
+    }
+
     strlcpy(pendingWebFwInfo.checksum_md5, uploadedFileChecksum.c_str(), FW_CHECKSUM_MD5_MAX_LEN);
 
     String finalBinName = String(pendingWebFwInfo.version) + ".bin";
     String finalKfwName = String(pendingWebFwInfo.version) + FIRMWARE_METADATA_EXTENSION;
     strlcpy(pendingWebFwInfo.binary_filename, finalBinName.c_str(), FW_BINARY_FILENAME_MAX_LEN);
-    snprintf(pendingWebFwInfo.description, FW_DESCRIPTION_MAX_LEN, "Uploaded via Web @ %s", pendingWebFwInfo.build_date);
+
+    String descDatePart = pendingWebFwInfo.build_date;
+    if (strcmp(pendingWebFwInfo.build_date, "N/A - Time Unset") != 0) {
+      int tPos = descDatePart.indexOf('T');
+      int zPos = descDatePart.indexOf('Z');
+      int dotPos = descDatePart.indexOf('.');
+      if (tPos != -1) {
+        int endDescDatePos = -1;
+        if (zPos > tPos) endDescDatePos = zPos;
+        else if (dotPos > tPos) endDescDatePos = dotPos;
+        if (endDescDatePos != -1) descDatePart = descDatePart.substring(0, endDescDatePos);
+        else if (descDatePart.length() > 19) descDatePart = descDatePart.substring(0, 19);
+      } else if (descDatePart.length() > 19) {
+        descDatePart = descDatePart.substring(0, 19);
+      }
+    }
+    snprintf(pendingWebFwInfo.description, FW_DESCRIPTION_MAX_LEN, "Web Upload @ %s", descDatePart.c_str());
 
     otaStatusMessage = "Starting flash process...";
     otaProgress = 90;
-    yield(); // Allow UI update
+    yield();
 
     File fwToFlash = SD.open(uploadedFilePath, FILE_READ);
     if (!fwToFlash) {
@@ -327,71 +308,73 @@ void handleWebUpdateUpload() {
     Update.setMD5(pendingWebFwInfo.checksum_md5);
     if (Update.begin(updateSize)) {
       otaStatusMessage = "Flashing firmware...";
-      otaProgress = 95; // Indicative progress for the blocking flash write
-      
+      otaProgress = 95;
+
       size_t written = Update.writeStream(fwToFlash);
-      fwToFlash.close(); // Close file after reading
+      fwToFlash.close();
 
       if (written == updateSize) {
-        if (Update.end(true)) { // true to set the boot partition flags
+        if (Update.end(true)) {
           Serial.printf("WebOTA: Update Success: %u bytes\n", written);
           otaProgress = 100;
           otaStatusMessage = "Success! Rebooting...";
 
-          // Save metadata for the newly flashed firmware
           String finalBinPath = String(FIRMWARE_DIR_PATH) + "/" + finalBinName;
           String finalKfwPath = String(FIRMWARE_DIR_PATH) + "/" + finalKfwName;
 
-          if (SD.exists(finalBinPath)) SD.remove(finalBinPath); // Remove if old one with same name exists
+          if (SD.exists(finalBinPath)) SD.remove(finalBinPath);
           if (SD.exists(finalKfwPath)) SD.remove(finalKfwPath);
 
           if (!SD.rename(uploadedFilePath, finalBinPath)) {
             Serial.printf("WebOTA: FAILED to rename %s to %s\n", uploadedFilePath.c_str(), finalBinPath.c_str());
-            // Flashing was successful, but the file on SD is still named ...pending.bin
-            // This is not ideal but the device will boot the new FW.
           } else {
-             Serial.printf("WebOTA: Renamed %s to %s\n", uploadedFilePath.c_str(), finalBinPath.c_str());
+            Serial.printf("WebOTA: Renamed %s to %s\n", uploadedFilePath.c_str(), finalBinPath.c_str());
           }
           saveFirmwareMetadataFile(finalKfwPath, pendingWebFwInfo);
-          saveCurrentFirmwareInfo(pendingWebFwInfo); // Update current_fw.json to reflect new FW
+          saveCurrentFirmwareInfo(pendingWebFwInfo);
 
-        } else { // Update.end() failed
+        } else {
           Update.printError(Serial);
           otaStatusMessage = String("Flash End Fail: ") + Update.errorString();
           otaProgress = -1;
-          // No need to set upload_error_this_session as this is the final step error.
         }
-      } else { // written != updateSize (Update.writeStream failed)
+      } else {
         Update.printError(Serial);
         otaStatusMessage = String("Flash Write Fail. Wrote ") + String(written) + "/" + String(updateSize);
         otaProgress = -1;
-        Update.abort(); // Important to call abort if writeStream fails
+        Update.abort();
       }
-    } else { // Update.begin() failed
+    } else {
       Update.printError(Serial);
       otaStatusMessage = String("Flash Begin Fail: ") + Update.errorString();
       otaProgress = -1;
-      if (fwToFlash) fwToFlash.close(); // Ensure file is closed
+      if (fwToFlash) fwToFlash.close();
     }
 
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     Serial.println("WebOTA: Upload aborted by client (UPLOAD_FILE_ABORTED status).");
     if (tempFwFile && tempFwFile.operator bool()) {
-        tempFwFile.close();
+      tempFwFile.close();
     }
     String tempBinPath = String(FIRMWARE_DIR_PATH) + "/web_upload_pending.bin";
     if (SD.exists(tempBinPath)) {
       SD.remove(tempBinPath);
     }
-    Update.abort(); // Attempt to abort any Update process state
-    otaStatusMessage = "Upload aborted by client."; // This will be shown on UI
+    Update.abort();
+    otaStatusMessage = "Upload aborted by client.";
     otaProgress = -1;
-    upload_error_this_session = true; // Mark that this upload attempt failed
+    upload_error_this_session = true;
   }
-  // handleWebUpdateEnd() will be called by the WebServer library automatically
-  // to send the final response to the client based on otaProgress and otaStatusMessage.
 }
 
+static String generateRandomPassword(uint8_t len) {
+  String pass = "";
+  const char alphanum[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  for (uint8_t i = 0; i < len; ++i) {
+    pass += alphanum[random(0, sizeof(alphanum) - 1)];
+  }
+  return pass;
+}
 
 bool startWebOtaUpdate() {
   if (webOtaActive || isJammingOperationActive) {
@@ -403,30 +386,24 @@ bool startWebOtaUpdate() {
 
   Serial.println("OTA Manager: Attempting to start Web OTA (AP Mode)...");
 
-  // 1. Ensure Wi-Fi hardware is ON and in AP mode.
-  setWifiHardwareState(true, WIFI_MODE_AP);  // Request AP mode via our robust function
-  // A delay here might allow event queue issues to settle, or for AP to fully come up.
-  // The delays within setWifiHardwareState after start should help.
-  delay(300);  // Additional delay after setWifiHardwareState completes for AP
+  setWifiHardwareState(true, WIFI_MODE_AP);
+  delay(300);
 
   if (!wifiHardwareEnabled || WiFi.getMode() != WIFI_MODE_AP) {
-    // setWifiHardwareState should have set an appropriate wifiStatusString or failed more clearly
-    otaStatusMessage = "Failed to init AP Mode. Check logs.";  // Generic message if setWifiHardwareState didn't provide one
+    otaStatusMessage = "Failed to init AP Mode. Check logs.";
     if (wifiHardwareEnabled && WiFi.getMode() != WIFI_MODE_AP) {
       otaStatusMessage = "Wi-Fi not in AP Mode. Current: " + String(WiFi.getMode());
     } else if (!wifiHardwareEnabled) {
       otaStatusMessage = "Wi-Fi HW failed to enable for AP.";
     }
     Serial.println("OTA Manager: " + otaStatusMessage);
-    // setWifiHardwareState(false); // Attempt to turn it off cleanly if full setup failed
     otaProgress = -1;
     return false;
   }
   Serial.println("OTA Manager: Wi-Fi hardware should now be enabled in AP mode.");
 
-  // 2. Proceed with SD card checks and AP configuration (SSID, WebServer)
   if (!isSdCardAvailable()) {
-    otaStatusMessage = "SD Card Required";
+    otaStatusMessage = "SD Card Required for OTA Page/Config!";
     Serial.println("OTA Manager: " + otaStatusMessage);
     otaProgress = -1;
     setWifiHardwareState(false);
@@ -444,31 +421,78 @@ bool startWebOtaUpdate() {
 
   char ap_ssid[32];
   snprintf(ap_ssid, sizeof(ap_ssid), "%s-OTA", OTA_HOSTNAME);
+  String ap_password_to_use = "";
 
-  // By now, esp_wifi should be stopped, deinit, init, mode AP, started.
-  // WiFi.softAP() should just configure the running AP.
-  if (WiFi.softAP(ap_ssid)) {
-    Serial.printf("AP Configured by WiFi.softAP. SSID: %s, IP: %s\n", ap_ssid, WiFi.softAPIP().toString().c_str());
-    strncpy(otaDisplayIpAddress, WiFi.softAPIP().toString().c_str(), sizeof(otaDisplayIpAddress) - 1);
+  // --- Try to load pre-set AP password ---
+  if (SD.exists(OTA_AP_PASSWORD_FILE)) {
+    File pwFile = SD.open(OTA_AP_PASSWORD_FILE, FILE_READ);
+    if (pwFile) {
+      if (pwFile.size() > 0 && pwFile.size() < MAX_AP_PASSWORD_LEN + 5) {  // +5 for potential whitespace/newlines
+        String loaded_pw = pwFile.readStringUntil('\n');                   // Read first line
+        loaded_pw.trim();                                                  // Remove leading/trailing whitespace including \r
+        if (loaded_pw.length() >= MIN_AP_PASSWORD_LEN && loaded_pw.length() <= MAX_AP_PASSWORD_LEN) {
+          ap_password_to_use = loaded_pw;
+          Serial.printf("OTA Manager: Using pre-set AP password from %s\n", OTA_AP_PASSWORD_FILE);
+        } else {
+          Serial.printf("OTA Manager: Password in %s is invalid length (%d). Generating random.\n", OTA_AP_PASSWORD_FILE, loaded_pw.length());
+        }
+      } else if (pwFile.size() > 0) {  // File exists but content might be too long or weird
+        Serial.printf("OTA Manager: Content of %s seems invalid (size: %d). Generating random.\n", OTA_AP_PASSWORD_FILE, pwFile.size());
+      }
+      pwFile.close();
+    } else {
+      Serial.printf("OTA Manager: Could not open %s. Generating random password.\n", OTA_AP_PASSWORD_FILE);
+    }
+  } else {
+    Serial.printf("OTA Manager: %s not found. Generating random password.\n", OTA_AP_PASSWORD_FILE);
+  }
+
+  if (ap_password_to_use.isEmpty()) {  // If no valid pre-set password was loaded
+    ap_password_to_use = generateRandomPassword(8);
+    Serial.println("OTA Manager: Using randomly generated AP password.");
+  }
+  // --- End of password logic ---
+
+  if (WiFi.softAP(ap_ssid, ap_password_to_use.c_str())) {
+    Serial.printf("AP Configured. SSID: %s, PW: %s, IP: %s\n", ap_ssid, ap_password_to_use.c_str(), WiFi.softAPIP().toString().c_str());
+
+    String displayInfo = WiFi.softAPIP().toString() + " P: " + ap_password_to_use;
+    strncpy(otaDisplayIpAddress, displayInfo.c_str(), sizeof(otaDisplayIpAddress) - 1);
     otaDisplayIpAddress[sizeof(otaDisplayIpAddress) - 1] = '\0';
 
     MDNS.end();
     if (MDNS.begin(OTA_HOSTNAME)) {
       MDNS.addService("http", "tcp", OTA_WEB_SERVER_PORT);
       Serial.printf("MDNS started for AP: %s.local or %s\n", OTA_HOSTNAME, WiFi.softAPIP().toString().c_str());
-      otaStatusMessage = String(OTA_HOSTNAME) + ".local";
     } else {
       Serial.println("Error setting up MDNS for AP!");
-      otaStatusMessage = WiFi.softAPIP().toString();
     }
+    otaStatusMessage = String(OTA_HOSTNAME) + ".local";
 
     otaWebServer.on("/", HTTP_GET, []() {
-      otaWebServer.send(200, "text/html", indexHtml);
+      if (!isSdCardAvailable()) {
+        otaWebServer.send(503, "text/plain", "SD Card Error: Cannot serve OTA page.");
+        return;
+      }
+      File pageFile = SD.open(OTA_HTML_PAGE_PATH, FILE_READ);
+      if (!pageFile || pageFile.isDirectory()) {
+        Serial.printf("OTA Page: Failed to open '%s' from SD card.\n", OTA_HTML_PAGE_PATH);
+        String errorMsg = "<html><title>Error</title><body><h1>OTA Page Not Found</h1><p>Could not load OTA interface. Ensure <code>";
+        errorMsg += OTA_HTML_PAGE_PATH;
+        errorMsg += "</code> exists on SD card.</p></body></html>";
+        otaWebServer.send(404, "text/html", errorMsg);
+        if (pageFile) pageFile.close();
+        return;
+      }
+      otaWebServer.streamFile(pageFile, "text/html");
+      pageFile.close();
     });
+
     otaWebServer.on("/favicon.ico", HTTP_GET, []() {
       otaWebServer.sendHeader("Content-Encoding", "gzip");
       otaWebServer.send_P(200, "image/x-icon", favicon_ico_gz, favicon_ico_gz_len);
     });
+
     otaWebServer.on("/update", HTTP_POST, handleWebUpdateEnd, handleWebUpdateUpload);
     otaWebServer.begin();
     webOtaActive = true;
@@ -560,37 +584,49 @@ bool prepareSdFirmwareList() {
 }
 
 void performSdUpdate(const FirmwareInfo& targetFirmware) {
+  resetOtaState();                           // Start with a clean OTA state
+  otaProgress = 5;                           // Initial "Starting" phase
+  otaStatusMessage = "Preparing Update...";  // Initial message for the UI
+  // The main loop should immediately draw the OTA_SD_STATUS screen with this message.
+  // To make it visible for a moment before the blocking operations:
+  // One way is to have the main loop call drawUI() and then proceed.
+  // Another way, if this function is called directly from menu selection,
+  // the UI update will happen in the next main loop iteration.
+  // For a guaranteed display, a small delay here AFTER setting status,
+  // combined with a drawUI call in the main loop before this long function fully executes,
+  // would be needed. However, this complicates the main loop structure.
+
+  // Let's assume the UI will pick up this "Preparing..." message in the next draw cycle.
+
   if (isJammingOperationActive) {
     otaStatusMessage = "Jamming active. Cannot update.";
     otaProgress = -1;
-    return;
+    return;  // Early exit, status screen will show this error.
   }
-  resetOtaState();
-  otaProgress = 5;  // Starting phase
 
   if (!targetFirmware.isValid) {
     otaStatusMessage = "Invalid target firmware information provided.";
     otaProgress = -1;
-    return;
+    return;  // Status screen will show this.
   }
 
   Serial.printf("SD_OTA: Attempting update to version: %s, File: %s, Checksum: %s\n",
                 targetFirmware.version, targetFirmware.binary_filename, targetFirmware.checksum_md5);
-  Serial.printf("SD_OTA: Current running version: %s, Checksum: %s\n",
-                currentRunningFirmware.version, currentRunningFirmware.checksum_md5);
+  // Optional: Update status message after initial checks
+  otaStatusMessage = "Checking: " + String(targetFirmware.binary_filename);
+  otaProgress = 10;
+  // Again, rely on main loop to draw this.
 
   if (currentRunningFirmware.isValid && strcmp(targetFirmware.checksum_md5, currentRunningFirmware.checksum_md5) == 0) {
     otaStatusMessage = "Already running this version.";
-    otaProgress = 100;  // Special state: "done", but no actual update performed. UI should reflect this.
-                        // Or use a distinct value like -3 if 100 is strictly for "rebooting".
-                        // For now, 100 implies completion of the *action*.
+    otaProgress = -3;  // Use -3 for "already up to date" as with web OTA
     Serial.println("SD_OTA: " + otaStatusMessage);
     return;
   }
 
   String binaryPath = String(FIRMWARE_DIR_PATH) + "/" + targetFirmware.binary_filename;
-  otaStatusMessage = String("Opening: ") + targetFirmware.binary_filename;
-  otaProgress = 10;
+  // otaStatusMessage = String("Opening: ") + targetFirmware.binary_filename; // Already covered by "Checking"
+  // otaProgress = 10; // Already set
 
   File updateBin = SD.open(binaryPath, FILE_READ);
   if (!updateBin || updateBin.isDirectory()) {
@@ -612,46 +648,47 @@ void performSdUpdate(const FirmwareInfo& targetFirmware) {
 
   otaStatusMessage = "Verifying & Starting Update...";
   otaProgress = 15;
-  Update.setMD5(targetFirmware.checksum_md5);  // Set expected MD5 for verification by Update class
+  Update.setMD5(targetFirmware.checksum_md5);
 
   if (Update.begin(updateSize)) {
-    otaStatusMessage = "Writing firmware...";
-    otaProgress = 25;
+    otaStatusMessage = "Flashing firmware...";
+    otaProgress = 25;  // Start of the actual write
 
-    size_t written = Update.writeStream(updateBin);  // This is blocking
-    // After writeStream, update progress before Update.end()
+    size_t written = Update.writeStream(updateBin);
+    // For SD card, progress during writeStream isn't easily granular without custom chunking.
+    // So we update progress after the (blocking) write.
     if (written == updateSize) {
-      otaProgress = 75;
+      otaProgress = 75;  // Assume most of the way done after successful write
     } else {
-      otaProgress = map(written, 0, updateSize, 25, 75);  // map progress if write was partial before error
+      // Partial write before error, estimate progress
+      otaProgress = 25 + (int)(((float)written / (float)updateSize) * 50.0f);  // Map to 25-75 range
     }
 
     if (written == updateSize) {
       otaStatusMessage = "Finalizing update...";
       otaProgress = 85;
-      if (Update.end(true)) {  // true to set boot partition
+      if (Update.end(true)) {
         otaProgress = 100;
         otaStatusMessage = "Success! Rebooting...";
         Serial.println("SD_OTA: Update successful. Saving current FW info.");
-        saveCurrentFirmwareInfo(targetFirmware);  // Update current_fw.json
-                                                  // Reboot will be handled by KivaMain loop based on otaProgress = 100
-      } else {                                    // Update.end() failed
+        saveCurrentFirmwareInfo(targetFirmware);
+      } else {
         otaStatusMessage = String("Finalize error: #") + String(Update.getError()) + " " + Update.errorString();
         otaProgress = -1;
         Serial.println("SD_OTA: " + otaStatusMessage);
       }
-    } else {  // written != updateSize (Update.writeStream failed)
+    } else {
       otaStatusMessage = String("Write error: ") + String(written) + "/" + String(updateSize);
       otaProgress = -1;
       Serial.println("SD_OTA: " + otaStatusMessage);
-      Update.abort();  // Abort the update process
+      Update.abort();
     }
-  } else {  // Update.begin() failed
+  } else {
     otaStatusMessage = String("Begin error: #") + String(Update.getError()) + String(" Details: ") + Update.errorString();
     otaProgress = -1;
     Serial.println("SD_OTA: " + otaStatusMessage);
   }
-  updateBin.close();  // Ensure file is closed in all paths
+  updateBin.close();
 }
 
 // --- Basic OTA (IDE) Implementation ---
@@ -718,46 +755,55 @@ void configureArduinoOta() {
   });
 }
 
-bool startBasicOtaUpdate() {  // Unchanged from previous, relies on onEnd to update current FW info
+bool startBasicOtaUpdate() {
   if (basicOtaStarted || isJammingOperationActive) {
     otaStatusMessage = basicOtaStarted ? "Basic OTA already active." : "Jamming active.";
+    Serial.println("OTA Manager: " + otaStatusMessage); // Keep this log for debugging
+    // otaProgress might already be set if basicOtaStarted is true, otherwise -2 (idle)
     return false;
   }
-  resetOtaState();
-  otaIsUndoingChanges = true;
+  resetOtaState(); // Clear previous OTA state
+  // otaIsUndoingChanges = true; // This flag seems more for critical phases, perhaps not needed here.
 
   if (!wifiHardwareEnabled) {
     otaStatusMessage = "Wi-Fi is Off. Enabling...";
-    setWifiHardwareState(true, WIFI_MODE_STA);  // Explicitly request STA
-    delay(200);
+    Serial.println("OTA Manager: " + otaStatusMessage);
+    setWifiHardwareState(true, WIFI_MODE_STA); // Explicitly request STA
+    delay(200); // Give time for Wi-Fi to enable
     if (!wifiHardwareEnabled) {
-      otaStatusMessage = "Failed to enable Wi-Fi.";
-      otaProgress = -1;
-      otaIsUndoingChanges = false;
+      otaStatusMessage = "Failed to enable Wi-Fi for OTA.";
+      otaProgress = -1; // Error state
+      Serial.println("OTA Manager: " + otaStatusMessage);
+      // otaIsUndoingChanges = false;
       return false;
     }
   }
 
+  // After ensuring Wi-Fi hardware is on, check connection status
   if (WiFi.status() != WL_CONNECTED) {
-    otaStatusMessage = "Connect to Wi-Fi STA first.";
-    otaProgress = -1;
+    otaStatusMessage = "Connect to Wi-Fi (STA) first."; // Clear message for UI
+    otaProgress = -1; // Indicate an error/precondition not met
     Serial.println("BasicOTA: " + otaStatusMessage);
-    otaIsUndoingChanges = false;
+    // otaIsUndoingChanges = false;
+    // Don't disable Wi-Fi here; let the main loop's auto-disable handle it if appropriate,
+    // or user might want to go to Wi-Fi setup.
     return false;
   }
 
+  // If we reach here, Wi-Fi is ON and CONNECTED in STA mode.
   Serial.println("BasicOTA: Starting ArduinoOTA...");
   strncpy(otaDisplayIpAddress, WiFi.localIP().toString().c_str(), sizeof(otaDisplayIpAddress) - 1);
   otaDisplayIpAddress[sizeof(otaDisplayIpAddress) - 1] = '\0';
 
-  configureArduinoOta();
+  configureArduinoOta(); // Ensure this is called before ArduinoOTA.begin()
   ArduinoOTA.begin();
 
-  otaStatusMessage = String(OTA_HOSTNAME) + ".local or " + WiFi.localIP().toString();
-  otaProgress = 0;
+  otaStatusMessage = String("IP: ") + WiFi.localIP().toString(); // Show IP for connection
+  // otaStatusMessage = String(OTA_HOSTNAME) + ".local or " + WiFi.localIP().toString(); // Alternative
+  otaProgress = 0; // Initial success state for "ready"
   basicOtaStarted = true;
-  otaIsUndoingChanges = false;
-  Serial.println("BasicOTA: Ready. IP: " + WiFi.localIP().toString());
+  // otaIsUndoingChanges = false; // Already false or not set
+  Serial.println("BasicOTA: Ready. IP: " + WiFi.localIP().toString() + " (Hostname: " + OTA_HOSTNAME + ".local)");
   return true;
 }
 
