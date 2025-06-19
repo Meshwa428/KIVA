@@ -8,7 +8,15 @@
 #include "menu_logic.h"
 #include "wifi_manager.h"
 #include "sd_card_manager.h"
-#include "jamming.h" // <--- NEW INCLUDE
+#include "jamming.h"
+#include "ota_manager.h"
+#include "firmware_metadata.h" // <--- NEW INCLUDE
+
+// For OTA Web Server and Basic OTA
+#include <WebServer.h>   // Already in config.h for extern WebServer
+#include <ESPmDNS.h>
+#include <ArduinoOTA.h>
+#include <Update.h>      // For Update class, used by ota_manager
 
 // ... (Bitmap Data) ...
 #define im_width 128
@@ -93,6 +101,7 @@ QuadratureEncoder encoder; // Definition
 VerticalListAnimation mainMenuAnim;
 CarouselAnimation subMenuAnim;
 VerticalListAnimation wifiListAnim;
+WebServer otaWebServer(OTA_WEB_SERVER_PORT); // Unchanged
 
 // === Global Variable Definitions ===
 MenuState currentMenu = MAIN_MENU;
@@ -194,6 +203,15 @@ float segmentAnimDurationMs_float = 300.0f;
 float segmentAnimStartPx = 0.0f;
 float segmentAnimTargetPx = 0.0f;
 const int PROGRESS_ANIM_UPDATE_INTERVAL_MS = 16;
+
+// --- OTA Related Global Variable DEFINITIONS ---
+int otaProgress = -2; 
+String otaStatusMessage = "";
+bool otaIsUndoingChanges = false;
+bool basicOtaStarted = false;
+bool webOtaActive = false;
+char otaDisplayIpAddress[16] = "";
+FirmwareInfo currentRunningFirmware; // <--- NEW DEFINITION
 
 
 void updateMainDisplayBootProgress() {
@@ -340,6 +358,15 @@ void setup() {
   bool sdInitializedResult = setupSdCard();
   runBootStepAnimation("SD Card Mounted", sdInitializedResult ? "PASS" : "FAIL");
 
+  if (sdInitializedResult) {
+    loadCurrentFirmwareInfo(); // <--- NEW: Load current FW info after SD is up
+  } else {
+    // Set currentRunningFirmware to a default unknown state if SD fails
+    currentRunningFirmware.isValid = false;
+    strlcpy(currentRunningFirmware.version, "Unknown (No SD)", FW_VERSION_MAX_LEN);
+    currentRunningFirmware.checksum_md5[0] = '\0';
+  }
+
   analogReadResolution(12);
   setupBatteryMonitor();
   runBootStepAnimation("Battery Service", "OK");
@@ -351,7 +378,11 @@ void setup() {
   runBootStepAnimation("WiFi Subsystem", "INIT");
 
   setupJamming();
-  runBootStepAnimation("Jamming System", "INIT"); // New boot step
+  runBootStepAnimation("Jamming System", "INIT");
+
+  setupOtaManager(); // <--- NEW: Initialize OTA components
+  runBootStepAnimation("OTA Manager", "INIT");
+
   runBootStepAnimation("Main Display OK", "READY");
 
   logToSmallDisplay("KivaOS Loading...", NULL);
@@ -378,6 +409,23 @@ void setup() {
 void loop() {
   unsigned long currentTime = millis();
 
+  // Priority 1: OTA Update processes (if active, they take precedence)
+  if (currentMenu == OTA_WEB_ACTIVE) {
+    if (webOtaActive) handleWebOtaClient();
+    if (otaProgress == 100 && otaStatusMessage.indexOf("Rebooting") != -1) {
+      drawUI(); delay(2000); ESP.restart();
+    }
+  } else if (currentMenu == OTA_BASIC_ACTIVE) {
+    if (basicOtaStarted) handleBasicOta();
+    if (otaProgress == 100 && otaStatusMessage.indexOf("Rebooting") != -1) {
+      drawUI(); delay(2000); ESP.restart();
+    }
+  } else if (currentMenu == OTA_SD_STATUS) {
+    if (otaProgress == 100 && otaStatusMessage.indexOf("Rebooting") != -1) {
+      drawUI(); delay(2000); ESP.restart();
+    }
+  }
+
   if (isJammingOperationActive) {
     runJammerCycle(); // Run the NRF modules for one jamming cycle
 
@@ -386,179 +434,217 @@ void loop() {
 
       // Check for NAV_BACK or ENC_BTN to stop jamming
       if (btnPress1[NAV_BACK] || btnPress0[ENC_BTN]) {
+        // Consume flags immediately
         if (btnPress1[NAV_BACK]) btnPress1[NAV_BACK] = false;
         if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
 
-        stopActiveJamming(); // This sets isJammingOperationActive = false, activeJammingType = JAM_NONE
-
-        // Restore normal operation speeds
+        stopActiveJamming();
         currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
         currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
-
-        // Return to the jamming selection grid in Tools menu
         currentMenu = TOOL_CATEGORY_GRID;
 
-        // Ensure toolsCategoryIndex is correctly set to "Jamming"
         bool foundJammingCategory = false;
-        for(int i=0; i < getToolsMenuItemsCount(); ++i) {
-            if(strcmp(toolsMenuItems[i], "Jamming") == 0) {
-                toolsCategoryIndex = i;
-                foundJammingCategory = true;
-                break;
-            }
+        for (int i = 0; i < getToolsMenuItemsCount(); ++i) {
+          if (strcmp(toolsMenuItems[i], "Jamming") == 0) {
+            toolsCategoryIndex = i;
+            foundJammingCategory = true;
+            break;
+          }
         }
         if (!foundJammingCategory) {
-            // This should not happen if menu items are consistent. Fallback or error.
-            Serial.println("CRITICAL ERROR: 'Jamming' category not found in toolsMenuItems!");
-            // Default to a known index for Jamming if programmatic find fails (e.g. 4 based on comments)
-            // This is a safeguard; ideally, the string comparison should always work.
-             for(int i=0; i < getToolsMenuItemsCount(); ++i) { // Find the default index for "Jamming"
-                if(strcmp(toolsMenuItems[i], "Jamming") == 0) { toolsCategoryIndex = i; break;}
-            }
+          Serial.println("CRITICAL ERROR: 'Jamming' category not found in toolsMenuItems!");
+          // Fallback to find "Jamming" again, just in case.
+          for (int i = 0; i < getToolsMenuItemsCount(); ++i) {
+            if (strcmp(toolsMenuItems[i], "Jamming") == 0) { toolsCategoryIndex = i; break; }
+          }
         }
-
-        menuIndex = lastSelectedJammingToolGridIndex; // Restore the last selected jamming tool
-
-        // Validate menuIndex against the items in the Jamming category
+        menuIndex = lastSelectedJammingToolGridIndex;
         int numJammingItems = getJammingToolItemsCount();
         if (numJammingItems > 0) {
-            menuIndex = constrain(menuIndex, 0, numJammingItems - 1);
+          menuIndex = constrain(menuIndex, 0, numJammingItems - 1);
         } else {
-            menuIndex = 0; // No items, index must be 0
+          menuIndex = 0;
         }
-
-        initializeCurrentMenu(); // Re-initialize menu state for drawing
-        drawUI(); // Draw the UI once to reflect the change
+        initializeCurrentMenu();
+        drawUI();
       }
       lastJammingInputCheckTime = currentTime;
     }
-    // No regular UI drawing or other updates while actively jamming to maximize NRF performance
-  } else {
+    // No regular UI drawing or other updates while actively jamming
+  } else { // Not Jamming
     // --- Normal Operation Loop ---
     if (currentTime - lastJammingInputCheckTime > currentInputPollInterval) {
-        updateInputs();
-        lastJammingInputCheckTime = currentTime;
+      updateInputs(); // updateInputs handles D-Pad for FIRMWARE_UPDATE_GRID and consumes D-pad flags
+      lastJammingInputCheckTime = currentTime;
     }
 
-    // Battery update logic
     if (batteryNeedsUpdate || (currentTime - lastBatteryCheck >= currentBatteryCheckInterval)) {
-        getSmoothV();
+      getSmoothV();
     }
 
-    // Wi-Fi auto-disable logic (from your provided KivaMain.ino)
+    // Wi-Fi auto-disable logic
     if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
         bool inRelevantWifiMenu = (currentMenu == WIFI_SETUP_MENU ||
                                    currentMenu == WIFI_PASSWORD_INPUT ||
                                    currentMenu == WIFI_CONNECTING ||
                                    currentMenu == WIFI_CONNECTION_INFO ||
                                    showWifiDisconnectOverlay);
-
+        bool inOtaStaMenu = (currentMenu == OTA_BASIC_ACTIVE);
         WifiConnectionStatus currentManagerStatus = getCurrentWifiConnectionStatus();
-
         bool isActivelyTrying = (wifiIsScanning ||
                                  currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS ||
                                  currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);
 
-        if (!inRelevantWifiMenu && !isActivelyTrying) {
-            Serial.println("Loop: Wi-Fi ON, Not Connected, Not in Wi-Fi Menu/Overlay, Not Actively Trying. Disabling Wi-Fi.");
-            setWifiHardwareState(false); // This will also update UI/menu state if needed
+        if (!inRelevantWifiMenu && !isActivelyTrying && !inOtaStaMenu && !webOtaActive) {
+            Serial.println("Loop: Wi-Fi ON, Not Connected, Not in Wi-Fi/OTA Menu, Not Actively Trying. Disabling Wi-Fi.");
+            setWifiHardwareState(false);
         }
     }
 
-    // Wi-Fi scan check (modified for clarity and to rely on checkAndRetrieveWifiScanResults)
+    // Wi-Fi Scan & Connection Progress
     if (currentMenu == WIFI_SETUP_MENU && wifiIsScanning && !showWifiDisconnectOverlay) {
       if (currentTime - lastWifiScanCheckTime >= WIFI_SCAN_CHECK_INTERVAL) {
-        int result = checkAndRetrieveWifiScanResults(); // This function now handles WiFi.scanComplete()
-
-        // wifiIsScanning is set to false by checkAndRetrieveWifiScanResults if scan is done/failed.
+        int result = checkAndRetrieveWifiScanResults();
         if (!wifiIsScanning) {
-          initializeCurrentMenu(); // Re-initialize menu for new item count, title, etc.
-          // Reset scroll and animation for the list as it's re-populated
+          initializeCurrentMenu();
           wifiMenuIndex = 0;
           targetWifiListScrollOffset_Y = 0;
           currentWifiListScrollOffset_Y_anim = 0;
-          if (maxMenuItems > 0) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems); // Update animation targets
+          if (maxMenuItems > 0) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
         }
-        lastWifiScanCheckTime = currentTime; // Update check time
+        lastWifiScanCheckTime = currentTime;
       }
     } else if (currentMenu == WIFI_CONNECTING && !showWifiDisconnectOverlay) {
-        WifiConnectionStatus status = checkWifiConnectionProgress();
-        if (status != WIFI_CONNECTING_IN_PROGRESS) {
-            currentMenu = WIFI_CONNECTION_INFO;
-            wifiStatusMessageTimeout = millis() + 3000; // Show result for 3 seconds
-            initializeCurrentMenu();
-        }
+      WifiConnectionStatus status = checkWifiConnectionProgress();
+      if (status != WIFI_CONNECTING_IN_PROGRESS) {
+        currentMenu = WIFI_CONNECTION_INFO;
+        wifiStatusMessageTimeout = millis() + 3000;
+        initializeCurrentMenu();
+      }
     } else if (currentMenu == WIFI_CONNECTION_INFO && !showWifiDisconnectOverlay) {
-        if (millis() > wifiStatusMessageTimeout) {
-            WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
-            if (lastStatus == WIFI_CONNECTED_SUCCESS) {
-                currentMenu = WIFI_SETUP_MENU; // Go back to Wi-Fi list
-            } else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) {
-                // If known password failed multiple times, go to password input
-                KnownWifiNetwork* net = findKnownNetwork(currentSsidToConnect);
-                if (net && net->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
-                    currentMenu = WIFI_PASSWORD_INPUT;
-                } else {
-                    currentMenu = WIFI_SETUP_MENU; // Otherwise, back to list
-                }
-            } else { // Other failures, or open network failure
-                currentMenu = WIFI_SETUP_MENU;
-            }
-            initializeCurrentMenu();
+      if (millis() > wifiStatusMessageTimeout) {
+        WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
+        if (lastStatus == WIFI_CONNECTED_SUCCESS) {
+          currentMenu = WIFI_SETUP_MENU;
+        } else if (selectedNetworkIsSecure && (lastStatus == WIFI_FAILED_WRONG_PASSWORD || lastStatus == WIFI_FAILED_TIMEOUT)) {
+          KnownWifiNetwork* net = findKnownNetwork(currentSsidToConnect);
+          if (net && net->failCount >= MAX_WIFI_FAIL_ATTEMPTS) {
+            currentMenu = WIFI_PASSWORD_INPUT;
+          } else {
+            currentMenu = WIFI_SETUP_MENU;
+          }
+        } else {
+          currentMenu = WIFI_SETUP_MENU;
+        }
+        initializeCurrentMenu();
+      }
+    }
+
+    // --- Menu Navigation and Selection ---
+    bool criticalOtaUpdateInProgress = false;
+    if (currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE) {
+        if ((otaProgress > 0 && otaProgress < 100) ||
+            (otaProgress == 100 && otaStatusMessage.indexOf("Rebooting") != -1)) {
+            criticalOtaUpdateInProgress = true;
         }
     }
 
-    // Menu Navigation and Selection (from your provided KivaMain.ino)
-    if (!showWifiDisconnectOverlay) {
-      if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
-        if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false;
-        if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
-        if (currentMenu != WIFI_PASSWORD_INPUT) { // Keyboard OK is handled in updateInputs
-            handleMenuSelection();
+    bool allowMenuInput = !criticalOtaUpdateInProgress;
+    if (showWifiDisconnectOverlay) { // PHASE 2: Will add || showWifiRedirectPromptOverlay
+        allowMenuInput = false;
+    }
+
+    if (allowMenuInput) {
+      bool selectionKeyPressed = false; 
+      // encBtnWasForKeyboard is not strictly needed here if updateInputs fully consumes ENC_BTN for keyboard
+      // but the refined logic below for selectionKeyPressed handles it implicitly.
+
+      if (btnPress1[NAV_OK]) {
+        btnPress1[NAV_OK] = false; 
+        selectionKeyPressed = true;
+      }
+      
+      if (btnPress0[ENC_BTN]) {
+        if (currentMenu != WIFI_PASSWORD_INPUT) { // Only treat as selection if not password input
+          btnPress0[ENC_BTN] = false; 
+          selectionKeyPressed = true;
         }
+        // If currentMenu IS WIFI_PASSWORD_INPUT, updateInputs() is responsible for handling
+        // ENC_BTN for keyboard entry and should consume/clear btnPress0[ENC_BTN] there.
+      }
+
+      if (selectionKeyPressed) {
+        handleMenuSelection(); // This is the primary action for OK/Select
       }
 
       if (btnPress1[NAV_BACK]) {
-        btnPress1[NAV_BACK] = false;
+        btnPress1[NAV_BACK] = false; 
         handleMenuBackNavigation();
       }
     }
 
-    // Clear button press flags (from your provided KivaMain.ino, slightly adapted)
-    for (int i = 0; i < 8; ++i) {
-      // ENC_BTN (pcf0[0]) is handled specially for keyboard and overlay confirmation.
-      // It's consumed in updateInputs for keyboard, and in main loop for overlay.
-      // If it reaches here and wasn't consumed, it means it's for a general menu OK.
-      // General menu OK (ENC_BTN) is cleared when handleMenuSelection is called (or if not used).
-      // So, explicit clearing of btnPress0[ENC_BTN] here might be redundant or could interfere
-      // if it's meant to be processed by handleMenuSelection.
-      // Let's keep your original logic for now, but it's a point of attention.
-      if ((currentMenu == WIFI_PASSWORD_INPUT || showWifiDisconnectOverlay) && i == ENC_BTN) {
-          // Don't clear ENC_BTN if it's for keyboard or overlay, it's handled there
-      } else {
-          btnPress0[i] = false; // Clear other PCF0 buttons
-      }
+    // --- General Button Flag Clearing (Safeguards for unconsumed flags) ---
+    // PCF0 buttons (btnPress0):
+    // ENC_BTN is handled/consumed above if it was a selection or by updateInputs for keyboard.
+    // If it's still true here, it was an unhandled press for this cycle.
+    // Other PCF0 buttons (BTN_AI, etc.) should be consumed by their specific action handlers.
+    // If they are one-shot and not consumed, clearing them here is a fallback.
+    if (allowMenuInput && !showWifiDisconnectOverlay /* PHASE 2: && !showWifiRedirectPromptOverlay */) {
+        for (int i = 0; i < 8; ++i) {
+            if (i == ENC_A || i == ENC_B) continue; // Encoder pins A and B are not one-shot buttons
+
+            if (i == ENC_BTN) {
+                // If btnPress0[ENC_BTN] is still true here, it means it wasn't consumed by selection
+                // logic above, nor by keyboard input logic in updateInputs().
+                // This implies it was an unhandled press.
+                if (btnPress0[ENC_BTN]) { // Only clear if still set
+                    // Serial.println("Loop: Clearing unhandled ENC_BTN"); // For debugging
+                    // btnPress0[ENC_BTN] = false; // Decided against aggressive clear here; rely on specific handlers.
+                                                // If it's truly unhandled, it will likely be ignored anyway.
+                                                // The selection logic *should* have caught it.
+                }
+            } else {
+                // For other PCF0 buttons like BTN_AI, BTN_RIGHT1, BTN_RIGHT2:
+                // If these are intended as one-shot actions and are not consumed elsewhere,
+                // clearing them here might be necessary.
+                // Example: btnPress0[i] = false;
+                // For now, assuming they are handled if used, or their persistence is not problematic.
+            }
+        }
     }
 
-    if (!showWifiDisconnectOverlay && currentMenu != WIFI_PASSWORD_INPUT) {
-      // These directional flags are for one-shot presses.
-      // If scrollAct consumes them, fine. If not, they are cleared here.
-      // Auto-repeat logic in updateInputs uses direct pin state, not these flags.
+    // PCF1 D-Pad flags (NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT):
+    // These are cleared in updateInputs() if they cause a scroll action.
+    // This is a safeguard if they were pressed but didn't result in scroll (e.g., at menu limits).
+    if (!showWifiDisconnectOverlay && currentMenu != WIFI_PASSWORD_INPUT && allowMenuInput /* PHASE 2: && !showWifiRedirectPromptOverlay */) {
       btnPress1[NAV_UP] = false;
       btnPress1[NAV_DOWN] = false;
       btnPress1[NAV_LEFT] = false;
       btnPress1[NAV_RIGHT] = false;
+      // NAV_A and NAV_B are typically special function buttons.
+      // Their flags should be consumed where their specific action is handled.
+      // btnPress1[NAV_A] = false; // Example if needed
+      // btnPress1[NAV_B] = false; // Example if needed
     }
-    // NAV_OK and NAV_BACK (btnPress1[NAV_OK] and btnPress1[NAV_BACK]) are cleared
-    // where they are handled (menu selection/back, overlay confirmation/cancel).
 
-    drawUI(); // Draw the full UI in normal operation
+    drawUI();
   }
 
-  // Conditional delay
-  if (!isJammingOperationActive) {
-    delay(16); // Approx 60 FPS for UI
-  } else {
-    delay(JAMMER_CYCLE_DELAY_MS); // Small delay to allow some system tasks if needed during jamming
+  // Conditional delay AT THE END OF THE LOOP
+  if (isJammingOperationActive) {
+    delay(JAMMER_CYCLE_DELAY_MS); // e.g., 1ms
+  } else if (webOtaActive) {
+      // If WebOTA is active, and we are in the upload phase (otaProgress is positive but not 100 or error states)
+      // we need to be extremely responsive.
+      if (otaProgress > 0 && otaProgress < 100) { // Check if upload/flash is in progress
+          delay(0); // Effectively yield(), ensuring handleClient() is called very frequently.
+      } else {
+          delay(1); // Still very responsive for other WebOTA states (server idle, post-flash)
+      }
+  } else if (basicOtaStarted) {
+    delay(1); // Basic OTA also needs frequent handling
+  }
+  else {
+    delay(16); // Normal loop delay for UI responsiveness
   }
 }

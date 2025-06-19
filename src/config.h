@@ -73,6 +73,15 @@
 #define INPUT_POLL_INTERVAL_JAMMING 2000UL  // ms <--- MAKE SURE THIS IS PRESENT
 #define JAMMER_CYCLE_DELAY_MS 1             // ms, delay in jamming loop <--- MAKE SURE THIS IS PRESENT
 
+// === OTA Specific Constants ===
+#define OTA_WEB_SERVER_PORT 80
+#define OTA_HOSTNAME "kiva-device"
+#define FIRMWARE_DIR_PATH "/firmware" // For storing .bin and .kfw files
+#define SYSTEM_INFO_DIR_PATH "/system" // For system related info like current firmware
+#define CURRENT_FIRMWARE_INFO_FILENAME (SYSTEM_INFO_DIR_PATH "/current_fw.json")
+#define FIRMWARE_METADATA_EXTENSION ".kfw" // Kiva FirmWare metadata
+#define MAX_FIRMWARES_ON_SD 10 // Max firmwares to list from SD
+
 // === Menu System ===
 enum MenuState {
   MAIN_MENU,
@@ -86,8 +95,12 @@ enum MenuState {
   WIFI_PASSWORD_INPUT,
   WIFI_CONNECTING,
   WIFI_CONNECTION_INFO,
-  JAMMING_ACTIVE_SCREEN // <--- NEW
-  // WIFI_DISCONNECT_OVERLAY, // Not using a state, using a flag instead
+  JAMMING_ACTIVE_SCREEN,
+  FIRMWARE_UPDATE_GRID,
+  FIRMWARE_SD_LIST_MENU, // <--- NEW: Lists firmware from SD
+  OTA_WEB_ACTIVE,
+  OTA_SD_STATUS,
+  OTA_BASIC_ACTIVE
 };
 
 // --- Extern Global Variables ---
@@ -111,7 +124,21 @@ extern uint8_t pcf0Output;
 // --- NEW EXTERN DECLARATIONS FOR INTERVALS ---
 extern unsigned long currentBatteryCheckInterval;
 extern unsigned long currentInputPollInterval;
-extern int lastSelectedJammingToolGridIndex; // <--- NEW EXTERN
+extern int lastSelectedJammingToolGridIndex;
+
+// --- Extern OTA Global Variables ---
+// extern WebServer otaWebServer;
+extern int otaProgress;
+extern String otaStatusMessage;
+extern bool otaIsUndoingChanges;
+extern bool basicOtaStarted;
+extern bool webOtaActive;
+extern char otaDisplayIpAddress[16];
+// extern struct FirmwareInfo currentRunningFirmware; // Forward declaration or include firmware_metadata.h
+// extern struct FirmwareInfo availableSdFirmwares[MAX_FIRMWARES_ON_SD]; // Forward declaration
+// extern int availableSdFirmwareCount; // Forward declaration
+// Best to include firmware_metadata.h if struct definition is needed here.
+// For now, these specific externs will be in ota_manager.h and KivaMain.ino
 
 // --- UI Layout Constants ---
 #define GRID_ITEM_H 18
@@ -119,6 +146,7 @@ extern int lastSelectedJammingToolGridIndex; // <--- NEW EXTERN
 #define GRID_ITEM_PADDING_X 4
 #define STATUS_BAR_H 11
 #define WIFI_LIST_ITEM_H 18
+#define FW_LIST_ITEM_H 18
 
 #define PASSWORD_INPUT_FIELD_Y 30
 #define PASSWORD_INPUT_FIELD_H 12
@@ -139,6 +167,7 @@ struct WifiNetwork {
   int8_t rssi;
   bool isSecure;
 };
+
 extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
 extern int foundWifiNetworksCount;
 extern int wifiMenuIndex;

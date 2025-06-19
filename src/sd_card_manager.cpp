@@ -9,14 +9,12 @@ bool setupSdCard() {
         return false;
     }
     uint8_t cardType = SD.cardType();
-
     if (cardType == CARD_NONE) {
         Serial.println("SD Card: No SD card attached");
         sdCardInitialized = false;
         return false;
     }
-
-    sdCardInitialized = true; // Set true early, so other SD functions can be called if needed by createSdDir
+    sdCardInitialized = true;
 
     Serial.print("SD Card: Type: ");
     if (cardType == CARD_MMC) Serial.println("MMC");
@@ -26,34 +24,34 @@ bool setupSdCard() {
 
     uint64_t cardSize = SD.cardSize() / (1024 * 1024);
     Serial.printf("SD Card: Size: %lluMB\n", cardSize);
-    Serial.printf("SD Card: Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
-    Serial.printf("SD Card: Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
 
 
-    // --- Create Standard Top-Level Directories if they don't exist ---
     Serial.println("SD Card: Checking/Creating standard directories...");
     const char* directoriesToEnsure[] = {
         WIFI_DIR, 
         MUSIC_DIR, 
         CAPTURES_DIR, 
         LOGS_DIR, 
-        SETTINGS_DIR
+        SETTINGS_DIR,
+        SYSTEM_INFO_DIR_PATH,      // <--- NEW
+        FIRMWARE_DIR_PATH          // <--- NEW
     };
     for (const char* dirPath : directoriesToEnsure) {
         if (!SD.exists(dirPath)) {
             Serial.printf("SD Card: Directory %s does not exist. Creating...\n", dirPath);
-            if (createSdDir(dirPath)) { // createSdDir already has logging
+            if (createSdDir(dirPath)) {
                 // Successfully created
             } else {
-                Serial.printf("SD Card: Failed to create directory %s. SD operations might be unreliable.\n", dirPath);
-                // Potentially set sdCardInitialized to false here if base dirs are critical
+                Serial.printf("SD Card: Failed to create directory %s.\n", dirPath);
+                // This might be critical for some dirs like /system or /firmware
+                if (strcmp(dirPath, SYSTEM_INFO_DIR_PATH) == 0 || strcmp(dirPath, FIRMWARE_DIR_PATH) == 0) {
+                     Serial.println("SD Card: Critical directory creation failed. OTA/System functions might be affected.");
+                     // sdCardInitialized = false; // Optionally mark SD as unusable
+                }
             }
-        } else {
-            // Serial.printf("SD Card: Directory %s already exists.\n", dirPath);
         }
     }
     
-    // Specifically ensure the handshakes directory exists if captures exists
     if (SD.exists(CAPTURES_DIR)) {
         if (!SD.exists(HANDSHAKES_DIR)) {
             Serial.printf("SD Card: Directory %s does not exist. Creating...\n", HANDSHAKES_DIR);
@@ -62,7 +60,7 @@ bool setupSdCard() {
     }
 
     Serial.println("SD Card: Standard directory check complete.");
-    return sdCardInitialized; // Return the final status
+    return sdCardInitialized;
 }
 
 bool isSdCardAvailable() {
