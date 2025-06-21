@@ -219,7 +219,6 @@ void drawWifiSignalStrength(int x, int y_icon_top, int8_t rssi) {
 
 
 void drawWifiSetupScreen() {
-  // ... (Implementation unchanged) ...
   const int list_start_y_abs = STATUS_BAR_H + 1;
   const int list_visible_height = u8g2.getDisplayHeight() - list_start_y_abs;
   const int item_row_h = WIFI_LIST_ITEM_H;
@@ -227,56 +226,99 @@ void drawWifiSetupScreen() {
   const int content_padding_x = 4;
 
   u8g2.setClipWindow(0, list_start_y_abs, u8g2.getDisplayWidth(), u8g2.getDisplayHeight());
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setDrawColor(1);
 
-  float target_scroll_for_centering = 0;
-  if (maxMenuItems > 0 && (maxMenuItems * item_row_h > list_visible_height)) {
-    target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
-    if (target_scroll_for_centering < 0) target_scroll_for_centering = 0;
-    float max_scroll_val = (maxMenuItems * item_row_h) - list_visible_height;
-    if (max_scroll_val < 0) max_scroll_val = 0;
-    if (target_scroll_for_centering > max_scroll_val) {
-      target_scroll_for_centering = max_scroll_val;
-    }
-  }
-  float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
-  if (abs(scrollDiff) > 0.1f) {
-    currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
-  } else {
-    currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
-  }
+  const char* statusMsg = getWifiStatusMessage();
 
-
+  // --- Phase 1: Display exclusive status messages if applicable ---
   if (!wifiHardwareEnabled) {
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.setDrawColor(1);
-    const char* offMsg = getWifiStatusMessage();
-    int msgWidth = u8g2.getStrWidth(offMsg);
+    int msgWidth = u8g2.getStrWidth(statusMsg);  // Should be "Wi-Fi Off"
     int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
-    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, offMsg);
+    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, statusMsg);
+    u8g2.setMaxClipWindow();  // Reset clip window before returning
+    return;
   } else if (wifiIsScanning) {
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.setDrawColor(1);
-    const char* scanMsg = getWifiStatusMessage();
-    int msgWidth = u8g2.getStrWidth(scanMsg);
+    int msgWidth = u8g2.getStrWidth(statusMsg);  // Should be "Scanning..."
     int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
-    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, scanMsg);
-  } else {
-    wifiListAnim.update();
-    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, statusMsg);
+    u8g2.setMaxClipWindow();  // Reset clip window before returning
+    return;
+  }
+  // No early return from here if not off or scanning. Proceed to draw message and/or list.
 
-    if (foundWifiNetworksCount == 0 && maxMenuItems <= 2) {
-      u8g2.setDrawColor(1);
-      const char* noNetMsg = getWifiStatusMessage();
-      int msgWidth = u8g2.getStrWidth(noNetMsg);
-      int text_y_pos = list_start_y_abs + (list_visible_height - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
-      u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos, noNetMsg);
+  // --- Phase 1.5: Display "Scan Failed" or "No Networks" message if applicable, positioned carefully ---
+  bool specialMessageDisplayed = false;
+  if (wifiHardwareEnabled && !wifiIsScanning && foundWifiNetworksCount == 0 && (strcmp(statusMsg, "Scan Failed") == 0 || strcmp(statusMsg, "No Networks") == 0)) {
+    // MaxMenuItems will be 2 here ("Scan Again", "Back"), set by initializeCurrentMenu
+    int msgWidth = u8g2.getStrWidth(statusMsg);
+    // Position this message. If there are items ("Scan Again", "Back"), they will be drawn by the main loop.
+    // Let's position it in the upper part of the list area.
+    int text_y_pos_status = list_start_y_abs + item_row_h / 2 + u8g2.getAscent();  // Example: Centered in first potential item slot
+    if (list_visible_height < 3 * item_row_h) {                                    // If very little space
+      text_y_pos_status = list_start_y_abs + (list_visible_height / 3) + u8g2.getAscent();
     }
+    // Ensure message Y doesn't interfere if items are drawn starting at currentWifiListScrollOffset_Y_anim = 0
+    if (maxMenuItems > 0) {                                                            // If "Scan Again" / "Back" will be drawn
+      int firstItemTopY = list_start_y_abs - (int)currentWifiListScrollOffset_Y_anim;  // Simplified, assuming item 0
+      if (text_y_pos_status > firstItemTopY - 5) {                                     // If message might overlap item 0's text
+                                                                                       // Push message higher, or adjust item drawing area.
+                                                                                       // For simplicity, let's assume items will be drawn below this.
+                                                                                       // This Y might need fine-tuning based on how items are drawn below.
+      }
+    }
+    u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, text_y_pos_status, statusMsg);
+    specialMessageDisplayed = true;
+  }
 
+  // --- Phase 2: Draw the list of networks (or "Scan Again" / "Back") ---
+  // This part runs if Wi-Fi is ON, NOT scanning.
+  // Scroll animation
+  if (maxMenuItems > 0) {
+    float target_scroll_for_centering = 0;
+    if ((maxMenuItems * item_row_h > list_visible_height)) {
+      target_scroll_for_centering = (wifiMenuIndex * item_row_h) - (list_visible_height / 2) + (item_row_h / 2);
+      if (target_scroll_for_centering < 0) target_scroll_for_centering = 0;
+      float max_scroll_val = (maxMenuItems * item_row_h) - list_visible_height;
+      if (max_scroll_val < 0) max_scroll_val = 0;
+      if (target_scroll_for_centering > max_scroll_val) {
+        target_scroll_for_centering = max_scroll_val;
+      }
+    }
+    float scrollDiff = target_scroll_for_centering - currentWifiListScrollOffset_Y_anim;
+    if (abs(scrollDiff) > 0.1f) {
+      currentWifiListScrollOffset_Y_anim += scrollDiff * GRID_ANIM_SPEED * 0.016f;
+    } else {
+      currentWifiListScrollOffset_Y_anim = target_scroll_for_centering;
+    }
+    wifiListAnim.update();
+  } else {
+    currentWifiListScrollOffset_Y_anim = 0;
+  }
+
+  // Draw list items
+  if (maxMenuItems > 0) {
+    // If a special message like "Scan Failed" was drawn, and we have few items (e.g. "Scan Again", "Back"),
+    // we might want to adjust the starting Y of these items to be below the message.
+    // For now, let's assume the currentWifiListScrollOffset_Y_anim and item positioning handles this.
+    // If specialMessageDisplayed is true, the items are "Scan Again" and "Back".
+    // Their `i` will be 0 and 1, mapping to foundWifiNetworksCount and foundWifiNetworksCount + 1 respectively.
 
     for (int i = 0; i < maxMenuItems; i++) {
       int item_center_y_in_full_list = (i * item_row_h) + (item_row_h / 2);
+      // If specialMessageDisplayed, and drawing "Scan Again" / "Back", start them lower.
+      // This offset is ad-hoc, might need better calculation based on message height.
+      int y_offset_due_to_message = 0;
+      if (specialMessageDisplayed && foundWifiNetworksCount == 0) {
+        y_offset_due_to_message = item_row_h + 5;  // Push items down by roughly one row + padding
+      }
+
+      item_center_y_in_full_list += y_offset_due_to_message;
+
+
       int item_center_on_screen_y = list_start_y_abs + item_center_y_in_full_list - (int)currentWifiListScrollOffset_Y_anim;
       int item_top_on_screen_y = item_center_on_screen_y - item_row_h / 2;
+
 
       if (item_top_on_screen_y + item_row_h < list_start_y_abs || item_top_on_screen_y >= u8g2.getDisplayHeight()) {
         continue;
@@ -307,7 +349,6 @@ void drawWifiSetupScreen() {
           displayText = scannedNetworks[i].ssid;
         }
         currentItemTextPtr = displayText.c_str();
-
         currentRssi = scannedNetworks[i].rssi;
         currentIsSecure = scannedNetworks[i].isSecure;
         isNetworkItem = true;
@@ -327,7 +368,6 @@ void drawWifiSetupScreen() {
       if (isNetworkItem) {
         drawWifiSignalStrength(current_content_x, icon_y_center_for_draw - 4, currentRssi);
         current_content_x += 12;
-
         if (currentIsSecure) {
           int lock_body_start_x = current_content_x;
           int body_top_y = icon_y_center_for_draw - 3;
@@ -348,7 +388,7 @@ void drawWifiSetupScreen() {
 
       int text_x_start = current_content_x;
       int text_available_width = u8g2.getDisplayWidth() - text_x_start - content_padding_x - item_padding_x;
-      int text_baseline_y = item_center_on_screen_y - (u8g2.getAscent() + u8g2.getDescent()) / 2 + u8g2.getAscent();
+      int text_baseline_y = item_top_on_screen_y + (item_row_h - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
 
       if (is_selected_item && isNetworkItem) {
         updateMarquee(text_available_width, currentItemTextPtr);
@@ -364,6 +404,7 @@ void drawWifiSetupScreen() {
       }
     }
   }
+
   u8g2.setDrawColor(1);
   u8g2.setMaxClipWindow();
 }
@@ -374,9 +415,9 @@ void drawPasswordInputScreen() {
 
   char ssidTitle[40];
   snprintf(ssidTitle, sizeof(ssidTitle), "Enter Pass for:");
-  u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle); // Y position for "Enter Pass for:"
+  u8g2.drawStr(2, 7 + STATUS_BAR_H, ssidTitle);  // Y position for "Enter Pass for:"
 
-  char truncatedSsid[22]; // Assuming max 21 chars + null for SSID display here
+  char truncatedSsid[22];  // Assuming max 21 chars + null for SSID display here
   strncpy(truncatedSsid, currentSsidToConnect, sizeof(truncatedSsid) - 1);
   truncatedSsid[sizeof(truncatedSsid) - 1] = '\0';
   // Truncate if too long for display
@@ -386,24 +427,24 @@ void drawPasswordInputScreen() {
     strncpy(truncatedSsid, tempTrunc, sizeof(truncatedSsid) - 1);
     truncatedSsid[sizeof(truncatedSsid) - 1] = '\0';
   }
-  int ssidTextY = 19 + STATUS_BAR_H; // Y position for the SSID itself
+  int ssidTextY = 19 + STATUS_BAR_H;  // Y position for the SSID itself
   u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, ssidTextY, truncatedSsid);
 
   // Define field properties
   int fieldX = 5;
   // int fieldY = PASSWORD_INPUT_FIELD_Y; // Original
-  int fieldY = PASSWORD_INPUT_FIELD_Y + 5; // MODIFIED: Moved down by 5 pixels
+  int fieldY = PASSWORD_INPUT_FIELD_Y + 5;  // MODIFIED: Moved down by 5 pixels
   int fieldW = u8g2.getDisplayWidth() - 10;
   int fieldH = PASSWORD_INPUT_FIELD_H;
 
   // Ensure fieldY doesn't push it too far down, adjust if necessary
   // For example, if it collides with the instruction text at the bottom:
-  int instructionTextY_approx = u8g2.getDisplayHeight() - 2 - u8g2.getAscent(); // Approximate top of instruction text
-  if (fieldY + fieldH > instructionTextY_approx - 2) { // If field bottom is too close to instruction top
-      fieldY = instructionTextY_approx - fieldH - 2; // Adjust upwards slightly
-      if (fieldY < ssidTextY + u8g2.getAscent() + 2) { // Ensure it's still below SSID text
-          fieldY = ssidTextY + u8g2.getAscent() + 2;
-      }
+  int instructionTextY_approx = u8g2.getDisplayHeight() - 2 - u8g2.getAscent();  // Approximate top of instruction text
+  if (fieldY + fieldH > instructionTextY_approx - 2) {                           // If field bottom is too close to instruction top
+    fieldY = instructionTextY_approx - fieldH - 2;                               // Adjust upwards slightly
+    if (fieldY < ssidTextY + u8g2.getAscent() + 2) {                             // Ensure it's still below SSID text
+      fieldY = ssidTextY + u8g2.getAscent() + 2;
+    }
   }
 
 
@@ -418,7 +459,7 @@ void drawPasswordInputScreen() {
   // Adjust textY to be vertically centered within the new fieldY
   int textY = fieldY + (fieldH - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
 
-  int maxPassDisplayLengthChars = (fieldW - 6) / u8g2.getStrWidth("*"); 
+  int maxPassDisplayLengthChars = (fieldW - 6) / u8g2.getStrWidth("*");
   if (maxPassDisplayLengthChars < 1) maxPassDisplayLengthChars = 1;
 
   int passDisplayStartIdx = 0;
@@ -426,14 +467,14 @@ void drawPasswordInputScreen() {
     passDisplayStartIdx = wifiPasswordInputCursor - maxPassDisplayLengthChars + 1;
   }
 
-  char displaySegment[maxPassDisplayLengthChars + 2]; // +1 for potential char, +1 for null
+  char displaySegment[maxPassDisplayLengthChars + 2];  // +1 for potential char, +1 for null
   strncpy(displaySegment, maskedPassword + passDisplayStartIdx, maxPassDisplayLengthChars);
-  displaySegment[maxPassDisplayLengthChars] = '\0'; // Ensure null termination
+  displaySegment[maxPassDisplayLengthChars] = '\0';  // Ensure null termination
   u8g2.drawStr(textX, textY, displaySegment);
 
   // Calculate cursor X position relative to the start of the displayed segment
   int cursorDisplayPosInSegment = wifiPasswordInputCursor - passDisplayStartIdx;
-  int cursorX = textX; 
+  int cursorX = textX;
   if (cursorDisplayPosInSegment > 0) {
     // Create a substring of the *displayed* segment up to the cursor
     char tempCursorSubstr[maxPassDisplayLengthChars + 1];
@@ -450,7 +491,7 @@ void drawPasswordInputScreen() {
   // Instruction text at the bottom (unchanged logic, but its position might influence fieldY adjustment)
   u8g2.setFont(u8g2_font_5x7_tf);
   const char* instrOriginal = "See aux display for keyboard";
-  int instrY = u8g2.getDisplayHeight() - 2; 
+  int instrY = u8g2.getDisplayHeight() - 2;
   int availableInstrWidth = u8g2.getDisplayWidth() - 4;
 
   updateMarquee(availableInstrWidth, instrOriginal);
@@ -576,145 +617,202 @@ void drawWifiConnectingStatusScreen() {
   snprintf(connectingMsg, sizeof(connectingMsg), "Please wait%s", ellipsis);
   u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(connectingMsg)) / 2, 50, connectingMsg);
 }
-
 void drawWifiConnectionResultScreen() {
-  // ... (Implementation unchanged) ...
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.setDrawColor(1);
 
-  const char* resultMsg = getWifiStatusMessage();
-
-  int msgWidth = u8g2.getStrWidth(resultMsg);
-  u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, 32, resultMsg);
+  const char* resultMsgFull = getWifiStatusMessage();
+  int iconY = 10;
+  int textYBase = 32 + 7;  // Shifted down by 7 pixels from original 32
 
   WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
+
   if (lastStatus == WIFI_CONNECTED_SUCCESS) {
-    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, 10, 3, true);
-  } else {
-    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, 10, 11, true);
+    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 3, true);  // Success icon
+
+    String connectedPrefix = "Connected: ";
+    String ssidName = "";
+
+    // Extract SSID name from the full message "Connected: ActualSSID"
+    if (String(resultMsgFull).startsWith(connectedPrefix)) {
+      ssidName = String(resultMsgFull).substring(connectedPrefix.length());
+    } else {
+      // Fallback: display full message if parsing fails (should ideally not happen for success)
+      int msgWidth = u8g2.getStrWidth(resultMsgFull);
+      if (msgWidth > u8g2.getDisplayWidth() - 4) {
+        char* truncatedMsg = truncateText(resultMsgFull, u8g2.getDisplayWidth() - 4, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg)) / 2, textYBase, truncatedMsg);
+      } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, textYBase, resultMsgFull);
+      }
+      return;
+    }
+
+    int prefixWidth = u8g2.getStrWidth(connectedPrefix.c_str());
+    int ssidNameWidth = u8g2.getStrWidth(ssidName.c_str());
+    int availableWidth = u8g2.getDisplayWidth() - 4;  // Usable width for text
+
+    // Check if the prefix plus a space plus the SSID name fits on one line
+    if (prefixWidth + 1 /* for space */ + ssidNameWidth > availableWidth && prefixWidth < availableWidth) {
+      // Word wrap: Display "Connected:" on the first line
+      u8g2.drawStr((u8g2.getDisplayWidth() - prefixWidth) / 2, textYBase, connectedPrefix.c_str());
+
+      // Display SSID on the second line
+      int ssidTextY = textYBase + 10;        // Approx line height for 6x10 font
+      if (ssidNameWidth > availableWidth) {  // If SSID itself is too long for one line
+        char* truncatedSsid = truncateText(ssidName.c_str(), availableWidth, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedSsid)) / 2, ssidTextY, truncatedSsid);
+      } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - ssidNameWidth) / 2, ssidTextY, ssidName.c_str());
+      }
+    } else {  // Fits on one line, or prefix itself is too long (truncate the whole original message)
+      int fullMsgWidth = u8g2.getStrWidth(resultMsgFull);
+      if (fullMsgWidth > availableWidth) {
+        char* truncatedFullMsg = truncateText(resultMsgFull, availableWidth, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedFullMsg)) / 2, textYBase, truncatedFullMsg);
+      } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - fullMsgWidth) / 2, textYBase, resultMsgFull);
+      }
+    }
+
+  } else {                                                            // Error case
+    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 11, true);  // Error icon
+    int msgWidth = u8g2.getStrWidth(resultMsgFull);
+    // For error messages, just display as before but shifted down
+    if (msgWidth > u8g2.getDisplayWidth() - 4) {
+      char* truncatedMsg = truncateText(resultMsgFull, u8g2.getDisplayWidth() - 4, u8g2);
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg)) / 2, textYBase, truncatedMsg);
+    } else {
+      u8g2.drawStr((u8g2.getDisplayWidth() - msgWidth) / 2, textYBase, resultMsgFull);
+    }
   }
 }
 
-void drawWifiDisconnectOverlay() {
+void drawPromptOverlay() {  // WAS drawWifiDisconnectOverlay
   // --- Animation Update ---
-  if (disconnectOverlayAnimatingIn) {
-    float diff = disconnectOverlayTargetScale - disconnectOverlayCurrentScale;
+  if (promptOverlayAnimatingIn) {  // Use new variable names
+    float diff = promptOverlayTargetScale - promptOverlayCurrentScale;
     if (abs(diff) > 0.01f) {
-      // Using a slightly faster animation speed for the overlay pop-up
-      disconnectOverlayCurrentScale += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f;
-      if ((diff > 0 && disconnectOverlayCurrentScale > disconnectOverlayTargetScale) || (diff < 0 && disconnectOverlayCurrentScale < disconnectOverlayTargetScale)) {
-        disconnectOverlayCurrentScale = disconnectOverlayTargetScale;
+      promptOverlayCurrentScale += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f;
+      if ((diff > 0 && promptOverlayCurrentScale > promptOverlayTargetScale) || (diff < 0 && promptOverlayCurrentScale < promptOverlayTargetScale)) {
+        promptOverlayCurrentScale = promptOverlayTargetScale;
       }
     } else {
-      disconnectOverlayCurrentScale = disconnectOverlayTargetScale;
-      disconnectOverlayAnimatingIn = false;  // Animation finished
+      promptOverlayCurrentScale = promptOverlayTargetScale;
+      promptOverlayAnimatingIn = false;
     }
   }
 
-  if (disconnectOverlayCurrentScale <= 0.05f && !disconnectOverlayAnimatingIn) return;  // Don't draw if effectively invisible and not animating
+  if (promptOverlayCurrentScale <= 0.05f && !promptOverlayAnimatingIn) return;
 
-  // --- Base (Final) Dimensions & Position ---
-  int baseOverlayWidth = 100;
-  int baseOverlayHeight = 50;  // Slightly increased height for better spacing
-  int baseOverlayX = (u8g2.getDisplayWidth() - baseOverlayWidth) / 2;
-  int baseOverlayY = (u8g2.getDisplayHeight() - baseOverlayHeight) / 2;
+  int baseOverlayWidth = 110;  // Slightly wider for more generic text
+  int baseOverlayHeight = 55;  // Adjusted height
 
-  // Ensure it's below the status bar
-  int minOverlayY = STATUS_BAR_H + 3;  // 3px margin below status bar
-  baseOverlayY = max(baseOverlayY, minOverlayY);
+  int animatedOverlayWidth = (int)(baseOverlayWidth * promptOverlayCurrentScale);
+  int animatedOverlayHeight = (int)(baseOverlayHeight * promptOverlayCurrentScale);
+  if (animatedOverlayWidth < 1 || animatedOverlayHeight < 1) return;
 
-  // --- Animated Dimensions & Positions (scaling from center) ---
-  int animatedOverlayWidth = (int)(baseOverlayWidth * disconnectOverlayCurrentScale);
-  int animatedOverlayHeight = (int)(baseOverlayHeight * disconnectOverlayCurrentScale);
-  if (animatedOverlayWidth < 1 || animatedOverlayHeight < 1) return;  // Don't draw if too small
+  int drawX = (u8g2.getDisplayWidth() - baseOverlayWidth) / 2 + (baseOverlayWidth - animatedOverlayWidth) / 2;
+  int drawY = (u8g2.getDisplayHeight() - baseOverlayHeight) / 2 + (baseOverlayHeight - animatedOverlayHeight) / 2;
+  drawY = max(drawY, STATUS_BAR_H + 3);
 
-  int drawX = baseOverlayX + (baseOverlayWidth - animatedOverlayWidth) / 2;
-  int drawY = baseOverlayY + (baseOverlayHeight - animatedOverlayHeight) / 2;
 
-  // --- Drawing ---
   int padding = 4;
   u8g2.setFont(u8g2_font_6x10_tf);
   int fontAscent = u8g2.getAscent();
-  int textLineHeight = fontAscent + 3;  // Ascent + small gap
+  int textLineHeight = fontAscent + 2;  // Slightly tighter
 
-  // 1. Draw the black border (slightly larger than the white box if desired, or same size)
-  // For a simple pop-out, we'll draw the white box, then a black frame around it.
-  // To make it look like a black border *around* a white box:
-  // Draw black frame, then slightly smaller white filled box.
-  // Or, simpler: draw white filled box, then black frame of same size.
-
-  // Draw filled white background
-  u8g2.setDrawColor(1);  // White
+  u8g2.setDrawColor(1);
   u8g2.drawRBox(drawX, drawY, animatedOverlayWidth, animatedOverlayHeight, 3);
-
-  // Draw black border around the white box
-  u8g2.setDrawColor(0);  // Black
+  u8g2.setDrawColor(0);
   u8g2.drawRFrame(drawX, drawY, animatedOverlayWidth, animatedOverlayHeight, 3);
 
-
-  // Only draw content if the overlay is mostly scaled up
-  if (disconnectOverlayCurrentScale > 0.9f) {
-    u8g2.setDrawColor(0);  // Black text on white background
+  if (promptOverlayCurrentScale > 0.9f) {
+    u8g2.setDrawColor(0);
 
     // Title
-    const char* title = "Disconnect";
-    int titleX = drawX + (animatedOverlayWidth - u8g2.getStrWidth(title)) / 2;
+    int titleX = drawX + (animatedOverlayWidth - u8g2.getStrWidth(promptOverlayTitle)) / 2;
     int titleY = drawY + padding + fontAscent;
-    u8g2.drawStr(titleX, titleY, title);
+    u8g2.drawStr(titleX, titleY, promptOverlayTitle);
 
-    // SSID (truncated)
-    char truncatedSsid[18];
-    truncateText(currentSsidToConnect, animatedOverlayWidth - 2 * padding - 4, u8g2);
-    strncpy(truncatedSsid, SBUF, sizeof(truncatedSsid) - 1);
-    truncatedSsid[sizeof(truncatedSsid) - 1] = '\0';
-    int ssidX = drawX + (animatedOverlayWidth - u8g2.getStrWidth(truncatedSsid)) / 2;
-    int ssidY = titleY + textLineHeight;
-    u8g2.drawStr(ssidX, ssidY, truncatedSsid);
+    // Message (potentially two lines)
+    String msgStr = promptOverlayMessage;
+    String msgLine1 = msgStr;
+    String msgLine2 = "";
+    int msgMaxPixelWidth = animatedOverlayWidth - 2 * padding - 4;
 
-    // Options (X and O)
-    int optionTextY = drawY + animatedOverlayHeight - padding - fontAscent - 1;
-    int optionBoxY = optionTextY - fontAscent - 2;  // Top of option boxes
+    if (u8g2.getStrWidth(msgStr.c_str()) > msgMaxPixelWidth) {
+      // Attempt to split message smartly
+      int breakPt = -1;
+      for (int k = msgStr.length() / 2; k < msgStr.length(); ++k) {
+        if (msgStr.charAt(k) == ' ') {
+          breakPt = k;
+          break;
+        }
+      }
+      if (breakPt == -1)
+        for (int k = msgStr.length() / 2 - 1; k >= 0; --k) {
+          if (msgStr.charAt(k) == ' ') {
+            breakPt = k;
+            break;
+          }
+        }
 
-    const char* cancelText = "X";
-    const char* confirmText = "O";
-    int cancelWidth = u8g2.getStrWidth(cancelText);
-    int confirmWidth = u8g2.getStrWidth(confirmText);
-    int optionBoxWidth = max(cancelWidth, confirmWidth) + 12;
-    int optionBoxHeight = fontAscent + 4;  // Box height based on font ascent + padding
+      if (breakPt != -1) {
+        msgLine1 = msgStr.substring(0, breakPt);
+        msgLine2 = msgStr.substring(breakPt + 1);
+      } else {  // Hard split if no space
+        int approxChars = msgMaxPixelWidth / u8g2.getMaxCharWidth();
+        if (approxChars > 0 && msgStr.length() > approxChars) {
+          msgLine1 = msgStr.substring(0, approxChars);
+          msgLine2 = msgStr.substring(approxChars);
+        }
+      }
+    }
+    int msgY1 = titleY + textLineHeight;
+    u8g2.drawStr(drawX + (animatedOverlayWidth - u8g2.getStrWidth(msgLine1.c_str())) / 2, msgY1, msgLine1.c_str());
+    if (msgLine2.length() > 0) {
+      int msgY2 = msgY1 + textLineHeight;
+      u8g2.drawStr(drawX + (animatedOverlayWidth - u8g2.getStrWidth(msgLine2.c_str())) / 2, msgY2, msgLine2.c_str());
+    }
 
-    // Calculate X positions for centered options
-    int totalOptionsWidth = 2 * optionBoxWidth + 10;  // 10px spacing between options
+
+    // Options
+    int optionTextY = drawY + animatedOverlayHeight - padding - fontAscent - 1;  // Baseline for text
+    int optionBoxY = optionTextY - fontAscent - 2;
+
+    int opt0Width = u8g2.getStrWidth(promptOverlayOption0Text);
+    int opt1Width = u8g2.getStrWidth(promptOverlayOption1Text);
+    int optionBoxWidth = max(opt0Width, opt1Width) + 12;  // Ensure enough padding
+    int optionBoxHeight = fontAscent + 4;
+
+    int totalOptionsWidth = 2 * optionBoxWidth + 10;  // 10px spacing
     int optionsStartX = drawX + (animatedOverlayWidth - totalOptionsWidth) / 2;
 
-    int cancelBoxX = optionsStartX;
-    int confirmBoxX = optionsStartX + optionBoxWidth + 10;
+    int opt0BoxX = optionsStartX;
+    int opt1BoxX = optionsStartX + optionBoxWidth + 10;
 
-
-    // Draw Cancel (X)
-    if (disconnectOverlaySelection == 0) {  // Highlight Cancel
-      u8g2.setDrawColor(0);                 // Black filled box for selection
-      u8g2.drawRBox(cancelBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
-      u8g2.setDrawColor(1);  // White text on black selection
-      u8g2.drawStr(cancelBoxX + (optionBoxWidth - cancelWidth) / 2, optionTextY, cancelText);
+    // Draw Option 0 (Cancel/No)
+    if (promptOverlaySelection == 0) {
+      u8g2.setDrawColor(0);
+      u8g2.drawRBox(opt0BoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+      u8g2.setDrawColor(1);
     } else {
-      u8g2.setDrawColor(0);  // Black frame for non-selected
-      u8g2.drawRFrame(cancelBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
-      u8g2.drawStr(cancelBoxX + (optionBoxWidth - cancelWidth) / 2, optionTextY, cancelText);
+      u8g2.setDrawColor(0);
+      u8g2.drawRFrame(opt0BoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
     }
+    u8g2.drawStr(opt0BoxX + (optionBoxWidth - opt0Width) / 2, optionTextY, promptOverlayOption0Text);
 
-    // Draw Confirm (O)
-    u8g2.setDrawColor(0);                   // Ensure black for elements on white bg before checking selection
-    if (disconnectOverlaySelection == 1) {  // Highlight Confirm
-      u8g2.drawRBox(confirmBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
-      u8g2.setDrawColor(1);  // White text on black selection
-      u8g2.drawStr(confirmBoxX + (optionBoxWidth - confirmWidth) / 2, optionTextY, confirmText);
+    // Draw Option 1 (Confirm/Yes)
+    u8g2.setDrawColor(0);  // Reset for frame or fill
+    if (promptOverlaySelection == 1) {
+      u8g2.drawRBox(opt1BoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
+      u8g2.setDrawColor(1);
     } else {
-      u8g2.drawRFrame(confirmBoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
-      u8g2.drawStr(confirmBoxX + (optionBoxWidth - confirmWidth) / 2, optionTextY, confirmText);
+      u8g2.drawRFrame(opt1BoxX, optionBoxY, optionBoxWidth, optionBoxHeight, 2);
     }
+    u8g2.drawStr(opt1BoxX + (optionBoxWidth - opt1Width) / 2, optionTextY, promptOverlayOption1Text);
   }
-
-  // Reset draw color to white for elements outside the overlay
   u8g2.setDrawColor(1);
 }
 
@@ -768,82 +866,82 @@ void drawOtaStatusScreen() {
   else if (currentMenu == OTA_BASIC_ACTIVE) title = "Basic OTA (IDE)";
 
   int currentY = STATUS_BAR_H + 6;
-  bool statusBarWasDrawn = !(currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || currentMenu == JAMMING_ACTIVE_SCREEN || currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE);
-  if (!statusBarWasDrawn) {
-    currentY = 8;
+  // ... (status bar check) ...
+  if (!(currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || currentMenu == JAMMING_ACTIVE_SCREEN || currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE)) {
+    // This condition seems inverted or complex, but assuming it sets currentY correctly if status bar not drawn
+  } else {
+    currentY = 8;  // Simplified: if status bar not drawn, start title lower
   }
+
 
   int titleWidth = u8g2.getStrWidth(title);
   u8g2.drawStr((u8g2.getDisplayWidth() - titleWidth) / 2, currentY, title);
   currentY += 12;
 
-  // --- Display IP and Password (if Web OTA AP mode) ---
-  if (currentMenu == OTA_WEB_ACTIVE && strlen(otaDisplayIpAddress) > 0) {
+  // --- Display IP and Password (Unified logic for Web and Basic OTA) ---
+  if ((currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_BASIC_ACTIVE) && strlen(otaDisplayIpAddress) > 0) {
     String fullInfo = otaDisplayIpAddress;
     String ipLine = "";
     String passwordLine = "";
     int pColonPos = fullInfo.indexOf(" P: ");
 
-    if (pColonPos != -1) { // "IP_ADDRESS P: PASSWORD" format found
+    if (pColonPos != -1) {
       ipLine = fullInfo.substring(0, pColonPos);
-      passwordLine = fullInfo.substring(pColonPos + 1); // " P: PASSWORD"
-    } else { // Not the special format, display as single line (might be just IP or hostname)
-      ipLine = fullInfo;
+      passwordLine = fullInfo.substring(pColonPos);  // Includes " P: "
+    } else {
+      ipLine = fullInfo;  // Only IP was present
     }
 
     // Display IP Line
     int ipLineWidth = u8g2.getStrWidth(ipLine.c_str());
-    // Center the IP line, or apply marquee if too long (less likely for IP)
     if (ipLineWidth > u8g2.getDisplayWidth() - 4) {
-        updateMarquee(u8g2.getDisplayWidth() - 4, ipLine.c_str()); // Use SBUF for marquee
-        if (marqueeActive && strcmp(marqueeText, ipLine.c_str())==0) { // Check if marquee is for this text
-            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
-        } else {
-            char* truncatedIp = truncateText(ipLine.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
-            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
-        }
+      updateMarquee(u8g2.getDisplayWidth() - 4, ipLine.c_str());
+      if (marqueeActive && strcmp(marqueeText, ipLine.c_str()) == 0) {
+        u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+      } else {
+        char* truncatedIp = truncateText(ipLine.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
+      }
     } else {
-        u8g2.drawStr((u8g2.getDisplayWidth() - ipLineWidth) / 2, currentY, ipLine.c_str());
+      marqueeActive = false;  // Reset marquee if IP line fits
+      u8g2.drawStr((u8g2.getDisplayWidth() - ipLineWidth) / 2, currentY, ipLine.c_str());
     }
     currentY += 10;
 
-    // Display Password Line (if it exists)
+    // Display Password Line (if it exists from parsing)
     if (passwordLine.length() > 0) {
-      // For the password line, we want to ensure "P: XXXXXXXX" is visible.
-      // The available width is the full display width.
+      // passwordLine already includes " P: "
       int passwordLineWidth = u8g2.getStrWidth(passwordLine.c_str());
-      int availablePasswordWidth = u8g2.getDisplayWidth() - 4; // 2px padding each side
+      int availablePasswordWidth = u8g2.getDisplayWidth() - 4;
 
       if (passwordLineWidth > availablePasswordWidth) {
-        // If the whole " P: XXXXXXXX" is too long, activate marquee for it
         updateMarquee(availablePasswordWidth, passwordLine.c_str());
-         if (marqueeActive && strcmp(marqueeText, passwordLine.c_str())==0) {
-            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
-        } else { // Should not happen if updateMarquee correctly sets marqueeText
-            char* truncatedPass = truncateText(passwordLine.c_str(), availablePasswordWidth, u8g2);
-            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedPass)) / 2, currentY, truncatedPass);
+        if (marqueeActive && strcmp(marqueeText, passwordLine.c_str()) == 0) {
+          u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+        } else {
+          char* truncatedPass = truncateText(passwordLine.c_str(), availablePasswordWidth, u8g2);
+          u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedPass)) / 2, currentY, truncatedPass);
         }
       } else {
-        // If it fits, center it
-        marqueeActive = false; // Ensure marquee is off if text fits
+        marqueeActive = false;  // Reset marquee if password line fits
         u8g2.drawStr((u8g2.getDisplayWidth() - passwordLineWidth) / 2, currentY, passwordLine.c_str());
       }
-      currentY += 2; // Less space after the password line
+      currentY += 2;  // Smaller gap after password line if present
     }
-    currentY += 10; // Space after IP/Password block
+    currentY += 10;  // Consistent gap after IP/Password block
   } else if (currentMenu == OTA_BASIC_ACTIVE && strlen(otaDisplayIpAddress) > 0) {
     // For Basic OTA, otaDisplayIpAddress usually just contains the IP
     int ipWidth = u8g2.getStrWidth(otaDisplayIpAddress);
     if (ipWidth > u8g2.getDisplayWidth() - 4) {
-        updateMarquee(u8g2.getDisplayWidth() - 4, otaDisplayIpAddress);
-        if (marqueeActive && strcmp(marqueeText, otaDisplayIpAddress)==0) {
-            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
-        } else {
-            char* truncatedIp = truncateText(otaDisplayIpAddress, u8g2.getDisplayWidth() - 4, u8g2);
-            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
-        }
+      updateMarquee(u8g2.getDisplayWidth() - 4, otaDisplayIpAddress);
+      if (marqueeActive && strcmp(marqueeText, otaDisplayIpAddress) == 0) {
+        u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+      } else {
+        char* truncatedIp = truncateText(otaDisplayIpAddress, u8g2.getDisplayWidth() - 4, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedIp)) / 2, currentY, truncatedIp);
+      }
     } else {
-        u8g2.drawStr((u8g2.getDisplayWidth() - ipWidth) / 2, currentY, otaDisplayIpAddress);
+      u8g2.drawStr((u8g2.getDisplayWidth() - ipWidth) / 2, currentY, otaDisplayIpAddress);
     }
     currentY += 12;
   }
@@ -854,94 +952,94 @@ void drawOtaStatusScreen() {
     String line1 = "", line2 = "";
     // Approx max chars that fit comfortably. MaxCharWidth can be small for 'i', wider for 'W'.
     // A better estimate would be pixel-based.
-    int maxCharsPerLine = (u8g2.getDisplayWidth() - 8) / u8g2.getStrWidth("W"); // Estimate with a wide char
+    int maxCharsPerLine = (u8g2.getDisplayWidth() - 8) / u8g2.getStrWidth("W");  // Estimate with a wide char
 
     if (otaStatusMessage.length() > maxCharsPerLine && u8g2.getStrWidth(otaStatusMessage.c_str()) > u8g2.getDisplayWidth() - 8) {
       int breakPoint = -1;
       // Try to break at a space or hyphen for better readability
       // Search backward from an estimated char count, or a pixel width
-      int estimatedPixelBreak = u8g2.getDisplayWidth() - 8; // Target pixel width for line 1
+      int estimatedPixelBreak = u8g2.getDisplayWidth() - 8;  // Target pixel width for line 1
       int currentPixelWidth = 0;
       int lastGoodBreak = -1;
 
-      for (int k=0; k < otaStatusMessage.length(); ++k) {
-          char tempStr[2] = {otaStatusMessage.charAt(k), '\0'};
-          currentPixelWidth += u8g2.getStrWidth(tempStr);
-          if (currentPixelWidth > estimatedPixelBreak) {
-              if (lastGoodBreak != -1) {
-                  breakPoint = lastGoodBreak;
-              } else { // No good break found, force break
-                  breakPoint = k -1; // Break before char that exceeded width
-              }
-              break;
+      for (int k = 0; k < otaStatusMessage.length(); ++k) {
+        char tempStr[2] = { otaStatusMessage.charAt(k), '\0' };
+        currentPixelWidth += u8g2.getStrWidth(tempStr);
+        if (currentPixelWidth > estimatedPixelBreak) {
+          if (lastGoodBreak != -1) {
+            breakPoint = lastGoodBreak;
+          } else {               // No good break found, force break
+            breakPoint = k - 1;  // Break before char that exceeded width
           }
-          if (otaStatusMessage.charAt(k) == ' ' || otaStatusMessage.charAt(k) == '-' || otaStatusMessage.charAt(k) == ':') {
-              lastGoodBreak = k;
-          }
+          break;
+        }
+        if (otaStatusMessage.charAt(k) == ' ' || otaStatusMessage.charAt(k) == '-' || otaStatusMessage.charAt(k) == ':') {
+          lastGoodBreak = k;
+        }
       }
-       if (breakPoint == -1 && currentPixelWidth <= estimatedPixelBreak) { // Message fits one line
-           line1 = otaStatusMessage;
-       } else if (breakPoint != -1) {
-           line1 = otaStatusMessage.substring(0, breakPoint + 1);
-           line2 = otaStatusMessage.substring(breakPoint + 1);
-           line2.trim();
-       } else { // Fallback hard break
-           line1 = otaStatusMessage.substring(0, maxCharsPerLine);
-           line2 = otaStatusMessage.substring(maxCharsPerLine);
-       }
+      if (breakPoint == -1 && currentPixelWidth <= estimatedPixelBreak) {  // Message fits one line
+        line1 = otaStatusMessage;
+      } else if (breakPoint != -1) {
+        line1 = otaStatusMessage.substring(0, breakPoint + 1);
+        line2 = otaStatusMessage.substring(breakPoint + 1);
+        line2.trim();
+      } else {  // Fallback hard break
+        line1 = otaStatusMessage.substring(0, maxCharsPerLine);
+        line2 = otaStatusMessage.substring(maxCharsPerLine);
+      }
 
-    } else { // Fits on one line or short enough not to worry about smart breaking
+    } else {  // Fits on one line or short enough not to worry about smart breaking
       line1 = otaStatusMessage;
     }
 
     // Draw line1 (status message)
     int status1Width = u8g2.getStrWidth(line1.c_str());
     if (status1Width > u8g2.getDisplayWidth() - 4) {
-        updateMarquee(u8g2.getDisplayWidth() - 4, line1.c_str());
-        if (marqueeActive && strcmp(marqueeText, line1.c_str())==0) {
-            u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
-        } else {
-            char* truncatedMsg1 = truncateText(line1.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
-            u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg1)) / 2, currentY, truncatedMsg1);
-        }
+      updateMarquee(u8g2.getDisplayWidth() - 4, line1.c_str());
+      if (marqueeActive && strcmp(marqueeText, line1.c_str()) == 0) {
+        u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
+      } else {
+        char* truncatedMsg1 = truncateText(line1.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+        u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg1)) / 2, currentY, truncatedMsg1);
+      }
     } else {
-        u8g2.drawStr((u8g2.getDisplayWidth() - status1Width) / 2, currentY, line1.c_str());
+      u8g2.drawStr((u8g2.getDisplayWidth() - status1Width) / 2, currentY, line1.c_str());
     }
 
     // Draw line2 (status message continuation)
     if (line2.length() > 0) {
       currentY += 10;
       int status2Width = u8g2.getStrWidth(line2.c_str());
-       if (status2Width > u8g2.getDisplayWidth() - 4) {
-            updateMarquee(u8g2.getDisplayWidth() - 4, line2.c_str());
-            if (marqueeActive && strcmp(marqueeText, line2.c_str())==0) {
-                u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
-            } else {
-                char* truncatedMsg2 = truncateText(line2.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
-                u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg2)) / 2, currentY, truncatedMsg2);
-            }
+      if (status2Width > u8g2.getDisplayWidth() - 4) {
+        updateMarquee(u8g2.getDisplayWidth() - 4, line2.c_str());
+        if (marqueeActive && strcmp(marqueeText, line2.c_str()) == 0) {
+          u8g2.drawStr(2 + (int)marqueeOffset, currentY, marqueeText);
         } else {
-            u8g2.drawStr((u8g2.getDisplayWidth() - status2Width) / 2, currentY, line2.c_str());
+          char* truncatedMsg2 = truncateText(line2.c_str(), u8g2.getDisplayWidth() - 4, u8g2);
+          u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(truncatedMsg2)) / 2, currentY, truncatedMsg2);
         }
+      } else {
+        u8g2.drawStr((u8g2.getDisplayWidth() - status2Width) / 2, currentY, line2.c_str());
+      }
     }
-    currentY += 12; // Extra space after status message
+    currentY += 12;  // Extra space after status message
   }
 
 
   // --- Progress Bar Logic (same as before) ---
   bool shouldDrawProgressBar = false;
   if (currentMenu == OTA_WEB_ACTIVE) {
-    if (otaProgress > 0 && otaProgress <= 100) { // Show for 1-100%
+    if (otaProgress > 0 && otaProgress <= 100) {  // Show for 1-100%
       shouldDrawProgressBar = true;
     }
   } else if (currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE) {
-    if (otaProgress >= OTA_PROGRESS_PENDING_SD_START && otaProgress <= 100) { // Show for 1-100% (or any positive progress)
-        // Note: OTA_PROGRESS_PENDING_SD_START is 1.
-        // For these modes, 0 could also be a valid "just started" state.
-        // Let's show bar if progress is >= 0 (and not an error state like -1 or -3)
-        if (otaProgress >=0 && otaProgress <=100) {
-            shouldDrawProgressBar = true;
-        }
+    if (otaProgress >= OTA_PROGRESS_PENDING_SD_START && otaProgress <= 100) {  // Show for 1-100% (or any positive progress)
+      // Note: OTA_PROGRESS_PENDING_SD_START is 1.
+      // For these modes, 0 could also be a valid "just started" state.
+      // Let's show bar if progress is >= 0 (and not an error state like -1 or -3)
+      if (otaProgress >= 0 && otaProgress <= 100) {
+        shouldDrawProgressBar = true;
+      }
     }
   }
 
@@ -959,15 +1057,15 @@ void drawOtaStatusScreen() {
     int barW = u8g2.getDisplayWidth() - 20;
     u8g2.drawFrame(barX, bottomElementY, barW, barH);
     int fillW = 0;
-    if (otaProgress > 0) { // Only fill if progress is positive
-        fillW = (barW - 2) * otaProgress / 100;
+    if (otaProgress > 0) {  // Only fill if progress is positive
+      fillW = (barW - 2) * otaProgress / 100;
     }
     if (fillW < 0) fillW = 0;
     if (fillW > barW - 2) fillW = barW - 2;
     if (fillW > 0) {
       u8g2.drawBox(barX + 1, bottomElementY + 1, fillW, barH - 2);
     }
-  } else if (otaProgress == -1) { // Error
+  } else if (otaProgress == -1) {  // Error
     const char* errorText = "Error Occurred";
     int errorTextWidth = u8g2.getStrWidth(errorText);
     u8g2.drawStr((u8g2.getDisplayWidth() - errorTextWidth) / 2, bottomElementY + (barH - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent(), errorText);
@@ -1191,8 +1289,8 @@ void drawUI() {
 
   // Draw overlay on top if active
   // PHASE 2: Add || showWifiRedirectPromptOverlay
-  if (showWifiDisconnectOverlay) {
-    drawWifiDisconnectOverlay();
+  if (showPromptOverlay) {
+    drawPromptOverlay();
   }
 
   u8g2.sendBuffer();
@@ -1205,27 +1303,17 @@ void drawPassiveDisplay() {
     u8g2_small.clearBuffer();
     u8g2_small.setDrawColor(1);
 
-    // REMOVED UPTIME CLOCK
-    // unsigned long now = millis(); unsigned long allSeconds = now / 1000;
-    // int runHours = allSeconds / 3600; int secsRemaining = allSeconds % 3600;
-    // int runMinutes = secsRemaining / 60; int runSeconds = secsRemaining % 60;
-    // char timeStr[9]; sprintf(timeStr, "%02d:%02d:%02d", runHours, runMinutes, runSeconds);
-    // u8g2_small.setFont(u8g2_font_helvB08_tr);
-    // int time_y_baseline = 17;
-    // u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(timeStr)) / 2, time_y_baseline, timeStr);
-
-    // Battery Info Section (moved up slightly since time is removed)
-    float v_bat = currentBatteryVoltage;  // Use the globally updated smooth voltage
+    // Battery Info Section
+    float v_bat = currentBatteryVoltage;
     uint8_t s_bat = batPerc(v_bat);
     char batInfoStr[15];
     snprintf(batInfoStr, sizeof(batInfoStr), "%.2fV %s%d%%", v_bat, isCharging ? "+" : "", s_bat);
     u8g2_small.setFont(u8g2_font_5x7_tf);
-    int bat_info_y = u8g2_small.getAscent() + 2;  // Top part of display
+    int bat_info_y = u8g2_small.getAscent() + 2;
     u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(batInfoStr)) / 2, bat_info_y, batInfoStr);
 
-
-    const char* modeText = "---";
-    if (isJammingOperationActive) {  // <--- NEW: Show jamming status
+    const char* modeText = "---";  // Default
+    if (isJammingOperationActive) {
       switch (activeJammingType) {
         case JAM_BLE: modeText = "BLE Jamming"; break;
         case JAM_BT: modeText = "BT Jamming"; break;
@@ -1233,46 +1321,107 @@ void drawPassiveDisplay() {
         case JAM_RF_NOISE_FLOOD: modeText = "RF Flooding"; break;
         default: modeText = "Jammer Active"; break;
       }
-    } else if (showWifiDisconnectOverlay) {
-      modeText = "Disconnecting...";
-      // ... (rest of modeText logic unchanged for other Kiva states) ...
-    } else if (currentMenu == FLASHLIGHT_MODE) modeText = "Torch";
-    else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) modeText = mainMenuItems[menuIndex];
-    else if (currentMenu == UTILITIES_MENU && menuIndex < getUtilitiesMenuItemsCount()) modeText = utilitiesMenuItems[menuIndex];
-    else if (currentMenu == GAMES_MENU && menuIndex < getGamesMenuItemsCount() && strcmp(gamesMenuItems[menuIndex], "Back") != 0) modeText = gamesMenuItems[menuIndex];
-    else if (currentMenu == TOOLS_MENU && menuIndex < getToolsMenuItemsCount() && strcmp(toolsMenuItems[menuIndex], "Back") != 0) modeText = toolsMenuItems[menuIndex];
-    else if (currentMenu == SETTINGS_MENU && menuIndex < getSettingsMenuItemsCount() && strcmp(settingsMenuItems[menuIndex], "Back") != 0) modeText = settingsMenuItems[menuIndex];
-    else if (currentMenu == TOOL_CATEGORY_GRID && toolsCategoryIndex < (getToolsMenuItemsCount() - 1)) {
-      // Check if it's the "Jamming" category
-      if (strcmp(toolsMenuItems[toolsCategoryIndex], "Jamming") == 0) {
-        if (menuIndex < getJammingToolItemsCount() && strcmp(jammingToolItems[menuIndex], "Back") != 0) {
-          modeText = jammingToolItems[menuIndex];
+    } else if (showPromptOverlay) {
+      // Check specific prompt titles for more context
+      if (strcmp(promptOverlayTitle, "Disconnect WiFi") == 0) {
+        modeText = "Disconnecting...";
+      } else if (strcmp(promptOverlayTitle, "OTA Wi-Fi") == 0) {
+        modeText = "Wi-Fi Needed";  // Or similar concise message for this prompt
+      } else {
+        // Generic message for other prompts, or use promptOverlayTitle if short enough
+        if (strlen(promptOverlayTitle) < 18) {  // Arbitrary length check
+          modeText = promptOverlayTitle;
         } else {
-          modeText = "Jamming Tools";
+          modeText = "Confirm Action";
         }
-      } else {  // Other tool categories
-        modeText = toolsMenuItems[toolsCategoryIndex];
+      }
+    } else if (currentMenu == FLASHLIGHT_MODE) {
+      modeText = "Torch";
+    } else if (currentMenu == MAIN_MENU && menuIndex < getMainMenuItemsCount()) {
+      modeText = mainMenuItems[menuIndex];
+    } else if (currentMenu == UTILITIES_MENU && menuIndex < getUtilitiesMenuItemsCount()) {
+      modeText = utilitiesMenuItems[menuIndex];
+    } else if (currentMenu == GAMES_MENU && menuIndex < getGamesMenuItemsCount() && strcmp(gamesMenuItems[menuIndex], "Back") != 0) {
+      modeText = gamesMenuItems[menuIndex];
+    } else if (currentMenu == TOOLS_MENU && menuIndex < getToolsMenuItemsCount() && strcmp(toolsMenuItems[menuIndex], "Back") != 0) {
+      modeText = toolsMenuItems[menuIndex];
+    } else if (currentMenu == SETTINGS_MENU && menuIndex < getSettingsMenuItemsCount() && strcmp(settingsMenuItems[menuIndex], "Back") != 0) {
+      modeText = settingsMenuItems[menuIndex];
+    } else if (currentMenu == TOOL_CATEGORY_GRID) {
+      if (toolsCategoryIndex >= 0 && toolsCategoryIndex < getToolsMenuItemsCount()) {
+        if (strcmp(toolsMenuItems[toolsCategoryIndex], "Jamming") == 0) {
+          if (menuIndex < getJammingToolItemsCount() && strcmp(jammingToolItems[menuIndex], "Back") != 0) {
+            modeText = jammingToolItems[menuIndex];
+          } else {
+            modeText = "Jamming Tools";  // Or toolsMenuItems[toolsCategoryIndex]
+          }
+        } else if (menuIndex < maxMenuItems - 1) {  // Check if not "Back" item in other grids
+          const char** currentGridItems = nullptr;
+          switch (toolsCategoryIndex) {
+            case 0: currentGridItems = injectionToolItems; break;
+            case 1: currentGridItems = wifiAttackToolItems; break;
+            case 2: currentGridItems = bleAttackToolItems; break;
+            case 3: currentGridItems = nrfReconToolItems; break;
+          }
+          if (currentGridItems && menuIndex < (currentGridItems == injectionToolItems ? getInjectionToolItemsCount() : currentGridItems == wifiAttackToolItems ? getWifiAttackToolItemsCount()
+                                                                                                                     : currentGridItems == bleAttackToolItems  ? getBleAttackToolItemsCount()
+                                                                                                                                                               : getNrfReconToolItemsCount())
+                                                - 1) {
+            modeText = currentGridItems[menuIndex];
+          } else {
+            modeText = toolsMenuItems[toolsCategoryIndex];  // Category name
+          }
+        } else {                                          // It's the "Back" item in a tool category grid
+          modeText = toolsMenuItems[toolsCategoryIndex];  // Show category name
+        }
       }
     } else if (currentMenu == WIFI_SETUP_MENU) {
-      if (wifiIsScanning) modeText = "Scanning WiFi";
-      else modeText = "Wi-Fi Setup";
+      if (!wifiHardwareEnabled) modeText = "Wi-Fi Off";
+      else if (wifiIsScanning) modeText = "Scanning WiFi";
+      else if (foundWifiNetworksCount == 0) modeText = "No Networks";
+      else if (wifiMenuIndex < foundWifiNetworksCount) {  // A network is selected
+        modeText = scannedNetworks[wifiMenuIndex].ssid;
+      } else if (wifiMenuIndex == foundWifiNetworksCount) {
+        modeText = "Scan Again";
+      } else {  // Back
+        modeText = "Wi-Fi Options";
+      }
     } else if (currentMenu == WIFI_CONNECTING) {
       modeText = "Connecting...";
     } else if (currentMenu == WIFI_CONNECTION_INFO) {
-      modeText = getWifiStatusMessage();
+      modeText = getWifiStatusMessage();  // This should be "Connected: SSID" or error
+    } else if (currentMenu == FIRMWARE_UPDATE_GRID) {
+      if (menuIndex < getOtaMenuItemsCount()) modeText = otaMenuItems[menuIndex];
+      else modeText = "FW Update";
+    } else if (currentMenu == FIRMWARE_SD_LIST_MENU) {
+      if (availableSdFirmwareCount > 0 && wifiMenuIndex < availableSdFirmwareCount) {
+        modeText = availableSdFirmwares[wifiMenuIndex].version;
+      } else if (wifiMenuIndex == availableSdFirmwareCount) {  // "Back" item
+        modeText = "SD FW List";
+      } else {  // No firmwares, only "Back"
+        modeText = "SD FW List";
+      }
+    } else if (currentMenu == OTA_WEB_ACTIVE) {
+      modeText = "Web OTA Active";
+    } else if (currentMenu == OTA_SD_STATUS) {
+      modeText = "SD OTA Status";
+    } else if (currentMenu == OTA_BASIC_ACTIVE) {
+      modeText = "Basic OTA";
     }
 
 
-    u8g2_small.setFont(u8g2_font_6x12_tr);  // Slightly larger font for mode text
-    char truncatedModeText[22];
+    u8g2_small.setFont(u8g2_font_6x12_tr);
+    char truncatedModeText[22];  // Max ~21 chars + null for 128px wide with 6px font
     strncpy(truncatedModeText, modeText, sizeof(truncatedModeText) - 1);
     truncatedModeText[sizeof(truncatedModeText) - 1] = '\0';
+
     if (u8g2_small.getStrWidth(truncatedModeText) > u8g2_small.getDisplayWidth() - 4) {
-      truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small);  // SBUF is used here
+      // Use the global SBUF for truncateText as it's designed for
+      truncateText(modeText, u8g2_small.getDisplayWidth() - 4, u8g2_small);
       strncpy(truncatedModeText, SBUF, sizeof(truncatedModeText) - 1);
       truncatedModeText[sizeof(truncatedModeText) - 1] = '\0';
     }
-    int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2;  // Bottom part of display
+    int mode_text_y_baseline = u8g2_small.getDisplayHeight() - 2;
     u8g2_small.drawStr((u8g2_small.getDisplayWidth() - u8g2_small.getStrWidth(truncatedModeText)) / 2, mode_text_y_baseline, truncatedModeText);
 
     u8g2_small.sendBuffer();

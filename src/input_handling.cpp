@@ -5,7 +5,7 @@
 #include "menu_logic.h"
 #include "keyboard_layout.h"
 
-// Static variables for debouncing and button states (unchanged)
+// Static variables for debouncing and button states 
 static bool prevDbncHState0[8] = { 1, 1, 1, 1, 1, 1, 1, 1 }, lastRawHState0[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
 static unsigned long lastDbncT0[8] = { 0 };
 static bool prevDbncHState1[8] = { 1, 1, 1, 1, 1, 1, 1, 1 }, lastRawHState1[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
@@ -14,7 +14,7 @@ static unsigned long btnHoldStartT1[8] = { 0 }, lastRepeatT1[8] = { 0 };
 static bool isBtnHeld1[8] = { 0 };
 
 
-// QuadratureEncoder methods (unchanged)
+// QuadratureEncoder methods 
 void QuadratureEncoder::init(int iA, int iB) {
   position = 0;
   lastState = (iB << 1) | iA;
@@ -63,14 +63,14 @@ bool QuadratureEncoder::update(int cA, int cB) {
   }
 }
 
-// setupInputs (unchanged)
+// setupInputs 
 void setupInputs() {
   selectMux(0);
   uint8_t initialPcf0State = readPCF(PCF0_ADDR);
   encoder.init(!(initialPcf0State & (1 << ENC_A)), !(initialPcf0State & (1 << ENC_B)));
 }
 
-// handleKeyboardInput (unchanged)
+// handleKeyboardInput 
 void handleKeyboardInput(int keyPressedValue) {
   if (wifiPasswordInputCursor < PASSWORD_MAX_LEN && keyPressedValue > 0 && keyPressedValue < 127) {  // Printable ASCII
     wifiPasswordInput[wifiPasswordInputCursor++] = (char)keyPressedValue;
@@ -95,28 +95,32 @@ void handleKeyboardInput(int keyPressedValue) {
             addOrUpdateKnownNetwork(currentSsidToConnect, wifiPasswordInput, true);
           } else {
             attemptDirectWifiConnection(currentSsidToConnect);
+            // For open networks, password is "", add/update if needed
+            addOrUpdateKnownNetwork(currentSsidToConnect, "", true);
           }
           currentMenu = WIFI_CONNECTING;
-          initializeCurrentMenu();
+          initializeCurrentMenu(); // This will re-init the new menu
         }
         break;
       case KB_KEY_SHIFT:
-        if (capsLockActive) {
+        if (capsLockActive) { // If caps lock is on, shift temporarily inverts it
           if (currentKeyboardLayer == KB_LAYER_UPPERCASE) currentKeyboardLayer = KB_LAYER_LOWERCASE;
-        } else {
+        } else { // If caps lock is off, shift toggles between lower and upper
           if (currentKeyboardLayer == KB_LAYER_LOWERCASE) currentKeyboardLayer = KB_LAYER_UPPERCASE;
           else if (currentKeyboardLayer == KB_LAYER_UPPERCASE) currentKeyboardLayer = KB_LAYER_LOWERCASE;
         }
+        // No focus change on shift, it's a modifier
         break;
       case KB_KEY_CAPSLOCK:
         capsLockActive = !capsLockActive;
         if (capsLockActive) currentKeyboardLayer = KB_LAYER_UPPERCASE;
         else currentKeyboardLayer = KB_LAYER_LOWERCASE;
+        // No focus change on caps lock
         break;
       case KB_KEY_TO_NUM:
         currentKeyboardLayer = KB_LAYER_NUMBERS;
-        capsLockActive = false;
-        keyboardFocusRow = 0;
+        capsLockActive = false; // Turn off caps lock when going to numbers/symbols
+        keyboardFocusRow = 0;   // Reset focus
         keyboardFocusCol = 0;
         break;
       case KB_KEY_TO_SYM:
@@ -127,13 +131,26 @@ void handleKeyboardInput(int keyPressedValue) {
         break;
       case KB_KEY_TO_LOWER:
         currentKeyboardLayer = KB_LAYER_LOWERCASE;
-        capsLockActive = false;
+        // capsLockActive = false; // Caps lock remains if it was on and user explicitly goes to lower via KB_KEY_TO_LOWER
         keyboardFocusRow = 0;
         keyboardFocusCol = 0;
         break;
       case KB_KEY_TO_UPPER:
         currentKeyboardLayer = KB_LAYER_UPPERCASE;
+        // capsLockActive state depends on previous state, might remain on if user explicitly selects upper
         keyboardFocusRow = 0;
+        keyboardFocusCol = 0;
+        break;
+      case KB_KEY_CYCLE_LAYOUT: // New case for NAV_B functionality
+        if (currentKeyboardLayer == KB_LAYER_LOWERCASE || currentKeyboardLayer == KB_LAYER_UPPERCASE) {
+            currentKeyboardLayer = KB_LAYER_NUMBERS;
+        } else if (currentKeyboardLayer == KB_LAYER_NUMBERS) {
+            currentKeyboardLayer = KB_LAYER_SYMBOLS;
+        } else if (currentKeyboardLayer == KB_LAYER_SYMBOLS) {
+            currentKeyboardLayer = KB_LAYER_LOWERCASE; // Cycle back to lowercase
+        }
+        capsLockActive = false; // Always turn off caps lock when cycling to/from num/sym
+        keyboardFocusRow = 0;   // Reset focus on layout change
         keyboardFocusCol = 0;
         break;
     }
@@ -142,339 +159,321 @@ void handleKeyboardInput(int keyPressedValue) {
 
 
 void updateInputs() {
-  unsigned long curT = millis();
-  selectMux(0);
-  uint8_t pcf0S = readPCF(PCF0_ADDR);
-  int encA_val = !(pcf0S & (1 << ENC_A));
-  int encB_val = !(pcf0S & (1 << ENC_B));
-  static int lastEncoderPosition = encoder.position;
+    unsigned long curT = millis();
+    selectMux(0);
+    uint8_t pcf0S = readPCF(PCF0_ADDR);
+    int encA_val = !(pcf0S & (1 << ENC_A));
+    int encB_val = !(pcf0S & (1 << ENC_B));
+    static int lastEncoderPosition = encoder.position;
 
-  // --- Process PCF0 inputs (Encoder Button) ---
-  for (int i = 0; i <= BTN_RIGHT2; i++) {  // Assuming ENC_A and ENC_B are not used as one-shot buttons directly
-    if (i == ENC_A || i == ENC_B) continue;
-    bool rawHardwareState = (pcf0S & (1 << i)) ? true : false;  // true if pin is HIGH (not pressed for active low)
-    bool currentRawState = rawHardwareState;                    // For active-low, a press is 'false'
+    // --- Process PCF0 inputs (Encoder Button) ---
+    for (int i = 0; i <= BTN_RIGHT2; i++) {
+        if (i == ENC_A || i == ENC_B) continue;
+        bool rawHardwareState = (pcf0S & (1 << i)) ? true : false;
+        bool currentRawState = rawHardwareState;
 
-    if (currentRawState != lastRawHState0[i]) {
-      lastDbncT0[i] = curT;
-    }
-    lastRawHState0[i] = currentRawState;
-
-    if ((curT - lastDbncT0[i]) > DEBOUNCE_DELAY) {
-      bool debouncedState = currentRawState;
-      if (debouncedState != prevDbncHState0[i]) {
-        if (debouncedState == false) {  // Button pressed (transition from high to low)
-          btnPress0[i] = true;          // Set one-shot press flag
+        if (currentRawState != lastRawHState0[i]) {
+            lastDbncT0[i] = curT;
         }
-        prevDbncHState0[i] = debouncedState;
-      }
-    }
-  }
+        lastRawHState0[i] = currentRawState;
 
-  // --- Process PCF1 inputs (Navigation buttons) ---
-  selectMux(1);
-  uint8_t pcf1S = readPCF(PCF1_ADDR);
-  for (int i = 0; i < 8; i++) {
-    bool rawHardwareState = (pcf1S & (1 << i)) ? true : false;
-    bool currentRawState = rawHardwareState;
-
-    if (currentRawState != lastRawHState1[i]) {
-      lastDbncT1[i] = curT;
-    }
-    lastRawHState1[i] = currentRawState;
-
-    if ((curT - lastDbncT1[i]) > DEBOUNCE_DELAY) {
-      bool debouncedState = currentRawState;
-      if (debouncedState != prevDbncHState1[i]) {
-        prevDbncHState1[i] = debouncedState;
-        if (debouncedState == false) {  // Button pressed
-          btnPress1[i] = true;
-
-          // Auto-repeat logic initiation
-          // PHASE 2: Add && !showWifiRedirectPromptOverlay
-          if (!showWifiDisconnectOverlay && currentMenu != WIFI_PASSWORD_INPUT) {
-            bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU);
-            bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
-            bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID);
-            bool relevantScrollButton = false;
-
-            if (isListNow && (i == NAV_UP || i == NAV_DOWN)) relevantScrollButton = true;
-            else if (isCarouselNow && (i == NAV_LEFT || i == NAV_RIGHT)) relevantScrollButton = true;
-            else if (isGridNow && (i == NAV_UP || i == NAV_DOWN || i == NAV_LEFT || i == NAV_RIGHT)) relevantScrollButton = true;
-
-            if (relevantScrollButton) {
-              isBtnHeld1[i] = true;
-              btnHoldStartT1[i] = curT;
-              lastRepeatT1[i] = curT;
+        if ((curT - lastDbncT0[i]) > DEBOUNCE_DELAY) {
+            bool debouncedState = currentRawState;
+            if (debouncedState != prevDbncHState0[i]) {
+                if (debouncedState == false) {
+                    btnPress0[i] = true;
+                }
+                prevDbncHState0[i] = debouncedState;
             }
-          }
-        } else {  // Button released
-          isBtnHeld1[i] = false;
         }
-      }
-    }
-  }
-
-
-  // --- Handle Wi-Fi Disconnect Overlay Input (takes precedence) ---
-  if (showWifiDisconnectOverlay) {
-    bool overlayInputHandledThisFrame = false;
-    if (encoder.update(encA_val, encB_val)) {
-      if (encoder.position != lastEncoderPosition) {
-        disconnectOverlaySelection = 1 - disconnectOverlaySelection;
-        lastEncoderPosition = encoder.position;
-        overlayInputHandledThisFrame = true;
-      }
-    }
-    if (btnPress1[NAV_LEFT]) {
-      disconnectOverlaySelection = 0;
-      btnPress1[NAV_LEFT] = false;
-      overlayInputHandledThisFrame = true;
-    }
-    if (btnPress1[NAV_RIGHT]) {
-      disconnectOverlaySelection = 1;
-      btnPress1[NAV_RIGHT] = false;
-      overlayInputHandledThisFrame = true;
     }
 
-    if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
-      if (disconnectOverlaySelection == 1) {
-        Serial.printf("Disconnecting from %s via overlay...\n", currentSsidToConnect);
-        WiFi.disconnect(true);
-        updateWifiStatusOnDisconnect();
-      } else {
-        Serial.println("Disconnect overlay: Cancelled.");
-      }
-      showWifiDisconnectOverlay = false;
-      disconnectOverlayAnimatingIn = false;
-      disconnectOverlayCurrentScale = 0.0f;
-      if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false;
-      if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
-      overlayInputHandledThisFrame = true;
-
-      if (currentMenu == WIFI_SETUP_MENU) {
-        initializeCurrentMenu();
-        bool foundPrev = false;
-        for (int k = 0; k < foundWifiNetworksCount; ++k) {
-          if (strcmp(scannedNetworks[k].ssid, currentSsidToConnect) == 0) {
-            wifiMenuIndex = k;
-            foundPrev = true;
-            break;
-          }
-        }
-        if (!foundPrev) wifiMenuIndex = 0;
-        targetWifiListScrollOffset_Y = 0;
-        currentWifiListScrollOffset_Y_anim = 0;
-        if (maxMenuItems > 0) wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
-      }
-    }
-    if (btnPress1[NAV_BACK]) {
-      showWifiDisconnectOverlay = false;
-      disconnectOverlayAnimatingIn = false;
-      disconnectOverlayCurrentScale = 0.0f;
-      btnPress1[NAV_BACK] = false;
-      overlayInputHandledThisFrame = true;
-    }
-
-    if (overlayInputHandledThisFrame) {
-      return;
-    }
-  }
-  // PHASE 2: Handle showWifiRedirectPromptOverlay here in a similar fashion
-
-
-  // --- Encoder scroll for general menus (if not overlay) ---
-  if (encoder.update(encA_val, encB_val)) {
-    int diff = encoder.position - lastEncoderPosition;
-    if (diff != 0) {
-      if (currentMenu == WIFI_PASSWORD_INPUT) {
-        const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
-        int prevFocusCol = keyboardFocusCol;
-        int direction = (diff > 0 ? 1 : -1);
-        int nextCol = keyboardFocusCol;
-        int attempts = 0;
-        do {
-          nextCol = (nextCol + direction + KB_LOGICAL_COLS) % KB_LOGICAL_COLS;
-          const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, nextCol);
-          if (key.colSpan > 0) {
-            keyboardFocusCol = nextCol;
-            break;
-          }
-          attempts++;
-        } while (attempts < KB_LOGICAL_COLS);
-        if (attempts == KB_LOGICAL_COLS) keyboardFocusCol = prevFocusCol;
-      } else {
-        scrollAct(diff > 0 ? 1 : -1, false, false);
-      }
-      lastEncoderPosition = encoder.position;
-    }
-  }
-
-  // --- PCF0 Encoder Button for Keyboard/General OK (if not overlay) ---
-  if (btnPress0[ENC_BTN]) {  // This flag is already debounced
-    if (currentMenu == WIFI_PASSWORD_INPUT) {
-      const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
-      const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, keyboardFocusCol);
-      handleKeyboardInput(key.value);
-      // btnPress0[ENC_BTN] is NOT cleared here because it might be used as general OK by main loop.
-      // It will be cleared at the end of the main loop if not consumed for general OK.
-      // Or, if main loop consumes it, it clears it there.
-      // To be safe, if it's *definitively* used *only* for keyboard here, clear it:
-      // btnPress0[ENC_BTN] = false; // Add this if ENC_BTN for keyboard should not also be general OK
-    }
-    // If not keyboard, ENC_BTN acts as general OK, handled by main loop logic.
-  }
-
-
-  // --- PCF1 Navigation Button Processing (if not overlay) ---
-  bool isKeyboardActive = (currentMenu == WIFI_PASSWORD_INPUT);
-  // PHASE 2: bool isOverlayActive = showWifiDisconnectOverlay || showWifiRedirectPromptOverlay;
-  bool isOverlayActive = showWifiDisconnectOverlay;
-
-
-  if (isKeyboardActive) {
-    // ... (Keyboard navigation logic - unchanged for Phase 1) ...
-    // Ensure btnPress1[NAV_UP] etc. are consumed (set to false) if they cause a focus change.
-    const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
-    bool focusChangedThisFrame = false;
-
-    if (btnPress1[NAV_UP]) {
-      keyboardFocusRow = (keyboardFocusRow - 1 + KB_ROWS) % KB_ROWS;
-      focusChangedThisFrame = true;
-      btnPress1[NAV_UP] = false;
-    }
-    if (btnPress1[NAV_DOWN]) {
-      keyboardFocusRow = (keyboardFocusRow + 1) % KB_ROWS;
-      focusChangedThisFrame = true;
-      btnPress1[NAV_DOWN] = false;
-    }
-    if (btnPress1[NAV_LEFT]) { /* ... existing logic ... */
-      focusChangedThisFrame = true;
-      btnPress1[NAV_LEFT] = false;
-    }
-    if (btnPress1[NAV_RIGHT]) { /* ... existing logic ... */
-      focusChangedThisFrame = true;
-      btnPress1[NAV_RIGHT] = false;
-    }
-
-    if (btnPress1[NAV_OK]) {
-      const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, keyboardFocusCol);
-      handleKeyboardInput(key.value);
-      btnPress1[NAV_OK] = false;
-    }
-    if (btnPress1[NAV_A]) {
-      handleKeyboardInput(KB_KEY_SHIFT);
-      btnPress1[NAV_A] = false;
-    }
-    if (btnPress1[NAV_B]) { /* ... existing logic ... */
-      btnPress1[NAV_B] = false;
-    }
-
-    if (focusChangedThisFrame) { /* ... existing focus validation ... */
-    }
-
-  } else if (!isOverlayActive) {  // Not keyboard active AND no overlay active: Handle scrolling for D-PAD
-    int scrollDirection = 0;
-    bool relevantScrollButton = false;
-    bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU);
-    bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
-    bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID);
-
-    if (btnPress1[NAV_UP]) {
-      if (isListNow) {
-        scrollDirection = -1;
-        relevantScrollButton = true;
-      } else if (isGridNow) {
-        scrollDirection = -gridCols;
-        relevantScrollButton = true;
-      }
-      if (relevantScrollButton) btnPress1[NAV_UP] = false;  // Consume
-    } else if (btnPress1[NAV_DOWN]) {
-      if (isListNow) {
-        scrollDirection = 1;
-        relevantScrollButton = true;
-      } else if (isGridNow) {
-        scrollDirection = gridCols;
-        relevantScrollButton = true;
-      }
-      if (relevantScrollButton) btnPress1[NAV_DOWN] = false;  // Consume
-    } else if (btnPress1[NAV_LEFT]) {
-      if (isCarouselNow || isGridNow) {
-        scrollDirection = -1;
-        relevantScrollButton = true;
-      }
-      if (relevantScrollButton) btnPress1[NAV_LEFT] = false;  // Consume
-    } else if (btnPress1[NAV_RIGHT]) {
-      if (isCarouselNow || isGridNow) {
-        scrollDirection = 1;
-        relevantScrollButton = true;
-      }
-      if (relevantScrollButton) btnPress1[NAV_RIGHT] = false;  // Consume
-    }
-
-    if (relevantScrollButton) {
-      scrollAct(scrollDirection, false, false);
-    }
-  }
-
-  // Handle auto-repeat for scrolling (if button is held, and not keyboard/overlay)
-  for (int i = 0; i < 8; ++i) {
+    // --- Process PCF1 inputs (Navigation buttons) ---
     selectMux(1);
-    uint8_t currentPcf1State = readPCF(PCF1_ADDR);
-    bool currentDebouncedPinState = !(currentPcf1State & (1 << i));
+    uint8_t pcf1S = readPCF(PCF1_ADDR);
+    for (int i = 0; i < 8; i++) {
+        bool rawHardwareState = (pcf1S & (1 << i)) ? true : false;
+        bool currentRawState = rawHardwareState;
 
-    if (currentDebouncedPinState && isBtnHeld1[i] && !isKeyboardActive && !isOverlayActive) {
-      if (curT - btnHoldStartT1[i] > REPEAT_INIT_DELAY && curT - lastRepeatT1[i] > REPEAT_INT) {
-        int scrollDirectionRepeat = 0;
-        bool relevantRepeatButton = false;
-        bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU);
-        bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
-        bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID);
-
-        if (isListNow) {
-          if (i == NAV_UP) {
-            scrollDirectionRepeat = -1;
-            relevantRepeatButton = true;
-          } else if (i == NAV_DOWN) {
-            scrollDirectionRepeat = 1;
-            relevantRepeatButton = true;
-          }
-        } else if (isCarouselNow) {
-          if (i == NAV_LEFT) {
-            scrollDirectionRepeat = -1;
-            relevantRepeatButton = true;
-          } else if (i == NAV_RIGHT) {
-            scrollDirectionRepeat = 1;
-            relevantRepeatButton = true;
-          }
-        } else if (isGridNow) {
-          if (i == NAV_UP) {
-            scrollDirectionRepeat = -gridCols;
-            relevantRepeatButton = true;
-          } else if (i == NAV_DOWN) {
-            scrollDirectionRepeat = gridCols;
-            relevantRepeatButton = true;
-          } else if (i == NAV_LEFT) {
-            scrollDirectionRepeat = -1;
-            relevantRepeatButton = true;
-          } else if (i == NAV_RIGHT) {
-            scrollDirectionRepeat = 1;
-            relevantRepeatButton = true;
-          }
+        if (currentRawState != lastRawHState1[i]) {
+            lastDbncT1[i] = curT;
         }
+        lastRawHState1[i] = currentRawState;
 
-        if (relevantRepeatButton) {
-          scrollAct(scrollDirectionRepeat, false, false);
-          lastRepeatT1[i] = curT;
+        if ((curT - lastDbncT1[i]) > DEBOUNCE_DELAY) {
+            bool debouncedState = currentRawState;
+            if (debouncedState != prevDbncHState1[i]) {
+                prevDbncHState1[i] = debouncedState;
+                if (debouncedState == false) {
+                    btnPress1[i] = true;
+                    if (!showPromptOverlay && currentMenu != WIFI_PASSWORD_INPUT) { 
+                        bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU);
+                        bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
+                        bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID);
+                        bool relevantScrollButton = false;
+
+                        if (isListNow && (i == NAV_UP || i == NAV_DOWN)) relevantScrollButton = true;
+                        else if (isCarouselNow && (i == NAV_LEFT || i == NAV_RIGHT)) relevantScrollButton = true;
+                        else if (isGridNow && (i == NAV_UP || i == NAV_DOWN || i == NAV_LEFT || i == NAV_RIGHT)) relevantScrollButton = true;
+                        
+                        if (relevantScrollButton) {
+                            isBtnHeld1[i] = true;
+                            btnHoldStartT1[i] = curT;
+                            lastRepeatT1[i] = curT;
+                        }
+                    }
+                } else { 
+                    isBtnHeld1[i] = false;
+                }
+            }
         }
-      }
     }
-  }
+
+    if (showPromptOverlay) { 
+        bool overlayInputHandledThisFrame = false;
+        if (encoder.update(encA_val, encB_val)) {
+            if (encoder.position != lastEncoderPosition) {
+                promptOverlaySelection = 1 - promptOverlaySelection;
+                lastEncoderPosition = encoder.position;
+                overlayInputHandledThisFrame = true;
+            }
+        }
+        if (btnPress1[NAV_LEFT]) {
+            promptOverlaySelection = 0; 
+            btnPress1[NAV_LEFT] = false; 
+            overlayInputHandledThisFrame = true;
+        }
+        if (btnPress1[NAV_RIGHT]) {
+            promptOverlaySelection = 1; 
+            btnPress1[NAV_RIGHT] = false; 
+            overlayInputHandledThisFrame = true;
+        }
+
+        if (btnPress1[NAV_OK] || btnPress0[ENC_BTN]) {
+            if (promptOverlaySelection == 1) {
+                Serial.println("Prompt Overlay: Confirmed.");
+                if (promptOverlayConfirmAction) {
+                    promptOverlayConfirmAction(); 
+                }
+                if (currentMenu != promptOverlayActionMenuTarget) {
+                    currentMenu = promptOverlayActionMenuTarget;
+                }
+            } else { 
+                Serial.println("Prompt Overlay: Cancelled.");
+            }
+            showPromptOverlay = false;
+            promptOverlayAnimatingIn = false; 
+            promptOverlayCurrentScale = 0.0f; 
+            promptOverlayConfirmAction = nullptr; 
+            if (btnPress1[NAV_OK]) btnPress1[NAV_OK] = false; 
+            if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false; 
+            overlayInputHandledThisFrame = true;
+        }
+        if (btnPress1[NAV_BACK]) {
+            Serial.println("Prompt Overlay: Backed out.");
+            showPromptOverlay = false;
+            promptOverlayAnimatingIn = false;
+            promptOverlayCurrentScale = 0.0f;
+            promptOverlayConfirmAction = nullptr;
+            btnPress1[NAV_BACK] = false; 
+            overlayInputHandledThisFrame = true;
+        }
+        if (overlayInputHandledThisFrame) {
+             return; 
+        }
+    }
+
+    if (encoder.update(encA_val, encB_val)) {
+        int diff = encoder.position - lastEncoderPosition;
+        if (diff != 0) {
+            if (currentMenu == WIFI_PASSWORD_INPUT) {
+                const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
+                int prevFocusCol = keyboardFocusCol;
+                int direction = (diff > 0 ? 1 : -1);
+                int nextCol = keyboardFocusCol;
+                int attempts = 0;
+                do {
+                    nextCol = (nextCol + direction + KB_LOGICAL_COLS) % KB_LOGICAL_COLS;
+                    const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, nextCol);
+                    if (key.colSpan > 0) {
+                        keyboardFocusCol = nextCol;
+                        break;
+                    }
+                    attempts++;
+                } while (attempts < KB_LOGICAL_COLS);
+                 if (attempts == KB_LOGICAL_COLS) keyboardFocusCol = prevFocusCol;
+            } else {
+                scrollAct(diff > 0 ? 1 : -1, false, false);
+            }
+            lastEncoderPosition = encoder.position;
+        }
+    }
+
+    if (btnPress0[ENC_BTN]) { 
+        if (currentMenu == WIFI_PASSWORD_INPUT) {
+            const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
+            const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, keyboardFocusCol);
+            handleKeyboardInput(key.value);
+            btnPress0[ENC_BTN] = false; 
+        }
+    }
+
+    bool isKeyboardActive = (currentMenu == WIFI_PASSWORD_INPUT);
+    // bool isOverlayActive = showPromptOverlay; // Already declared above and handled
+
+    if (isKeyboardActive) {
+        const KeyboardKey* layout = getCurrentKeyboardLayout(currentKeyboardLayer);
+        bool focusChangedThisFrame = false; 
+
+        // --- BACK BUTTON HANDLING FOR KEYBOARD SCREEN ---
+        if (btnPress1[NAV_BACK]) {
+            handleMenuBackNavigation(); // This function should handle going from WIFI_PASSWORD_INPUT to WIFI_SETUP_MENU
+            btnPress1[NAV_BACK] = false; 
+            return; // Input handled, exit updateInputs for this cycle
+        }
+        // --- END OF BACK BUTTON HANDLING ---
+
+
+        if (btnPress1[NAV_UP]) {
+            keyboardFocusRow = (keyboardFocusRow - 1 + KB_ROWS) % KB_ROWS;
+            focusChangedThisFrame = true;
+            btnPress1[NAV_UP] = false; 
+        }
+        if (btnPress1[NAV_DOWN]) {
+            keyboardFocusRow = (keyboardFocusRow + 1) % KB_ROWS;
+            focusChangedThisFrame = true;
+            btnPress1[NAV_DOWN] = false; 
+        }
+        if (btnPress1[NAV_LEFT]) { 
+            const KeyboardKey* currentLayout = getCurrentKeyboardLayout(currentKeyboardLayer); 
+            int prevFocusCol = keyboardFocusCol;
+            int nextCol = keyboardFocusCol;
+            int attempts = 0;
+            do {
+                nextCol = (nextCol - 1 + KB_LOGICAL_COLS) % KB_LOGICAL_COLS; 
+                const KeyboardKey& key = getKeyFromLayout(currentLayout, keyboardFocusRow, nextCol);
+                if (key.colSpan > 0) { 
+                    keyboardFocusCol = nextCol;
+                    break;
+                }
+                attempts++;
+            } while (attempts < KB_LOGICAL_COLS);
+            if (attempts == KB_LOGICAL_COLS) keyboardFocusCol = prevFocusCol; 
+            focusChangedThisFrame = true; btnPress1[NAV_LEFT] = false; 
+        }
+        if (btnPress1[NAV_RIGHT]) { 
+            const KeyboardKey* currentLayout = getCurrentKeyboardLayout(currentKeyboardLayer); 
+            int prevFocusCol = keyboardFocusCol;
+            int nextCol = keyboardFocusCol;
+            int attempts = 0;
+            do {
+                nextCol = (nextCol + 1) % KB_LOGICAL_COLS; 
+                const KeyboardKey& key = getKeyFromLayout(currentLayout, keyboardFocusRow, nextCol);
+                if (key.colSpan > 0) { 
+                    keyboardFocusCol = nextCol;
+                    break;
+                }
+                attempts++;
+            } while (attempts < KB_LOGICAL_COLS);
+            if (attempts == KB_LOGICAL_COLS) keyboardFocusCol = prevFocusCol; 
+            focusChangedThisFrame = true; btnPress1[NAV_RIGHT] = false;
+        }
+
+        if (btnPress1[NAV_OK]) { 
+            const KeyboardKey& key = getKeyFromLayout(layout, keyboardFocusRow, keyboardFocusCol);
+            handleKeyboardInput(key.value);
+            btnPress1[NAV_OK] = false; 
+        }
+        if (btnPress1[NAV_A]) { 
+            handleKeyboardInput(KB_KEY_SHIFT); 
+            btnPress1[NAV_A] = false; 
+        }
+        if (btnPress1[NAV_B]) { 
+            handleKeyboardInput(KB_KEY_CYCLE_LAYOUT); 
+            btnPress1[NAV_B] = false; 
+        }
+
+        if (focusChangedThisFrame) { 
+            const KeyboardKey& key = getKeyFromLayout(getCurrentKeyboardLayout(currentKeyboardLayer), keyboardFocusRow, keyboardFocusCol);
+            if (key.colSpan == 0) { 
+                for (int c = keyboardFocusCol; c >= 0; --c) {
+                    const KeyboardKey& scanKey = getKeyFromLayout(getCurrentKeyboardLayout(currentKeyboardLayer), keyboardFocusRow, c);
+                    if (scanKey.colSpan > 0 && (c + scanKey.colSpan > keyboardFocusCol)) {
+                        keyboardFocusCol = c;
+                        break;
+                    }
+                }
+            }
+        }
+    } else if (!showPromptOverlay) { // Not keyboard active and not overlay active
+        int scrollDirection = 0;
+        bool relevantScrollButton = false;
+        bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU); 
+        bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
+        bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID); 
+
+        if (btnPress1[NAV_UP]) {
+            if (isListNow) { scrollDirection = -1; relevantScrollButton = true;}
+            else if (isGridNow) { scrollDirection = -gridCols; relevantScrollButton = true; }
+            if(relevantScrollButton) btnPress1[NAV_UP]=false;
+        }
+        else if (btnPress1[NAV_DOWN]) {
+            if (isListNow) { scrollDirection = 1; relevantScrollButton = true; }
+            else if (isGridNow) { scrollDirection = gridCols; relevantScrollButton = true; }
+            if(relevantScrollButton) btnPress1[NAV_DOWN]=false;
+        }
+        else if (btnPress1[NAV_LEFT]) {
+            if (isCarouselNow || isGridNow) { scrollDirection = -1; relevantScrollButton = true; }
+            if(relevantScrollButton) btnPress1[NAV_LEFT]=false;
+        }
+        else if (btnPress1[NAV_RIGHT]) {
+            if (isCarouselNow || isGridNow) { scrollDirection = 1; relevantScrollButton = true; }
+            if(relevantScrollButton) btnPress1[NAV_RIGHT]=false;
+        }
+        
+        if (relevantScrollButton) {
+            scrollAct(scrollDirection, false, false);
+        }
+    }
+
+    // Handle auto-repeat for scrolling
+    for(int i=0; i<8; ++i) {
+        selectMux(1); 
+        uint8_t currentPcf1State = readPCF(PCF1_ADDR);
+        bool currentDebouncedPinState = ! (currentPcf1State & (1 << i)); 
+
+        if (currentDebouncedPinState && isBtnHeld1[i] && !isKeyboardActive && !showPromptOverlay) {
+            if (curT - btnHoldStartT1[i] > REPEAT_INIT_DELAY && curT - lastRepeatT1[i] > REPEAT_INT) {
+                int scrollDirectionRepeat = 0;
+                bool relevantRepeatButton = false;
+                bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU); 
+                bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
+                bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID); 
+
+                if (isListNow) {
+                    if (i == NAV_UP) { scrollDirectionRepeat = -1; relevantRepeatButton = true; }
+                    else if (i == NAV_DOWN) { scrollDirectionRepeat = 1; relevantRepeatButton = true; }
+                } else if (isCarouselNow) {
+                    if (i == NAV_LEFT) { scrollDirectionRepeat = -1; relevantRepeatButton = true; }
+                    else if (i == NAV_RIGHT) { scrollDirectionRepeat = 1; relevantRepeatButton = true; }
+                } else if (isGridNow) {
+                    if (i == NAV_UP) { scrollDirectionRepeat = -gridCols; relevantRepeatButton = true; }
+                    else if (i == NAV_DOWN) { scrollDirectionRepeat = gridCols; relevantRepeatButton = true; }
+                    else if (i == NAV_LEFT) { scrollDirectionRepeat = -1; relevantRepeatButton = true; }
+                    else if (i == NAV_RIGHT) { scrollDirectionRepeat = 1; relevantRepeatButton = true; }
+                }
+
+                if (relevantRepeatButton) {
+                    scrollAct(scrollDirectionRepeat, false, false);
+                    lastRepeatT1[i] = curT;
+                }
+            }
+        }
+    }
 }
 
 
-// scrollAct function (unchanged)
-// ...
+// scrollAct function
 void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselContextFlag_IGNORED) {
   if (currentMenu == WIFI_PASSWORD_INPUT) return;
 
@@ -661,7 +660,7 @@ void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselCon
   }
 }
 
-// getPCF1BtnName (unchanged)
+// getPCF1BtnName 
 // ...
 const char* getPCF1BtnName(int pin) {
   if (pin == NAV_OK) return "OK";

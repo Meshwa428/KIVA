@@ -183,14 +183,32 @@ extern int wifiPasswordInputCursor;
 extern bool selectedNetworkIsSecure;
 
 // --- Wi-Fi Disconnect Overlay ---
-extern bool showWifiDisconnectOverlay;    // <--- NEW
-extern int disconnectOverlaySelection; // <--- NEW (0 for Cancel, 1 for Confirm)
+// extern bool showWifiDisconnectOverlay;    // <--- NEW
+// extern int disconnectOverlaySelection; // <--- NEW (0 for Cancel, 1 for Confirm)
+// --- Generic Prompt Overlay ---
+extern bool showPromptOverlay;
+extern int promptOverlaySelection;
+extern char promptOverlayTitle[32];
+extern char promptOverlayMessage[64];
+extern char promptOverlayOption0Text[10];
+extern char promptOverlayOption1Text[10];
+extern MenuState promptOverlayActionMenuTarget;
+extern void (*promptOverlayConfirmAction)();
+
+extern float promptOverlayCurrentScale;
+extern float promptOverlayTargetScale;
+extern unsigned long promptOverlayAnimStartTime;
+extern bool promptOverlayAnimatingIn;
+
+extern MenuState postWifiActionMenu;
+extern bool wifiConnectForScheduledAction;
+
 
 // --- Wi-Fi Disconnect Overlay Animation ---
-extern float disconnectOverlayCurrentScale;
-extern float disconnectOverlayTargetScale;
-extern unsigned long disconnectOverlayAnimStartTime;
-extern bool disconnectOverlayAnimatingIn;
+// extern float disconnectOverlayCurrentScale;
+// extern float disconnectOverlayTargetScale;
+// extern unsigned long disconnectOverlayAnimStartTime;
+// extern bool disconnectOverlayAnimatingIn;
 
 
 // --- Keyboard related globals ---

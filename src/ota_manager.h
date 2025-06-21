@@ -28,8 +28,6 @@ extern char otaDisplayIpAddress[40];
 
 // Externs related to firmware info (defined in KivaMain.ino)
 extern FirmwareInfo currentRunningFirmware;
-// extern FirmwareInfo availableSdFirmwares[MAX_FIRMWARES_ON_SD]; // Already in firmware_metadata.h
-// extern int availableSdFirmwareCount; // Already in firmware_metadata.h
 
 
 // Web Updater HTML and favicon (defined in ota_manager.cpp)

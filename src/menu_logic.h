@@ -37,4 +37,9 @@ void handleMenuSelection();
 void handleMenuBackNavigation();
 void initializeCurrentMenu();
 
+void activatePromptOverlay(const char* title, const char* message, 
+                           const char* opt0Txt, const char* opt1Txt,
+                           MenuState actionMenu = currentMenu, // Default: currentMenu
+                           void (*confirmAction)() = nullptr); // Default: nullptr
+
 #endif // MENU_LOGIC_H

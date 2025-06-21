@@ -16,6 +16,7 @@
 #define KB_KEY_TO_LOWER    -8
 #define KB_KEY_TO_UPPER    -9
 #define KB_KEY_DEL         -10
+#define KB_KEY_CYCLE_LAYOUT -11 // <-- ADD THIS DEFINITION
 
 // Keyboard Layers
 enum KeyboardLayer {

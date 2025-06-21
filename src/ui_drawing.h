@@ -28,7 +28,7 @@ void drawPasswordInputScreen();
 void drawKeyboardOnSmallDisplay();
 void drawWifiConnectingStatusScreen();
 void drawWifiConnectionResultScreen();
-void drawWifiDisconnectOverlay(); 
+void drawPromptOverlay(); 
 void drawJammingActiveScreen();
 
 // --- NEW OTA Drawing Functions ---

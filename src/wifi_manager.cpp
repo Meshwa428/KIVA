@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "esp_wifi.h"
 #include "esp_event.h"
+#include "esp_netif.h"
 
 // This must be an extern to the global in KivaMain.ino
 extern bool wifiHardwareEnabled;
@@ -19,150 +20,208 @@ extern KnownWifiNetwork knownNetworksList[MAX_KNOWN_WIFI_NETWORKS];
 extern int knownNetworksCount;
 
 
+
+
 void setWifiHardwareState(bool enable, wifi_mode_t modeToSetOnEnable /* = WIFI_MODE_STA */) {
     if (enable) {
-        wifi_mode_t currentArduinoMode = WiFi.getMode();
-        bool stackIsUpIDF = false;
         wifi_mode_t currentIdfMode = WIFI_MODE_NULL;
-        // Check if ESP-IDF wifi stack is initialized and get its mode
-        if (esp_wifi_get_mode(&currentIdfMode) == ESP_OK) {
-            stackIsUpIDF = true;
-        }
+        esp_err_t idfModeGetResult = esp_wifi_get_mode(&currentIdfMode);
+        bool isIdfStackCurrentlyActive = (idfModeGetResult == ESP_OK && currentIdfMode != WIFI_MODE_NULL);
 
-        // Condition to check if already in the desired state from both Arduino and ESP-IDF perspectives
-        if (wifiHardwareEnabled && currentArduinoMode == modeToSetOnEnable && stackIsUpIDF && currentIdfMode == modeToSetOnEnable) {
-            // Serial.printf("Wi-Fi Manager: Already enabled in desired mode %d (Arduino & IDF).\n", modeToSetOnEnable);
-            return;
-        }
-
-        Serial.printf("Wi-Fi Manager: Attempting to enable Wi-Fi (target mode: %d).\n", modeToSetOnEnable);
-
-        // 1. Stop and De-initialize ESP-IDF Wi-Fi stack if it was previously initialized.
-        // This ensures a clean slate before re-initializing.
-        if (stackIsUpIDF) {
-            Serial.println("Wi-Fi Manager: ESP-IDF Wi-Fi stack was active/initialized. Stopping and de-initializing ESP-IDF side first...");
-            esp_err_t stop_err = esp_wifi_stop();
-            if (stop_err != ESP_OK && stop_err != ESP_ERR_WIFI_NOT_INIT && stop_err != ESP_ERR_WIFI_NOT_STARTED) {
-                Serial.printf("Wi-Fi Manager: esp_wifi_stop() during pre-enable cleanup failed with 0x%x.\n", stop_err);
+        bool needsTeardown = false;
+        if (wifiHardwareEnabled || isIdfStackCurrentlyActive) {
+            if (isIdfStackCurrentlyActive) {
+                if (currentIdfMode != modeToSetOnEnable) {
+                    needsTeardown = true;
+                    Serial.printf("Wi-Fi Manager: Teardown for mode switch (current: %d, target: %d).\n", currentIdfMode, modeToSetOnEnable);
+                } else if (!wifiHardwareEnabled) {
+                     needsTeardown = true;
+                     Serial.printf("Wi-Fi Manager: Teardown for inconsistent state (Kiva OFF, IDF ON mode %d, target %d).\n", currentIdfMode, modeToSetOnEnable);
+                }
+            } else { // IDF is NOT active, but Kiva's wifiHardwareEnabled flag was true.
+                needsTeardown = true;
+                Serial.printf("Wi-Fi Manager: Teardown for inconsistent state (Kiva ON, IDF OFF, target %d).\n", modeToSetOnEnable);
             }
         }
-        // Always attempt deinit to ensure clean state before init
-        esp_err_t deinit_err = esp_wifi_deinit();
-        if (deinit_err != ESP_OK && deinit_err != ESP_ERR_WIFI_NOT_INIT) {
-             Serial.printf("Wi-Fi Manager: esp_wifi_deinit() failed with 0x%x. This might cause issues for re-init.\n", deinit_err);
-        }
-        
-        // Reset Kiva's state variables and Arduino lib states
-        wifiHardwareEnabled = false; 
-        WiFi.disconnect(true, true); // true: erase SDK config, true: turnOff (calls esp_wifi_stop if STA was active)
-        WiFi.softAPdisconnect(true); // true: turnOff (calls esp_wifi_stop if AP was active)
-        delay(200); // Allow time for full de-initialization
 
-        // 2. Create Default Event Loop (Essential for Wi-Fi operation)
-        Serial.println("Wi-Fi Manager: Ensuring default event loop is created...");
-        esp_err_t event_loop_err = esp_event_loop_create_default();
-        if (event_loop_err != ESP_OK && event_loop_err != ESP_ERR_INVALID_STATE ) {
-            // ESP_ERR_INVALID_STATE means it's already created, which is fine.
-            Serial.printf("Wi-Fi Manager: esp_event_loop_create_default() FAILED with 0x%x\n", event_loop_err);
-            strncpy(wifiStatusString, "Event Loop Fail", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-            return; // wifiHardwareEnabled remains false
-        }
-        Serial.println("Wi-Fi Manager: Default event loop OK.");
 
-        // 3. Initialize Wi-Fi stack (ESP-IDF) - Base initialization.
-        Serial.println("Wi-Fi Manager: Initializing Wi-Fi stack (esp_wifi_init)...");
+        if (needsTeardown) {
+            Serial.println("Wi-Fi Manager: Performing Wi-Fi teardown...");
+            if (WiFi.isConnected()) { // Specifically for STA mode activity
+                Serial.println("Wi-Fi Manager: Arduino WiFi.disconnect(true,true) for STA.");
+                WiFi.disconnect(true, true); // true to clear credentials from SDK
+                delay(100);
+            }
+            // Check if AP was active before stopping. WiFi.softAPIP() != 0 checks if AP was configured.
+            // currentIdfMode check ensures we only try to disconnect AP if it was indeed in AP or APSTA mode.
+            if ((currentIdfMode == WIFI_MODE_AP || currentIdfMode == WIFI_MODE_APSTA) && WiFi.softAPIP() != IPAddress(0,0,0,0)) {
+                Serial.println("Wi-Fi Manager: Arduino WiFi.softAPdisconnect(true) for AP.");
+                if (!WiFi.softAPdisconnect(true)) { // true to deinit AP
+                     Serial.println("Wi-Fi Manager: WiFi.softAPdisconnect(true) returned false.");
+                }
+                delay(100);
+            }
+
+            Serial.println("Wi-Fi Manager: Explicitly calling esp_wifi_stop().");
+            esp_err_t stop_err = esp_wifi_stop();
+            if (stop_err != ESP_OK && stop_err != ESP_ERR_WIFI_NOT_STARTED && stop_err != ESP_ERR_WIFI_NOT_INIT) {
+                Serial.printf("Wi-Fi Manager: esp_wifi_stop() warning: 0x%x (%s)\n", stop_err, esp_err_to_name(stop_err));
+            } else {
+                 Serial.println("Wi-Fi Manager: esp_wifi_stop() successful or Wi-Fi was not started/initialized.");
+            }
+            delay(100);
+
+            Serial.println("Wi-Fi Manager: Explicitly calling esp_wifi_deinit().");
+            esp_err_t deinit_err = esp_wifi_deinit();
+            if (deinit_err != ESP_OK && deinit_err != ESP_ERR_WIFI_NOT_INIT) {
+                Serial.printf("Wi-Fi Manager: esp_wifi_deinit() warning: 0x%x (%s)\n", deinit_err, esp_err_to_name(deinit_err));
+            } else {
+                Serial.println("Wi-Fi Manager: esp_wifi_deinit() successful or Wi-Fi was not initialized.");
+            }
+            delay(100);
+
+            // Event loop is NOT deleted.
+
+            wifiHardwareEnabled = false; // Kiva's flag
+            currentConnectedSsid = "";
+            foundWifiNetworksCount = 0;
+            wifiIsScanning = false;
+            currentAttemptStatus = WIFI_STATUS_IDLE;
+            webOtaActive = false; // Reset OTA flags as Wi-Fi state is changing significantly
+            basicOtaStarted = false;
+            strncpy(wifiStatusString, "Wi-Fi Off (Post-Teardown)", sizeof(wifiStatusString)-1);
+            wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            Serial.println("Wi-Fi Manager: Teardown complete. Delaying before re-init...");
+            delay(200);
+        } else if (wifiHardwareEnabled && isIdfStackCurrentlyActive && currentIdfMode == modeToSetOnEnable) {
+            Serial.printf("Wi-Fi Manager: Wi-Fi already enabled in target mode %d. No action needed.\n", modeToSetOnEnable);
+            return; 
+        } else {
+            Serial.println("Wi-Fi Manager: Wi-Fi stack appears to be fully inactive. Proceeding to initialization.");
+        }
+
+
+        Serial.println("Wi-Fi Manager: Initializing Wi-Fi stack...");
+        // Ensure default event loop exists (safe to call even if already created)
+        esp_err_t event_loop_create_err = esp_event_loop_create_default();
+        if (event_loop_create_err != ESP_OK && event_loop_create_err != ESP_ERR_INVALID_STATE ) {
+            Serial.printf("Wi-Fi Manager: esp_event_loop_create_default() FAILED: 0x%x (%s)\n", event_loop_create_err, esp_err_to_name(event_loop_create_err));
+            strncpy(wifiStatusString, "Wi-Fi Enable Fail (EvtLoop)", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            wifiHardwareEnabled = false;
+            return;
+        }
+        Serial.println("Wi-Fi Manager: Default event loop verified/created.");
+
+        // esp_netif_init() is called by Arduino's WiFi library initialization if needed.
+
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
         esp_err_t err_init = esp_wifi_init(&cfg);
         if (err_init != ESP_OK) {
-            Serial.printf("Wi-Fi Manager: esp_wifi_init() FAILED with error 0x%x. Wi-Fi cannot be enabled.\n", err_init);
-            strncpy(wifiStatusString, "Wi-Fi Init Fail", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-            return; // wifiHardwareEnabled remains false
-        }
-        Serial.println("Wi-Fi Manager: esp_wifi_init() successful.");
-
-        // 4. Set Wi-Fi Storage to RAM (ESP-IDF)
-        esp_err_t err_storage = esp_wifi_set_storage(WIFI_STORAGE_RAM);
-        if (err_storage != ESP_OK) {
-            Serial.printf("Wi-Fi Manager: esp_wifi_set_storage(RAM) failed with error 0x%x.\n", err_storage);
-            // Non-critical for basic operation, but log it.
-        }
-
-        // 5. Set Mode and Start using Arduino WiFi library call.
-        // Arduino's WiFi.mode() will handle the esp_wifi_set_mode() and esp_wifi_start() sequence.
-        Serial.printf("Wi-Fi Manager: Setting mode to %d using Arduino WiFi.mode()...\n", modeToSetOnEnable);
-        if (!WiFi.mode(modeToSetOnEnable)) { // This calls esp_wifi_stop, esp_wifi_set_mode, esp_wifi_start
-            Serial.printf("Wi-Fi Manager: Arduino WiFi.mode(%d) FAILED.\n", modeToSetOnEnable);
-            esp_wifi_deinit(); // Clean up ESP-IDF init if Arduino layer fails to set mode
-            strncpy(wifiStatusString, "Wi-Fi Mode Fail", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-            return; // wifiHardwareEnabled remains false
-        }
-        Serial.println("Wi-Fi Manager: Arduino WiFi.mode() successful (implies stack started).");
-        delay(200); // Allow mode change and start to settle
-
-        // 6. Post-start configurations (hostname for STA, etc.)
-        if (modeToSetOnEnable == WIFI_MODE_STA) {
-            if (WiFi.setHostname(DEVICE_HOSTNAME)) {
-                // Serial.printf("Wi-Fi Manager: Hostname set to '%s'\n", DEVICE_HOSTNAME);
-            } else {
-                Serial.println("Wi-Fi Manager: Failed to set Arduino-level hostname for STA.");
-            }
-            WiFi.persistent(false); // Do not save WiFi config to NVS by default with Arduino API
-            WiFi.setAutoReconnect(false); // Kiva manages reconnects
-            strncpy(wifiStatusString, "Wi-Fi Idle (STA)", sizeof(wifiStatusString)-1);
-        } else if (modeToSetOnEnable == WIFI_MODE_AP) {
-            // Hostname for AP is typically part of the SSID or set when softAP is configured.
-            strncpy(wifiStatusString, "Wi-Fi Idle (AP)", sizeof(wifiStatusString)-1);
-        } else if (modeToSetOnEnable == WIFI_MODE_APSTA) {
-            if (WiFi.setHostname(DEVICE_HOSTNAME)) { /* Similar to STA */ }
-            strncpy(wifiStatusString, "Wi-Fi Idle (APSTA)", sizeof(wifiStatusString)-1);
-        }
-         else { // WIFI_MODE_NULL or other
-            strncpy(wifiStatusString, "Wi-Fi Ready", sizeof(wifiStatusString)-1);
-        }
-        wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-        
-        wifiHardwareEnabled = true;
-        currentAttemptStatus = WIFI_STATUS_IDLE; 
-        Serial.println("Wi-Fi Manager: Wi-Fi enabled successfully in target mode.");
-
-    } else { // enable is false (Disabling Wi-Fi)
-        wifi_mode_t tempModeCheck;
-        bool isCurrentlyInitialized = (esp_wifi_get_mode(&tempModeCheck) == ESP_OK);
-
-        if (!wifiHardwareEnabled && !isCurrentlyInitialized) {
-            // Kiva state and ESP-IDF state both indicate Wi-Fi is off/uninitialized.
-            // Serial.println("Wi-Fi Manager: Already disabled (Kiva flag and IDF stack uninitialized).");
+            Serial.printf("Wi-Fi Manager: esp_wifi_init() FAILED: 0x%x (%s).\n", err_init, esp_err_to_name(err_init));
+            strncpy(wifiStatusString, "Wi-Fi Enable Fail (Init)", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            wifiHardwareEnabled = false;
             return;
         }
 
-        Serial.println("Wi-Fi Manager: Disabling Wi-Fi hardware...");
-        if (wifiIsScanning) { wifiIsScanning = false; WiFi.scanDelete(); }
+        esp_err_t err_storage = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+        if (err_storage != ESP_OK) {
+            Serial.printf("Wi-Fi Manager: esp_wifi_set_storage(RAM) failed: 0x%x (%s) (non-critical).\n", err_storage, esp_err_to_name(err_storage));
+        }
         
-        // Use Arduino API to disconnect/stop AP first, ensuring library state is clean
-        WiFi.disconnect(true, true); // Args: wifioff = true, eraseAP = true (if STA was connected)
-        WiFi.softAPdisconnect(true); // Arg: wifioff = true (if AP was active)
-        delay(100); // Give time for Arduino lib to process disconnections
+        // Use Arduino WiFi.mode() to set mode, create netifs, and start WiFi.
+        Serial.printf("Wi-Fi Manager: Calling Arduino WiFi.mode(%s) to set mode, manage netifs, and start.\n",
+                      modeToSetOnEnable == WIFI_MODE_STA ? "STA" :
+                      modeToSetOnEnable == WIFI_MODE_AP  ? "AP"  :
+                      modeToSetOnEnable == WIFI_MODE_APSTA ? "APSTA" : "NULL (OFF)");
 
-        // Then ensure ESP-IDF layer is fully stopped and deinitialized
-        esp_err_t stop_err = esp_wifi_stop();
-        if (stop_err != ESP_OK && stop_err != ESP_ERR_WIFI_NOT_INIT && stop_err != ESP_ERR_WIFI_NOT_STARTED) {
-             Serial.printf("Wi-Fi Manager: esp_wifi_stop() during disable failed with 0x%x.\n", stop_err);
+        if (!WiFi.mode(modeToSetOnEnable)) {
+            Serial.printf("Wi-Fi Manager: Arduino WiFi.mode(%d) FAILED. Critical Failure.\n", modeToSetOnEnable);
+            esp_wifi_deinit(); 
+            strncpy(wifiStatusString, "Wi-Fi Enable Fail (Mode)", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            wifiHardwareEnabled = false;
+            return;
         }
-        
-        esp_err_t deinit_err = esp_wifi_deinit();
-        if(deinit_err != ESP_OK && deinit_err != ESP_ERR_WIFI_NOT_INIT) {
-            Serial.printf("Wi-Fi Manager: esp_wifi_deinit() during disable failed with 0x%x.\n", deinit_err);
+        // WiFi.mode() internally calls esp_wifi_set_mode and esp_wifi_start.
+        // It also handles netif creation/destruction.
+        delay(300); // Allow time for mode switch and netif setup to stabilize.
+
+        wifi_mode_t finalIdfModeCheck; // Verify mode with IDF
+        if(esp_wifi_get_mode(&finalIdfModeCheck) == ESP_OK && finalIdfModeCheck == modeToSetOnEnable){
+            Serial.printf("Wi-Fi Manager: Confirmed IDF mode is %d after Arduino WiFi.mode().\n", finalIdfModeCheck);
+        } else {
+            Serial.printf("Wi-Fi Manager: CRITICAL - IDF mode is %d, expected %d after Arduino WiFi.mode(). Forcing failure.\n", finalIdfModeCheck, modeToSetOnEnable);
+            esp_wifi_stop(); 
+            esp_wifi_deinit();
+            strncpy(wifiStatusString, "Wi-Fi Enable Fail (Verify)", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            wifiHardwareEnabled = false;
+            return;
         }
-        // esp_wifi_deinit also deinitializes the default event loop if it was created by wifi component.
+
+        if (modeToSetOnEnable == WIFI_MODE_STA || modeToSetOnEnable == WIFI_MODE_APSTA) {
+            if(!WiFi.setHostname(DEVICE_HOSTNAME)){ 
+                Serial.println("Wi-Fi Manager: Warning - WiFi.setHostname failed.");
+            }
+            WiFi.persistent(false); 
+            WiFi.setAutoReconnect(false); 
+        }
+
+        if (modeToSetOnEnable == WIFI_MODE_STA) strncpy(wifiStatusString, "Wi-Fi Idle (STA)", sizeof(wifiStatusString)-1);
+        else if (modeToSetOnEnable == WIFI_MODE_AP) strncpy(wifiStatusString, "AP Mode Active", sizeof(wifiStatusString)-1); // Set appropriate status for AP
+        else if (modeToSetOnEnable == WIFI_MODE_APSTA) strncpy(wifiStatusString, "Wi-Fi Idle (APSTA)", sizeof(wifiStatusString)-1);
+        else strncpy(wifiStatusString, "Wi-Fi Ready", sizeof(wifiStatusString)-1); // Generic, should be one of above
+        wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+
+        wifiHardwareEnabled = true;
+        currentAttemptStatus = WIFI_STATUS_IDLE;
+        Serial.printf("Wi-Fi Manager: Wi-Fi enabled successfully, target mode %d.\n", modeToSetOnEnable);
+
+    } else { // enable == false
+        wifi_mode_t currentIdfModeForDisable = WIFI_MODE_NULL;
+        esp_err_t modeGetErrDisable = esp_wifi_get_mode(&currentIdfModeForDisable);
+        bool isIdfStackActiveForDisable = (modeGetErrDisable == ESP_OK && currentIdfModeForDisable != WIFI_MODE_NULL);
+
+        if (!wifiHardwareEnabled && !isIdfStackActiveForDisable) { // Already off
+            strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
+            return;
+        }
+        Serial.println("Wi-Fi Manager: Disabling Wi-Fi hardware (Explicit OFF call)...");
         
+        // Stop Kiva-specific activities first
+        if (wifiIsScanning) {
+            wifiIsScanning = false;
+            WiFi.scanDelete(); 
+            Serial.println("Wi-Fi Manager (Disable): Kiva scan stopped.");
+        }
+        webOtaActive = false; // Stop any OTA server logic that might try to use Wi-Fi
+        basicOtaStarted = false;
+
+        // Use WiFi.mode(WIFI_OFF) for a cleaner shutdown via Arduino API
+        // This should handle stopping, deinit, and netif destruction.
+        Serial.println("Wi-Fi Manager (Disable): Calling WiFi.mode(WIFI_OFF).");
+        if (!WiFi.mode(WIFI_OFF)) { // WIFI_OFF is equivalent to WIFI_MODE_NULL
+            Serial.println("Wi-Fi Manager (Disable): WiFi.mode(WIFI_OFF) returned false. Attempting IDF calls.");
+            // Fallback to manual IDF calls if WiFi.mode(WIFI_OFF) fails
+            esp_wifi_disconnect(); // Disconnect if STA was connected
+            delay(100);
+            esp_wifi_stop();
+            delay(100);
+            esp_wifi_deinit();
+        } else {
+             Serial.println("Wi-Fi Manager (Disable): WiFi.mode(WIFI_OFF) successful.");
+        }
+        delay(100);
+
+        // Default event loop should NOT be deleted.
+
         wifiHardwareEnabled = false;
-        currentConnectedSsid = ""; foundWifiNetworksCount = 0;
+        currentConnectedSsid = "";
+        foundWifiNetworksCount = 0;
         currentAttemptStatus = WIFI_STATUS_IDLE;
         strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString)-1); wifiStatusString[sizeof(wifiStatusString)-1] = '\0';
-        webOtaActive = false; basicOtaStarted = false; // Reset OTA flags that depend on Wi-Fi
-        Serial.println("Wi-Fi Manager: Wi-Fi disabled.");
+        Serial.println("Wi-Fi Manager: Wi-Fi fully disabled.");
     }
 }
+
 
 
 void updateWifiStatusOnDisconnect() {
@@ -322,35 +381,35 @@ void setupWifi() {
 int initiateAsyncWifiScan() {
   if (!wifiHardwareEnabled) {
     Serial.println("Wi-Fi Manager: Cannot scan, Wi-Fi hardware is disabled.");
-    strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString) - 1);
+    strncpy(wifiStatusString, "Wi-Fi Off", sizeof(wifiStatusString) - 1); // Set internal status
     wifiStatusString[sizeof(wifiStatusString) - 1] = '\0';
     foundWifiNetworksCount = 0;
     wifiIsScanning = false;
     currentAttemptStatus = WIFI_STATUS_IDLE;
-    return -3;  // KIVA_WIFI_ERROR_HARDWARE_OFF or similar
+    return -3;
   }
   Serial.println("Wi-Fi Manager: Initiating async scan...");
   WiFi.scanDelete();
   delay(50);
-  int scanResult = WiFi.scanNetworks(true, true);  // Async, hidden SSIDs
+  int scanResult = WiFi.scanNetworks(true, true);
   if (scanResult == WIFI_SCAN_FAILED) {
     Serial.println("Wi-Fi Manager: Scan initiation failed.");
     currentAttemptStatus = KIVA_WIFI_SCAN_FAILED;
-    strncpy(wifiStatusString, "Scan Failed", sizeof(wifiStatusString) - 1);
+    strncpy(wifiStatusString, "Scan Failed", sizeof(wifiStatusString) - 1); // Set internal status
     wifiIsScanning = false;
   } else if (scanResult == WIFI_SCAN_RUNNING) {
     Serial.println("Wi-Fi Manager: Scan started successfully, running in background.");
     currentAttemptStatus = KIVA_WIFI_SCAN_RUNNING;
-    strncpy(wifiStatusString, "Scanning...", sizeof(wifiStatusString) - 1);
+    strncpy(wifiStatusString, "Scanning...", sizeof(wifiStatusString) - 1); // Set internal status
     wifiIsScanning = true;
-  } else {  // Should be >0 if scan completed synchronously (not expected for async)
+  } else { 
     Serial.printf("Wi-Fi Manager: scanNetworks (async) returned %d. Processing results.\n", scanResult);
-    wifiIsScanning = false;  // No longer scanning
-    // This path implies synchronous completion, process results now.
-    return checkAndRetrieveWifiScanResults();  // Process and return final count or error
+    wifiIsScanning = false; 
+    // wifiStatusString will be updated by checkAndRetrieveWifiScanResults()
+    return checkAndRetrieveWifiScanResults();
   }
   wifiStatusString[sizeof(wifiStatusString) - 1] = '\0';
-  return scanResult;  // WIFI_SCAN_FAILED or WIFI_SCAN_RUNNING
+  return scanResult;
 }
 
 int checkAndRetrieveWifiScanResults() {
