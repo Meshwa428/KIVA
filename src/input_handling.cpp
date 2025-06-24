@@ -409,7 +409,12 @@ void updateInputs() {
         int scrollDirection = 0;
         bool relevantScrollButton = false;
         bool isListNow = (currentMenu == MAIN_MENU || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU); 
-        bool isCarouselNow = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
+        // MODIFIED: Add RF_TOOLKIT_OVERVIEW_MENU to carousel check
+        bool isCarouselNow = (currentMenu == GAMES_MENU || 
+                              currentMenu == TOOLS_MENU || 
+                              currentMenu == SETTINGS_MENU || 
+                              currentMenu == UTILITIES_MENU ||
+                              currentMenu == RF_TOOLKIT_OVERVIEW_MENU); // <--- ADDED HERE
         bool isGridNow = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID); 
 
         if (btnPress1[NAV_UP]) {
@@ -423,16 +428,16 @@ void updateInputs() {
             if(relevantScrollButton) btnPress1[NAV_DOWN]=false;
         }
         else if (btnPress1[NAV_LEFT]) {
-            if (isCarouselNow || isGridNow) { scrollDirection = -1; relevantScrollButton = true; }
+            if (isCarouselNow || isGridNow) { scrollDirection = -1; relevantScrollButton = true; } // Carousels and Grids use Left/Right
             if(relevantScrollButton) btnPress1[NAV_LEFT]=false;
         }
         else if (btnPress1[NAV_RIGHT]) {
-            if (isCarouselNow || isGridNow) { scrollDirection = 1; relevantScrollButton = true; }
+            if (isCarouselNow || isGridNow) { scrollDirection = 1; relevantScrollButton = true; } // Carousels and Grids use Left/Right
             if(relevantScrollButton) btnPress1[NAV_RIGHT]=false;
         }
         
-        if (relevantScrollButton) {
-            scrollAct(scrollDirection, false, false);
+        if (relevantScrollButton && scrollDirection != 0) { // Added check for scrollDirection != 0
+            scrollAct(scrollDirection, false, false); // The booleans are ignored anyway
         }
     }
 
@@ -479,8 +484,12 @@ void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselCon
 
   int oldMenuIndexGeneric = menuIndex;
   int oldWifiMenuIndex = wifiMenuIndex;
-  bool isCarouselActiveCurrent = (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU);
-  bool isGridContextCurrent = (currentMenu == TOOL_CATEGORY_GRID);
+  bool isCarouselActiveCurrent = (currentMenu == GAMES_MENU || 
+                                  currentMenu == TOOLS_MENU || 
+                                  currentMenu == SETTINGS_MENU || 
+                                  currentMenu == UTILITIES_MENU ||
+                                  currentMenu == RF_TOOLKIT_OVERVIEW_MENU); // <--- ADDED HERE
+  bool isGridContextCurrent = (currentMenu == TOOL_CATEGORY_GRID || currentMenu == FIRMWARE_UPDATE_GRID); // 
   bool indexChanged = false;
 
   if (isGridContextCurrent) {
@@ -621,41 +630,44 @@ void scrollAct(int direction, bool isGridContextFlag_IGNORED, bool isCarouselCon
     if (scroll_to_center_selected_item < 0) scroll_to_center_selected_item = 0;  // Redundant, but safe
     targetWifiListScrollOffset_Y = (int)scroll_to_center_selected_item;
 
-  } else {
+  } else { // This 'else' block handles vertical lists and carousels NOT covered above
     if (maxMenuItems <= 0) {
       menuIndex = 0;
       return;
     }
     int oldMenuIdx = menuIndex;
-    menuIndex += direction;
+    menuIndex += direction; // For carousels and vertical lists, direction is usually +/- 1
     if (menuIndex >= maxMenuItems) menuIndex = 0;
     else if (menuIndex < 0) menuIndex = maxMenuItems - 1;
     indexChanged = (oldMenuIdx != menuIndex);
   }
 
+  // Determine actual index change based on the specific menu's index variable
   bool actualIndexDidChange = false;
-  if (currentMenu == WIFI_SETUP_MENU) {
+  if (currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU) { // Menus using wifiMenuIndex
     actualIndexDidChange = (oldWifiMenuIndex != wifiMenuIndex);
-  } else {
+  } else { // Menus using generic menuIndex
     actualIndexDidChange = (oldMenuIndexGeneric != menuIndex);
   }
 
-  if (actualIndexDidChange || isGridContextCurrent || currentMenu == WIFI_SETUP_MENU || isCarouselActiveCurrent) {
+  // Update animations based on menu type
+  if (actualIndexDidChange || isGridContextCurrent || isCarouselActiveCurrent || currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU) {
     if (currentMenu == MAIN_MENU) {
       mainMenuAnim.setTargets(menuIndex, maxMenuItems);
-    } else if (currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU) {  // MODIFIED
-      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);                               // This uses wifiMenuIndex
+    } else if (currentMenu == WIFI_SETUP_MENU || currentMenu == FIRMWARE_SD_LIST_MENU) {
+      wifiListAnim.setTargets(wifiMenuIndex, maxMenuItems);
       marqueeActive = false;
       marqueeOffset = 0;
-    } else if (isCarouselActiveCurrent) {
+    } else if (isCarouselActiveCurrent) { // This condition now includes RF_TOOLKIT_OVERVIEW_MENU
       subMenuAnim.setTargets(menuIndex, maxMenuItems);
       marqueeActive = false;
       marqueeOffset = 0;
       marqueeScrollLeft = true;
-    } else if (isGridContextCurrent) {
+    } else if (isGridContextCurrent) { // Grid animation handled elsewhere or here if marquee needs reset
       marqueeActive = false;
       marqueeOffset = 0;
       marqueeScrollLeft = true;
+      // Grid item scale animations are handled by startGridItemAnimation and its update in drawUI
     }
   }
 }

@@ -53,6 +53,6 @@ bool addOrUpdateKnownNetwork(const char* ssid, const char* password, bool resetF
 bool incrementSsidFailCount(const char* ssid);
 bool resetSsidFailCount(const char* ssid);
 
-void setWifiHardwareState(bool enable, wifi_mode_t modeToSetOnEnable = WIFI_MODE_STA); 
+void setWifiHardwareState(bool enable, ActiveRfOperationMode modeToSetOnEnable = RF_MODE_NORMAL_STA, int channel = 0); 
 
 #endif // WIFI_MANAGER_H

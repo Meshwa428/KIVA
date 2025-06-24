@@ -35,6 +35,8 @@ void drawJammingActiveScreen();
 void drawOtaStatusScreen(); // Generic screen for Web, SD, Basic progress/status
 void drawSDFirmwareListScreen(); // <--- NEW
 
+void drawRfToolkitOverviewMenu(); // <--- NEW DECLARATION
+
 void drawRndBox(int x, int y, int w, int h, int r, bool fill);
 void drawBatIcon(int x, int y, uint8_t percentage);
 void drawCustomIcon(int x, int y, int iconType, bool isLarge);

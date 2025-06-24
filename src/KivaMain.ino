@@ -108,6 +108,7 @@ FirmwareInfo g_firmwareToInstallFromSd;
 // === Global Variable Definitions ===
 MenuState currentMenu = MAIN_MENU;
 MenuState postWifiActionMenu = currentMenu;  // Stores the menu to go to after Wi-Fi connect
+ActiveRfOperationMode currentRfMode = RF_MODE_OFF; // <--- DEFINITION
 bool wifiConnectForScheduledAction = false;
 int menuIndex = 0;
 int maxMenuItems = 0;
@@ -332,6 +333,9 @@ void setup() {
   selectMux(0);
   writePCF(PCF0_ADDR, pcf0Output);
 
+  // Initial RF mode
+  currentRfMode = RF_MODE_OFF;  // Explicitly set initial RF mode
+
   selectMux(MUX_CHANNEL_SECOND_DISPLAY);
   u8g2_small.begin();
   u8g2_small.enableUTF8Print();
@@ -429,6 +433,22 @@ void setup() {
 void loop() {
   unsigned long currentTime = millis();
 
+  // --- Priority 0: Critical Radio Mode Management ---
+  // Example: If NRF jamming is active, ensure other RF tools are not.
+  // This logic will be refined as tools are added.
+  if (isJammingOperationActive && currentRfMode != RF_MODE_NRF_JAMMING) {
+    // This indicates a potential state conflict. NRF jamming should take precedence.
+    // For now, we assume NRF jamming setup correctly sets currentRfMode.
+    // If other tools accidentally change currentRfMode without stopping NRF, log error.
+    Serial.println("CRITICAL: NRF Jamming active but currentRfMode is not RF_MODE_NRF_JAMMING!");
+  }
+  if (!isJammingOperationActive && currentRfMode == RF_MODE_NRF_JAMMING) {
+    // NRF jamming stopped, but mode not updated. Reset to RF_MODE_OFF.
+    Serial.println("WARN: NRF Jamming stopped, resetting currentRfMode to RF_MODE_OFF.");
+    currentRfMode = RF_MODE_OFF;
+    // This implies stopActiveJamming() should also update currentRfMode.
+  }
+
   // Priority 1: OTA Update processes (if active, they take precedence)
   if (currentMenu == OTA_WEB_ACTIVE) {
     if (webOtaActive) handleWebOtaClient();
@@ -513,29 +533,20 @@ void loop() {
       getSmoothV();
     }
 
-    if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED) {
-      // Conditions under which Wi-Fi should REMAIN ON despite not being connected:
-      bool stayOnForMenu = (currentMenu == WIFI_SETUP_MENU ||       // Actively in Wi-Fi list/scan screen
-                            currentMenu == WIFI_PASSWORD_INPUT ||   // Entering password
-                            currentMenu == WIFI_CONNECTING ||       // Connection in progress screen
-                            currentMenu == WIFI_CONNECTION_INFO ||  // Viewing connection result
-                            showPromptOverlay);                     // A prompt might be related to a Wi-Fi action
+    // Revised Wi-Fi auto-disable logic considering currentRfMode
+    if (wifiHardwareEnabled && WiFi.status() != WL_CONNECTED && currentRfMode == RF_MODE_NORMAL_STA) {
+      bool stayOnForMenu = (currentMenu == WIFI_SETUP_MENU || currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || showPromptOverlay);
 
       bool stayOnForOtaError = (currentMenu == OTA_BASIC_ACTIVE && otaProgress == -1 && (otaStatusMessage.indexOf("Connect to Wi-Fi") != -1 || otaStatusMessage.indexOf("Failed to enable Wi-Fi") != -1));
-
-      bool stayOnForOtaReady = (currentMenu == OTA_BASIC_ACTIVE && basicOtaStarted && otaProgress == 0);  // Waiting for IDE
-
-      bool stayOnForWebOta = webOtaActive;  // Web OTA server is running
+      bool stayOnForOtaReady = (currentMenu == OTA_BASIC_ACTIVE && basicOtaStarted && otaProgress == 0);
+      bool stayOnForWebOta = webOtaActive;
 
       WifiConnectionStatus currentManagerStatus = getCurrentWifiConnectionStatus();
-      bool stayOnForActiveConnectionAttempt = (wifiIsScanning ||                                       // Kiva is trying to scan
-                                               currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS ||  // Kiva is trying to connect
-                                               currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);        // ESP-IDF is scanning
+      bool stayOnForActiveConnectionAttempt = (wifiIsScanning || currentManagerStatus == WIFI_CONNECTING_IN_PROGRESS || currentManagerStatus == KIVA_WIFI_SCAN_RUNNING);
 
-      // If none of the conditions to keep Wi-Fi ON are met, then consider disabling it.
       if (!stayOnForMenu && !stayOnForActiveConnectionAttempt && !stayOnForOtaReady && !stayOnForOtaError && !stayOnForWebOta) {
-        Serial.println("Loop: Wi-Fi ON, Not Connected, Not in critical Wi-Fi/OTA Menu/State. Disabling Wi-Fi.");
-        setWifiHardwareState(false);
+        Serial.println("Loop: Wi-Fi ON (STA), Not Connected, Not in critical Menu/State. Disabling Wi-Fi.");
+        setWifiHardwareState(false, RF_MODE_OFF);  // Explicitly set mode to OFF
       }
     }
 
@@ -660,13 +671,13 @@ void loop() {
       if (currentMenu == WIFI_SETUP_MENU && wifiConnectForScheduledAction) {
         Serial.println("Loop: Prompt dismissed, now in WIFI_SETUP_MENU for scheduled action.");
 
-        // Ensure Wi-Fi is ON. It should have been turned on by startBasicOtaUpdate before the prompt.
         if (!wifiHardwareEnabled) {
           Serial.println("Loop: Wi-Fi was unexpectedly OFF. Enabling for scheduled action scan...");
-          setWifiHardwareState(true, WIFI_MODE_STA);
+          // The error is likely here or in similar calls:
+          // OLD: setWifiHardwareState(true, WIFI_MODE_STA);
+          setWifiHardwareState(true, RF_MODE_NORMAL_STA); // <--- UPDATED: Use ActiveRfOperationMode
           delay(300);
         } else {
-          // Wi-Fi is already enabled, give a short settling time before scan
           delay(100);
         }
 

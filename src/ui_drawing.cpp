@@ -930,7 +930,7 @@ void drawOtaStatusScreen() {
   // --- Display otaStatusMessage (handles multi-line and truncation) ---
   if (otaStatusMessage.length() > 0) {
     String line1 = "", line2 = "";
-    int maxCharsPerLine = (u8g2.getDisplayWidth() - 8) / u8g2.getStrWidth("W"); // Approximate
+    int maxCharsPerLine = (u8g2.getDisplayWidth() - 8) / u8g2.getStrWidth("W");  // Approximate
 
     if (otaStatusMessage.length() > maxCharsPerLine && u8g2.getStrWidth(otaStatusMessage.c_str()) > u8g2.getDisplayWidth() - 8) {
       int breakPoint = -1;
@@ -945,7 +945,7 @@ void drawOtaStatusScreen() {
           if (lastGoodBreak != -1) {
             breakPoint = lastGoodBreak;
           } else {
-            breakPoint = k -1;
+            breakPoint = k - 1;
             if (breakPoint < 0) breakPoint = 0;
           }
           break;
@@ -955,12 +955,12 @@ void drawOtaStatusScreen() {
         }
       }
       if (breakPoint == -1 && currentPixelWidth <= estimatedPixelBreak) {
-         line1 = otaStatusMessage;
+        line1 = otaStatusMessage;
       } else if (breakPoint != -1) {
         line1 = otaStatusMessage.substring(0, breakPoint + 1);
         line2 = otaStatusMessage.substring(breakPoint + 1);
         line2.trim();
-      } else { // Fallback if no good break point found
+      } else {  // Fallback if no good break point found
         line1 = otaStatusMessage.substring(0, maxCharsPerLine);
         line2 = otaStatusMessage.substring(maxCharsPerLine);
       }
@@ -1003,7 +1003,7 @@ void drawOtaStatusScreen() {
 
   // --- Conditional Error Message Display (where progress bar used to be) ---
   int bottomElementY = u8g2.getDisplayHeight() - 15;
-  int barH_placeholder = 7; // Height of the area previously occupied by the bar
+  int barH_placeholder = 7;  // Height of the area previously occupied by the bar
 
   // Adjust currentY if it's too close to the bottomElementY, to prevent overlap
   if (currentY > bottomElementY - barH_placeholder - 2) {
@@ -1011,7 +1011,7 @@ void drawOtaStatusScreen() {
   }
 
 
-  if (otaProgress == -1) { // Error state
+  if (otaProgress == -1) {  // Error state
     const char* errorText = "Error Occurred";
     int errorTextWidth = u8g2.getStrWidth(errorText);
     // Draw the error message in the area where the progress bar would have been
@@ -1134,6 +1134,98 @@ void drawSDFirmwareListScreen() {
   u8g2.setMaxClipWindow();
 }
 
+// NEW Function: drawRfToolkitOverviewMenu
+void drawRfToolkitOverviewMenu() {
+    // This will be very similar to drawCarouselMenu or drawMainMenu
+    // For simplicity, let's adapt drawCarouselMenu
+    subMenuAnim.update(); // Use subMenuAnim for consistency with other sub-menus
+    const int carousel_center_y_abs = 44;
+    const int screen_center_x_abs = 64;
+    const int card_internal_padding = 3;
+    const int icon_render_size = 16;
+    const int icon_margin_top = 3;
+    const int text_margin_from_icon = 2;
+
+    u8g2.setFont(u8g2_font_6x10_tf);
+
+    for (int i = 0; i < maxMenuItems; i++) { // maxMenuItems should be set by initializeCurrentMenu
+        float current_item_scale = subMenuAnim.itemScale[i];
+        if (current_item_scale <= 0.05f) continue;
+
+        float current_item_offset_x = subMenuAnim.itemOffsetX[i];
+        int card_w_scaled = (int)(CarouselAnimation().cardBaseW * current_item_scale);
+        int card_h_scaled = (int)(CarouselAnimation().cardBaseH * current_item_scale);
+        int card_x_abs = screen_center_x_abs + (int)current_item_offset_x - (card_w_scaled / 2);
+        int card_y_abs = carousel_center_y_abs - (card_h_scaled / 2);
+        bool is_selected_item = (i == menuIndex);
+
+        const char* itemTextToDisplay = rfToolkitMenuItems[i]; // Use the correct menu item array
+        int icon_type_for_item = 9; // Default to Wi-Fi icon
+
+        // Assign specific icons if needed for items within RF_TOOLKIT_OVERVIEW_MENU
+        if (strcmp(itemTextToDisplay, "Wi-Fi Scanning") == 0) icon_type_for_item = 9; // Wi-Fi icon
+        else if (strcmp(itemTextToDisplay, "Wi-Fi Attacks") == 0) icon_type_for_item = 11; // Jamming/Attack icon
+        // else if (strcmp(itemTextToDisplay, "Bluetooth (ESP32)") == 0) icon_type_for_item = 10; // BT Icon
+        // else if (strcmp(itemTextToDisplay, "LAN Tools") == 0) icon_type_for_item = 0; // Generic Tools Icon
+        else if (strcmp(itemTextToDisplay, "Back") == 0) icon_type_for_item = 8; // Back arrow
+
+
+        if (card_w_scaled <= 0 || card_h_scaled <= 0) continue;
+
+        if (is_selected_item) {
+            u8g2.setDrawColor(1);
+            drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true); // Fill selected
+
+            u8g2.setDrawColor(0); // Text color for filled box
+            int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
+            int icon_y_pos = card_y_abs + icon_margin_top;
+            drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true); // Large icon
+
+            int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
+            int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
+            int text_baseline_y_render = text_area_y_start_abs + (text_area_h_available - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent() - 1;
+            
+            int card_inner_content_width = card_w_scaled - 2 * card_internal_padding;
+            updateMarquee(card_inner_content_width, itemTextToDisplay);
+
+            int clip_x1 = card_x_abs + card_internal_padding;
+            // ... (rest of clipping and text drawing logic from drawCarouselMenu, adapted for itemTextToDisplay) ...
+            int clip_y1 = text_area_y_start_abs;
+            int clip_x2 = card_x_abs + card_w_scaled - card_internal_padding;
+            int clip_y2 = card_y_abs + card_h_scaled - card_internal_padding;
+
+            clip_y1 = max(clip_y1, card_y_abs);
+            clip_y2 = min(clip_y2, card_y_abs + card_h_scaled);
+
+            if (clip_x1 < clip_x2 && clip_y1 < clip_y2) {
+                u8g2.setClipWindow(clip_x1, clip_y1, clip_x2, clip_y2);
+                if (marqueeActive) {
+                    u8g2.drawStr(card_x_abs + card_internal_padding + (int)marqueeOffset, text_baseline_y_render, marqueeText);
+                } else {
+                    int text_width_pixels = u8g2.getStrWidth(itemTextToDisplay);
+                    u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, itemTextToDisplay);
+                }
+                u8g2.setMaxClipWindow();
+            }
+
+        } else { // Not selected
+            u8g2.setDrawColor(1);
+            drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 2, false); // Frame non-selected
+
+            if (current_item_scale > 0.5) { // Only draw text if reasonably scaled
+                u8g2.setFont(u8g2_font_5x7_tf); // Smaller font for non-selected scaled items
+                char* display_text_truncated = truncateText(itemTextToDisplay, card_w_scaled - 2 * card_internal_padding, u8g2);
+                int text_width_pixels = u8g2.getStrWidth(display_text_truncated);
+                int text_baseline_y_render = card_y_abs + (card_h_scaled - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
+                u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, display_text_truncated);
+                u8g2.setFont(u8g2_font_6x10_tf); // Reset font
+            }
+        }
+    }
+    u8g2.setDrawColor(1); // Reset draw color
+}
+
+
 void drawUI() {
   unsigned long currentTime = millis();  // Ensure currentTime is available for animations
 
@@ -1208,6 +1300,8 @@ void drawUI() {
     drawToolGridScreen();
   } else if (currentMenu == MAIN_MENU) {
     drawMainMenu();
+  } else if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) { // <--- ADDED CASE
+    drawRfToolkitOverviewMenu();
   } else if (currentMenu == WIFI_SETUP_MENU) {
     drawWifiSetupScreen();
   } else if (currentMenu == WIFI_PASSWORD_INPUT) {
@@ -1517,13 +1611,14 @@ void drawStatusBar() {
     }
   } else if (currentMenu == WIFI_SETUP_MENU) {
     titleText = "Wi-Fi Setup";
-  } else if (currentMenu == FIRMWARE_UPDATE_GRID) {  // <--- NEW
+  } else if (currentMenu == FIRMWARE_UPDATE_GRID) {
     titleText = "Firmware Update";
   } else if (currentMenu == FIRMWARE_SD_LIST_MENU) {
     titleText = "Update from SD";
-  }  // <--- NEW TITLE
-  else if (currentMenu != MAIN_MENU && mainMenuSavedIndex >= 0 && mainMenuSavedIndex < getMainMenuItemsCount()) {
+  } else if (currentMenu != MAIN_MENU && mainMenuSavedIndex >= 0 && mainMenuSavedIndex < getMainMenuItemsCount()) {
     titleText = mainMenuItems[mainMenuSavedIndex];
+  } else if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) {  // <--- NEW
+    titleText = "RF Toolkit";
   }
 
   char titleBuffer[14];
@@ -1614,6 +1709,7 @@ void drawMainMenu() {
 
     int iconType = 0;
     if (strcmp(itms[i], "Tools") == 0) iconType = 0;
+    else if (strcmp(itms[i], "RF Toolkit") == 0) iconType = 9;
     else if (strcmp(itms[i], "Games") == 0) iconType = 1;
     else if (strcmp(itms[i], "Settings") == 0) iconType = 2;
     else if (strcmp(itms[i], "Utilities") == 0) iconType = 21;
@@ -1885,7 +1981,6 @@ void drawToolGridScreen() {
 }
 
 void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
-  // ... (Implementation unchanged) ...
   switch (iconType) {
     case 0:  // Tools Icon
       if (isLarge) {

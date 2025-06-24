@@ -17,6 +17,18 @@
 #define NRF2_CSN_PIN 44
 #define SPI_SPEED_NRF 16000000 // SPI speed for NRF modules
 
+// === RF Operation Modes === <--- NEW SECTION
+enum ActiveRfOperationMode {
+    RF_MODE_OFF,                // All RF (Wi-Fi, BT, NRF) ideally off or minimal
+    RF_MODE_NORMAL_STA,         // Standard Kiva Wi-Fi Station mode (for connecting to AP)
+    RF_MODE_NORMAL_AP_OTA,      // Kiva's OTA AP mode
+    RF_MODE_WIFI_SNIFF_PROMISC, // Wi-Fi promiscuous mode for sniffing
+    RF_MODE_WIFI_INJECT_AP,     // Wi-Fi AP mode configured for packet injection
+    RF_MODE_NRF_JAMMING,        // NRF24L01 jamming active
+    RF_MODE_BT_ESP32_SCAN,      // ESP32 Bluetooth scanning (future)
+    RF_MODE_BT_ESP32_ADVERTISE  // ESP32 Bluetooth advertising (future)
+};
+
 
 // === I2C Multiplexer & Peripherals ===
 #define MUX_ADDR 0x70
@@ -86,22 +98,44 @@
 // === Menu System ===
 enum MenuState {
   MAIN_MENU,
+  // RF_TOOLKIT_MENU,         // <--- NEW TOP-LEVEL (Alternative: Add to Tools)
+  // WIFI_SNIFFING_MENU,    // <--- Submenu
+  //   ADV_AP_SCAN_MENU,      // <--- Example Sniffing Option
+  //   STATION_SCAN_MENU,   // <--- Example Sniffing Option
+  //   PROBE_SCAN_MENU,     // <--- Example Sniffing Option
+  // WIFI_ATTACKS_MENU,     // <--- Submenu
+  //   BEACON_FLOOD_MENU,   // <--- Example Attack Option
+  //   DEAUTH_ATTACK_MENU,  // <--- Example Attack Option
   GAMES_MENU,
-  TOOLS_MENU,
+  TOOLS_MENU,             // <--- We will add sub-menus for RF tools under this for now
+    // Sub-menus for specific RF tools will be added here later like WIFI_SNIFFING_SUBMENU etc.
   SETTINGS_MENU,
   UTILITIES_MENU,
-  TOOL_CATEGORY_GRID,
+  // LAN_SCAN_MENU,         // Example for later
+  TOOL_CATEGORY_GRID,     // Existing for NRF tools, can be reused or new grid for Wi-Fi tools
   WIFI_SETUP_MENU,
   FLASHLIGHT_MODE,
   WIFI_PASSWORD_INPUT,
   WIFI_CONNECTING,
   WIFI_CONNECTION_INFO,
-  JAMMING_ACTIVE_SCREEN,
+  JAMMING_ACTIVE_SCREEN,  // Existing for NRF tools
   FIRMWARE_UPDATE_GRID,
-  FIRMWARE_SD_LIST_MENU, // <--- NEW: Lists firmware from SD
+  FIRMWARE_SD_LIST_MENU, 
   OTA_WEB_ACTIVE,
   OTA_SD_STATUS,
-  OTA_BASIC_ACTIVE
+  OTA_BASIC_ACTIVE,
+  // New RF tool-specific screens will be added here
+  RF_TOOLKIT_OVERVIEW_MENU, // <--- NEW Top-level menu for all RF tools
+  WIFI_SCANNING_TOOLS_MENU,
+  WIFI_ATTACK_TOOLS_MENU,
+  // Placeholder for specific scan/attack screens:
+  WIFI_AP_SCAN_SCREEN,
+  WIFI_STATION_SCAN_SCREEN,
+  WIFI_PROBE_REQUEST_SCAN_SCREEN,
+  WIFI_PACKET_MONITOR_SCREEN,
+  WIFI_BEACON_SPAM_CONFIG_SCREEN,
+  WIFI_DEAUTH_CONFIG_SCREEN
+  // ... more to be added
 };
 
 // --- Extern Global Variables ---
@@ -121,6 +155,7 @@ extern bool laserOn;
 extern bool wifiHardwareEnabled;
 
 extern uint8_t pcf0Output;
+extern ActiveRfOperationMode currentRfMode; // <--- NEW EXTERN
 
 // --- NEW EXTERN DECLARATIONS FOR INTERVALS ---
 extern unsigned long currentBatteryCheckInterval;

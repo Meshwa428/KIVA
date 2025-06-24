@@ -389,7 +389,7 @@ bool startWebOtaUpdate() {
   Serial.println("OTA Manager: Attempting to start Web OTA (AP Mode)...");
 
 
-  setWifiHardwareState(true, WIFI_MODE_AP);  // Request AP mode
+  setWifiHardwareState(true, RF_MODE_NORMAL_AP_OTA);  // Request AP mode
 
   if (!wifiHardwareEnabled) {  // Check Kiva's flag, which setWifiHardwareState should manage
     // otaStatusMessage will be set by getWifiStatusMessage() reflecting the failure reason from setWifiHardwareState
@@ -894,7 +894,7 @@ bool startBasicOtaUpdate() {
   if (!wifiHardwareEnabled) {
     otaStatusMessage = "Wi-Fi is Off. Enabling...";
     Serial.println("OTA Manager: " + otaStatusMessage);
-    setWifiHardwareState(true, WIFI_MODE_STA);
+    setWifiHardwareState(true, RF_MODE_NORMAL_STA);
     delay(200);
     if (!wifiHardwareEnabled) {
       otaStatusMessage = "Failed to enable Wi-Fi for OTA.";
