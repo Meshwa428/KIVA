@@ -91,11 +91,12 @@ void initializeCurrentMenu() {
     }
   }
 
-  if (!isJammingOperationActive && currentMenu != OTA_WEB_ACTIVE && currentMenu != OTA_BASIC_ACTIVE && currentMenu != OTA_SD_STATUS) {
+  if (isJammingOperationActive) {
+    currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_JAMMING;
+    currentInputPollInterval = INPUT_POLL_INTERVAL_JAMMING;
+  } else {
     currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
     currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
-  } else if (currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_BASIC_ACTIVE || currentMenu == OTA_SD_STATUS) {
-    currentInputPollInterval = INPUT_POLL_INTERVAL_JAMMING; 
   }
 
 

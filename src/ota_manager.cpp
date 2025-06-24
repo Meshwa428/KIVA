@@ -384,16 +384,16 @@ bool startWebOtaUpdate() {
     Serial.println("OTA Manager: " + otaStatusMessage);
     return false;
   }
-  resetOtaState(); 
+  resetOtaState();
 
   Serial.println("OTA Manager: Attempting to start Web OTA (AP Mode)...");
 
 
-  setWifiHardwareState(true, WIFI_MODE_AP); // Request AP mode
-  
-  if (!wifiHardwareEnabled) { // Check Kiva's flag, which setWifiHardwareState should manage
+  setWifiHardwareState(true, WIFI_MODE_AP);  // Request AP mode
+
+  if (!wifiHardwareEnabled) {  // Check Kiva's flag, which setWifiHardwareState should manage
     // otaStatusMessage will be set by getWifiStatusMessage() reflecting the failure reason from setWifiHardwareState
-    otaStatusMessage = String("AP Mode Setup FAILED: ") + getWifiStatusMessage(); 
+    otaStatusMessage = String("AP Mode Setup FAILED: ") + getWifiStatusMessage();
     Serial.println("OTA Manager: " + otaStatusMessage);
     otaProgress = -1;
     // No need to call setWifiHardwareState(false) here, as it failed to enable.
@@ -402,21 +402,21 @@ bool startWebOtaUpdate() {
 
   // Double check actual mode with Arduino API, as an extra safeguard
   if (WiFi.getMode() != WIFI_AP) {
-      otaStatusMessage = "Error: Wi-Fi not in AP Mode after enable. Mode: " + String(WiFi.getMode());
-      Serial.println("OTA Manager: " + otaStatusMessage);
-      otaProgress = -1;
-      setWifiHardwareState(false); // Attempt to turn it off cleanly if it's in a wrong state
-      return false;
+    otaStatusMessage = "Error: Wi-Fi not in AP Mode after enable. Mode: " + String(WiFi.getMode());
+    Serial.println("OTA Manager: " + otaStatusMessage);
+    otaProgress = -1;
+    setWifiHardwareState(false);  // Attempt to turn it off cleanly if it's in a wrong state
+    return false;
   }
 
   Serial.println("OTA Manager: Wi-Fi hardware confirmed to be in AP mode by setWifiHardwareState.");
-  delay(300); // Increased delay for AP mode to be fully stable before AP config.
+  delay(300);  // Increased delay for AP mode to be fully stable before AP config.
 
   if (!isSdCardAvailable()) {
     otaStatusMessage = "SD Card Required for OTA Page/Config!";
     Serial.println("OTA Manager: " + otaStatusMessage);
     otaProgress = -1;
-    setWifiHardwareState(false); 
+    setWifiHardwareState(false);
     return false;
   }
   if (!SD.exists(FIRMWARE_DIR_PATH)) {
@@ -431,7 +431,7 @@ bool startWebOtaUpdate() {
 
   char ap_ssid[32];
   snprintf(ap_ssid, sizeof(ap_ssid), "%s-OTA", OTA_HOSTNAME);
-  String ap_password_to_use = ""; // Default to open AP if no password found/generated
+  String ap_password_to_use = "";  // Default to open AP if no password found/generated
 
   if (SD.exists(OTA_AP_PASSWORD_FILE)) {
     File pwFile = SD.open(OTA_AP_PASSWORD_FILE, FILE_READ);
@@ -444,85 +444,85 @@ bool startWebOtaUpdate() {
           Serial.printf("OTA Manager: Using pre-set AP password from %s\n", OTA_AP_PASSWORD_FILE);
         } else {
           Serial.printf("OTA Manager: Password in %s is invalid length (%d). AP will be OPEN.\n", OTA_AP_PASSWORD_FILE, loaded_pw.length());
-           ap_password_to_use = ""; // Force open AP
+          ap_password_to_use = "";  // Force open AP
         }
       } else if (pwFile.size() > 0) {
         Serial.printf("OTA Manager: Content of %s seems invalid (size: %d). AP will be OPEN.\n", OTA_AP_PASSWORD_FILE, pwFile.size());
-         ap_password_to_use = ""; // Force open AP
-      } else { 
-         Serial.printf("OTA Manager: Password file %s is empty. AP will be OPEN.\n", OTA_AP_PASSWORD_FILE);
-          ap_password_to_use = ""; // Force open AP
+        ap_password_to_use = "";  // Force open AP
+      } else {
+        Serial.printf("OTA Manager: Password file %s is empty. AP will be OPEN.\n", OTA_AP_PASSWORD_FILE);
+        ap_password_to_use = "";  // Force open AP
       }
-      if(pwFile) pwFile.close();
+      if (pwFile) pwFile.close();
     } else {
       Serial.printf("OTA Manager: Could not open %s. AP will be OPEN.\n", OTA_AP_PASSWORD_FILE);
-       ap_password_to_use = ""; // Force open AP
+      ap_password_to_use = "";  // Force open AP
     }
   } else {
     Serial.printf("OTA Manager: %s not found. AP will be OPEN.\n", OTA_AP_PASSWORD_FILE);
-     ap_password_to_use = ""; // Force open AP
+    ap_password_to_use = "";  // Force open AP
   }
 
   // If you want to force a random password if none is found, uncomment next lines:
   // if (ap_password_to_use.isEmpty()) {
-  //   ap_password_to_use = generateRandomPassword(8); 
+  //   ap_password_to_use = generateRandomPassword(8);
   //   Serial.println("OTA Manager: Using randomly generated AP password.");
   // }
-  
+
   IPAddress apIP(192, 168, 4, 1);
-  IPAddress gateway(192, 168, 4, 1); 
+  IPAddress gateway(192, 168, 4, 1);
   IPAddress subnet(255, 255, 255, 0);
-  
+
   Serial.printf("OTA Manager: Attempting WiFi.softAPConfig with IP: %s\n", apIP.toString().c_str());
-  if(!WiFi.softAPConfig(apIP, gateway, subnet)){ 
-      Serial.println("OTA Manager: WiFi.softAPConfig FAILED!");
-      otaStatusMessage = "AP Config Fail (IP)";
-      otaProgress = -1;
-      setWifiHardwareState(false); 
-      return false;
+  if (!WiFi.softAPConfig(apIP, gateway, subnet)) {
+    Serial.println("OTA Manager: WiFi.softAPConfig FAILED!");
+    otaStatusMessage = "AP Config Fail (IP)";
+    otaProgress = -1;
+    setWifiHardwareState(false);
+    return false;
   }
   Serial.println("OTA Manager: WiFi.softAPConfig successful.");
-  delay(100); 
+  delay(100);
 
-  Serial.printf("OTA Manager: Attempting WiFi.softAP with SSID: %s. Password is %s\n", 
+  Serial.printf("OTA Manager: Attempting WiFi.softAP with SSID: %s. Password is %s\n",
                 ap_ssid, ap_password_to_use.isEmpty() ? "OPEN (none)" : "SET");
 
   bool apStarted;
   if (ap_password_to_use.isEmpty()) {
-      apStarted = WiFi.softAP(ap_ssid); // Open AP
+    apStarted = WiFi.softAP(ap_ssid);  // Open AP
   } else {
-      apStarted = WiFi.softAP(ap_ssid, ap_password_to_use.c_str()); // WPA2-PSK AP
+    apStarted = WiFi.softAP(ap_ssid, ap_password_to_use.c_str());  // WPA2-PSK AP
   }
 
   if (apStarted) {
-    Serial.printf("AP Configured by WiFi.softAP. SSID: %s, PW: %s, IP: %s\n", 
-                  ap_ssid, 
-                  ap_password_to_use.isEmpty() ? "OPEN" : ap_password_to_use.c_str(), 
+    Serial.printf("AP Configured by WiFi.softAP. SSID: %s, PW: %s, IP: %s\n",
+                  ap_ssid,
+                  ap_password_to_use.isEmpty() ? "OPEN" : ap_password_to_use.c_str(),
                   WiFi.softAPIP().toString().c_str());
 
     String displayInfo = WiFi.softAPIP().toString();
     if (!ap_password_to_use.isEmpty()) {
-        displayInfo += " P: " + ap_password_to_use;
+      displayInfo += " P: " + ap_password_to_use;
     }
     strncpy(otaDisplayIpAddress, displayInfo.c_str(), sizeof(otaDisplayIpAddress) - 1);
     otaDisplayIpAddress[sizeof(otaDisplayIpAddress) - 1] = '\0';
-    
-    if (mdnsServiceStarted) { 
-        MDNS.end();
-        mdnsServiceStarted = false; 
-        Serial.println("OTA Manager: Ended pre-existing MDNS service.");
+
+    if (mdnsServiceStarted) {
+      MDNS.end();
+      mdnsServiceStarted = false;
+      Serial.println("OTA Manager: Ended pre-existing MDNS service.");
     }
-    if (MDNS.begin(OTA_HOSTNAME)) { 
+    if (MDNS.begin(OTA_HOSTNAME)) {
       MDNS.addService("http", "tcp", OTA_WEB_SERVER_PORT);
       Serial.printf("MDNS started for AP: %s.local (or IP: %s)\n", OTA_HOSTNAME, WiFi.softAPIP().toString().c_str());
-      mdnsServiceStarted = true; 
+      mdnsServiceStarted = true;
     } else {
       Serial.println("Error setting up MDNS for AP!");
-      mdnsServiceStarted = false; 
+      mdnsServiceStarted = false;
     }
-    otaStatusMessage = String(OTA_HOSTNAME) + ".local"; 
+    otaStatusMessage = String(OTA_HOSTNAME) + ".local";
 
-    otaWebServer.on("/", HTTP_GET, []() { 
+    otaWebServer.on("/", HTTP_GET, []() {
       if (!isSdCardAvailable()) {
         otaWebServer.send(503, "text/plain", "SD Card Error: Cannot serve OTA page.");
         return;
@@ -540,25 +540,25 @@ bool startWebOtaUpdate() {
       otaWebServer.streamFile(pageFile, "text/html");
       pageFile.close();
     });
-    otaWebServer.on("/favicon.ico", HTTP_GET, []() { 
+    otaWebServer.on("/favicon.ico", HTTP_GET, []() {
       otaWebServer.sendHeader("Content-Encoding", "gzip");
       otaWebServer.send_P(200, "image/x-icon", favicon_ico_gz, favicon_ico_gz_len);
     });
     otaWebServer.on("/update", HTTP_POST, handleWebUpdateEnd, handleWebUpdateUpload);
-    
+
     otaWebServer.begin();
-    webOtaActive = true; 
-    otaProgress = 0;     
+    webOtaActive = true;
+    otaProgress = 0;
     Serial.println("WebOTA: Server started and listening.");
     return true;
-  } else { 
+  } else {
     Serial.println("AP Mode Failed (WiFi.softAP call returned false). ESP Wi-Fi State may be inconsistent.");
     otaStatusMessage = "AP Config Fail (SSID)";
     otaDisplayIpAddress[0] = '\0';
-    setWifiHardwareState(false); 
+    setWifiHardwareState(false);
     otaProgress = -1;
     webOtaActive = false;
-    mdnsServiceStarted = false; 
+    mdnsServiceStarted = false;
     return false;
   }
 }
@@ -571,46 +571,46 @@ void handleWebOtaClient() {
 }
 
 void stopWebOtaUpdate() {
-  if (!webOtaActive && !otaIsUndoingChanges) { // Only reset state if not already trying to undo
+  if (!webOtaActive && !otaIsUndoingChanges) {  // Only reset state if not already trying to undo
     // If stop is called on an inactive OTA, just ensure state is clean.
     // This can happen if back is pressed multiple times from OTA screen.
     if (mdnsServiceStarted) {
-        MDNS.end();
-        mdnsServiceStarted = false;
-        Serial.println("WebOTA: Ended orphaned MDNS service during stop of inactive OTA.");
+      MDNS.end();
+      mdnsServiceStarted = false;
+      Serial.println("WebOTA: Ended orphaned MDNS service during stop of inactive OTA.");
     }
-    resetOtaState(); 
+    resetOtaState();
     // Ensure Wi-Fi is also turned off if it was somehow left on by a failed AP attempt
     // Check actual IDF mode before deciding to call setWifiHardwareState(false)
     wifi_mode_t currentIdfMode = WIFI_MODE_NULL;
     esp_wifi_get_mode(&currentIdfMode);
-    if (currentIdfMode != WIFI_MODE_NULL || wifiHardwareEnabled) { // If Kiva thinks its on or IDF says its on
-        Serial.println("WebOTA: Wi-Fi was active during stop of inactive OTA. Forcing disable.");
-        setWifiHardwareState(false);
+    if (currentIdfMode != WIFI_MODE_NULL || wifiHardwareEnabled) {  // If Kiva thinks its on or IDF says its on
+      Serial.println("WebOTA: Wi-Fi was active during stop of inactive OTA. Forcing disable.");
+      setWifiHardwareState(false);
     }
     return;
   }
 
-  otaIsUndoingChanges = true; // Signal that we are actively stopping
+  otaIsUndoingChanges = true;  // Signal that we are actively stopping
   Serial.println("WebOTA: Stopping server and AP mode...");
-  
-  if (mdnsServiceStarted) { 
+
+  if (mdnsServiceStarted) {
     MDNS.end();
-    mdnsServiceStarted = false; 
+    mdnsServiceStarted = false;
     Serial.println("WebOTA: MDNS Ended.");
   }
-  
-  otaWebServer.stop(); 
+
+  otaWebServer.stop();
   Serial.println("WebOTA: WebServer Stopped.");
 
   // Wi-Fi stack is fully managed by setWifiHardwareState now.
   // Calling setWifiHardwareState(false) will perform the full teardown.
   Serial.println("WebOTA: Calling setWifiHardwareState(false) for full Wi-Fi disable...");
-  setWifiHardwareState(false); 
+  setWifiHardwareState(false);
 
-  webOtaActive = false;     
-  resetOtaState();          
-  otaIsUndoingChanges = false; // Reset flag after successful stop
+  webOtaActive = false;
+  resetOtaState();
+  otaIsUndoingChanges = false;  // Reset flag after successful stop
   Serial.println("WebOTA: Stopped and Wi-Fi hardware disabled.");
 }
 
@@ -776,6 +776,8 @@ void performSdUpdate(const FirmwareInfo& targetFirmware) {
 }
 
 // --- Basic OTA (IDE) Implementation ---
+// In ota_manager.cpp
+
 void configureArduinoOta() {
   ArduinoOTA.setHostname(OTA_HOSTNAME);
 
@@ -785,9 +787,9 @@ void configureArduinoOta() {
   if (isSdCardAvailable() && SD.exists(OTA_AP_PASSWORD_FILE)) {
     File pwFile = SD.open(OTA_AP_PASSWORD_FILE, FILE_READ);
     if (pwFile) {
-      if (pwFile.size() > 0 && pwFile.size() < MAX_AP_PASSWORD_LEN + 5) {  // +5 for potential whitespace/newlines
-        String loaded_pw = pwFile.readStringUntil('\n');                   // Read first line
-        loaded_pw.trim();                                                  // Remove leading/trailing whitespace including \r
+      if (pwFile.size() > 0 && pwFile.size() < MAX_AP_PASSWORD_LEN + 5) {
+        String loaded_pw = pwFile.readStringUntil('\n');
+        loaded_pw.trim();
         if (loaded_pw.length() >= MIN_AP_PASSWORD_LEN && loaded_pw.length() <= MAX_AP_PASSWORD_LEN) {
           basic_ota_password_to_use = loaded_pw;
           Serial.printf("BasicOTA: Using password from %s for authentication.\n", OTA_AP_PASSWORD_FILE);
@@ -796,7 +798,7 @@ void configureArduinoOta() {
         }
       } else if (pwFile.size() > 0) {
         Serial.printf("BasicOTA: Content of %s seems invalid (size: %d). Proceeding without password.\n", OTA_AP_PASSWORD_FILE, pwFile.size());
-      } else {  // File exists but is empty
+      } else { 
         Serial.printf("BasicOTA: Password file %s is empty. Proceeding without password.\n", OTA_AP_PASSWORD_FILE);
       }
       pwFile.close();
@@ -810,11 +812,6 @@ void configureArduinoOta() {
   if (!basic_ota_password_to_use.isEmpty()) {
     ArduinoOTA.setPassword(basic_ota_password_to_use.c_str());
   } else {
-    // No valid password found from SD card.
-    // Option 1: Proceed without a password (as done here).
-    // Option 2: Fall back to a default hardcoded password from config.h (e.g., OTA_BASIC_DEFAULT_PASSWORD)
-    //           if (strlen(OTA_BASIC_DEFAULT_PASSWORD) > 0) ArduinoOTA.setPassword(OTA_BASIC_DEFAULT_PASSWORD);
-    // For now, sticking to no password if not found on SD for simplicity, but clearly logging it.
     Serial.println("BasicOTA: No password set (authentication disabled).");
   }
 
@@ -826,15 +823,19 @@ void configureArduinoOta() {
       type = "filesystem";
     }
     otaStatusMessage = String("Updating ") + type + "...";
-    otaProgress = 0;
+    otaProgress = 0; // Initialize percentage progress
+    // REMOVED: otaLastProgressBytes = 0;
+    // REMOVED: otaLastTotalBytes = 0;
     Serial.println("BasicOTA: " + otaStatusMessage);
-    otaIsUndoingChanges = true;
+    otaIsUndoingChanges = true; 
   });
 
   ArduinoOTA.onEnd([]() {
-    otaProgress = 100;
+    otaProgress = 100; 
     otaStatusMessage = "Success! Rebooting...";
     Serial.println("\nBasicOTA: End. Assuming success and rebooting.");
+
+    // REMOVED: Logic to update otaLastProgressBytes and otaLastTotalBytes on completion
 
     FirmwareInfo basicUpdateInfo;
     strlcpy(basicUpdateInfo.version, "BasicOTA Update", FW_VERSION_MAX_LEN);
@@ -847,23 +848,26 @@ void configureArduinoOta() {
       strcpy(basicUpdateInfo.build_date, "N/A - Time Unset");
     }
     strlcpy(basicUpdateInfo.checksum_md5, "UNKNOWN_AFTER_IDE_OTA", FW_CHECKSUM_MD5_MAX_LEN);
-    strlcpy(basicUpdateInfo.binary_filename, "ide_upload.bin", FW_BINARY_FILENAME_MAX_LEN);
+    strlcpy(basicUpdateInfo.binary_filename, "ide_upload.bin", FW_BINARY_FILENAME_MAX_LEN); 
     strlcpy(basicUpdateInfo.description, "Updated via Arduino IDE", FW_DESCRIPTION_MAX_LEN);
     basicUpdateInfo.isValid = true;
-    saveCurrentFirmwareInfo(basicUpdateInfo);
+    saveCurrentFirmwareInfo(basicUpdateInfo); 
   });
 
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    if (total > 0) {
-      otaProgress = (progress / (total / 100));
-    } else {
-      otaProgress = 0;
-    }
-    otaStatusMessage = String("Progress: ") + String(otaProgress) + "%";
-  });
+  // ArduinoOTA.onProgress([](unsigned int progress_val, unsigned int total_val) {
+  //   // REMOVED: otaLastProgressBytes = progress_val;
+  //   // REMOVED: otaLastTotalBytes = total_val;
+
+  //   if (total_val > 0) {
+  //     otaProgress = (progress_val * 100) / total_val;
+  //   } else {
+  //     otaProgress = 0; 
+  //   }
+  //   otaStatusMessage = String("Progress: ") + String(otaProgress) + "%"; 
+  // });
 
   ArduinoOTA.onError([](ota_error_t error) {
-    otaProgress = -1;
+    otaProgress = -1; 
     String errorMsgBase = "Error[" + String(error) + "]: ";
     String specificError = "";
     if (error == OTA_AUTH_ERROR) specificError = "Auth Failed";
@@ -875,7 +879,7 @@ void configureArduinoOta() {
 
     otaStatusMessage = errorMsgBase + specificError;
     Serial.println("BasicOTA: " + otaStatusMessage);
-    otaIsUndoingChanges = false;
+    otaIsUndoingChanges = false; 
   });
 }
 
@@ -901,32 +905,60 @@ bool startBasicOtaUpdate() {
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    otaStatusMessage = "Wi-Fi not connected for OTA.";  // This message is for internal logging mainly now
+    otaStatusMessage = "Wi-Fi not connected for OTA."; // This will be the initial message before prompt
     Serial.println("BasicOTA: " + otaStatusMessage);
 
-    activatePromptOverlay("OTA Wi-Fi",       // Shorter Title
-                          "Connect Wi-Fi?",  // Shorter Message
-                          "X", "O",          // Option texts: "X" for Cancel/No, "O" for Confirm/Yes
-                          WIFI_SETUP_MENU,
-                          []() {  // Action on confirm ("O")
+    activatePromptOverlay("OTA Wi-Fi",
+                          "Connect Wi-Fi?",
+                          "X", "O",
+                          WIFI_SETUP_MENU, // Target menu if prompt is cancelled (stays on WIFI_SETUP_MENU)
+                          []() { // Action on confirm
                             wifiConnectForScheduledAction = true;
-                            postWifiActionMenu = OTA_BASIC_ACTIVE;
+                            postWifiActionMenu = OTA_BASIC_ACTIVE; // Go back to OTA_BASIC_ACTIVE after Wi-Fi connect
+                            // Note: currentMenu will be set to WIFI_SETUP_MENU by prompt logic if confirmed
                           });
-    return false;  // OTA doesn't start immediately, prompt is shown
+    return false; // Return false, prompt will handle next steps
   }
 
-  resetOtaState();
+  // ---- If Wi-Fi is already connected ----
+  resetOtaState(); // Ensure clean state if we proceed
   Serial.println("BasicOTA: Starting ArduinoOTA...");
-  strncpy(otaDisplayIpAddress, WiFi.localIP().toString().c_str(), sizeof(otaDisplayIpAddress) - 1);
-  otaDisplayIpAddress[sizeof(otaDisplayIpAddress) - 1] = '\0';
+  
+  String basic_ota_password_to_use_for_display = "";
+  if (isSdCardAvailable() && SD.exists(OTA_AP_PASSWORD_FILE)) {
+    File pwFile = SD.open(OTA_AP_PASSWORD_FILE, FILE_READ);
+    if (pwFile) {
+      if (pwFile.size() > 0 && pwFile.size() < MAX_AP_PASSWORD_LEN + 5) {
+        String loaded_pw = pwFile.readStringUntil('\n');
+        loaded_pw.trim();
+        if (loaded_pw.length() >= MIN_AP_PASSWORD_LEN && loaded_pw.length() <= MAX_AP_PASSWORD_LEN) {
+          basic_ota_password_to_use_for_display = loaded_pw;
+        }
+      }
+      pwFile.close();
+    }
+  }
+  
+  configureArduinoOta(); // Sets up callbacks, including onProgress
 
-  configureArduinoOta();
+  // Construct otaDisplayIpAddress string (IP and Password ONLY)
+  String displayInfo = WiFi.localIP().toString();
+  if (!basic_ota_password_to_use_for_display.isEmpty()) {
+      displayInfo += " P: " + basic_ota_password_to_use_for_display;
+  }
+  strncpy(otaDisplayIpAddress, displayInfo.c_str(), sizeof(otaDisplayIpAddress) - 1);
+  otaDisplayIpAddress[sizeof(otaDisplayIpAddress) - 1] = '\0';
+  
   ArduinoOTA.begin();
 
-  otaStatusMessage = String("IP: ") + WiFi.localIP().toString();
-  otaProgress = 0;
+  // Set the initial main status message to the hostname
+  otaStatusMessage = String(OTA_HOSTNAME) + ".local"; 
+  // Or, if you prefer "Waiting for IDE..."
+  // otaStatusMessage = "Waiting for IDE...";
+
+  otaProgress = 0; // Indicates ready, waiting for IDE
   basicOtaStarted = true;
-  Serial.println("BasicOTA: Ready. IP: " + WiFi.localIP().toString() + " (Hostname: " + OTA_HOSTNAME + ".local)");
+  Serial.printf("BasicOTA: Ready. Hostname: %s.local, Full Info for Display: %s\n", OTA_HOSTNAME, otaDisplayIpAddress);
   return true;
 }
 
@@ -939,8 +971,8 @@ void handleBasicOta() {  // Unchanged
 void stopBasicOtaUpdate() {
   if (!basicOtaStarted) {
     if (otaIsUndoingChanges) {
-        Serial.println("BasicOTA: Stop called while otaIsUndoingChanges was true. Resetting.");
-        otaIsUndoingChanges = false;
+      Serial.println("BasicOTA: Stop called while otaIsUndoingChanges was true. Resetting.");
+      otaIsUndoingChanges = false;
     }
     resetOtaState();
     return;
@@ -948,7 +980,7 @@ void stopBasicOtaUpdate() {
 
   otaIsUndoingChanges = true;
   Serial.println("BasicOTA: Stopping ArduinoOTA services...");
-  basicOtaStarted = false; // Stops ArduinoOTA.handle()
+  basicOtaStarted = false;  // Stops ArduinoOTA.handle()
 
   // MDNS for Basic OTA is usually not started by Kiva, but by ArduinoOTA library implicitly if needed.
   // If Kiva explicitly started MDNS for Basic OTA (it doesn't seem to), it would be ended here.
@@ -961,5 +993,5 @@ void stopBasicOtaUpdate() {
 
   resetOtaState();
   otaIsUndoingChanges = false;
-  Serial.println("BasicOTA: Stopped."); // Message reflects Wi-Fi state not explicitly changed here
+  Serial.println("BasicOTA: Stopped.");  // Message reflects Wi-Fi state not explicitly changed here
 }
