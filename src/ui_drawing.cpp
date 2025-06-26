@@ -7,8 +7,435 @@
 #include "jamming.h"
 #include "ota_manager.h"  // For OTA status variables
 #include "firmware_metadata.h"
+#include "ui_drawing.h" // Your main UI drawing header
+#include "icons.h"      // The new header for icon definitions and declarations
+#include <U8g2lib.h>    // For the u8g2 object
 #include <Arduino.h>
 #include <math.h>
+
+// const int ICON_WIDTH = 15;
+// const int ICON_HEIGHT = 15;
+
+// const int SMALL_ICON_WIDTH = 7;
+// const int SMALL_ICON_HEIGHT = 7;
+
+// // Structure to hold the bitmap for an 15x15 icon
+// struct IconData {
+//     uint8_t bitmap[ICON_HEIGHT][ICON_WIDTH];         // For 15x15
+//     uint8_t small_bitmap[SMALL_ICON_HEIGHT][SMALL_ICON_WIDTH]; // For 7x7
+//     bool has_small_version;
+// };
+
+// // Total number of unique icon types you have
+// // Please update this count if you add/remove icons
+// #define NUM_ICON_TYPES 22
+
+// // Predefined icons array (15x15)
+// // IMPORTANT: You need to design the 15x15 pixel art for each icon.
+// // Below are EXAMPLES and placeholders. You'll need to fill these out.
+
+// const IconData predefinedIcons[NUM_ICON_TYPES] = {
+//     // Icon Type 0: Tools (Wrench example for 15x15)
+//     {{
+//         {1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
+//         {1,0,0,0,0,1,0,0,0,0,1,1,1,1,0},
+//         {1,0,1,0,0,1,0,0,0,0,1,1,0,1,0},
+//         {1,0,0,1,1,1,0,0,0,0,1,0,1,1,0},
+//         {1,0,0,1,1,0,0,0,0,0,1,1,1,1,0},
+//         {0,1,1,1,0,1,0,0,0,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,1,0,0,0,1,0,0,0,0,0},
+//         {0,1,1,1,1,0,0,0,0,0,1,0,0,0,0},
+//         {0,1,1,0,1,0,0,0,0,0,0,1,0,0,0},
+//         {0,1,0,1,1,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,1,1,0,0,0,0,0,0,0,1,1,1},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,1},
+//     }},
+//     // Icon Type 1: Games (Simple Gamepad for 15x15)
+//     {{
+//         {0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//         {0,0,1,1,1,1,0,1,0,1,1,1,1,0,0},
+//         {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,1,0,0,0,0,0,1,1,0,0,0,1},
+//         {1,0,1,1,1,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,1,0,0,0,0,0,0,0,1,1,0,1},
+//         {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
+//         {0,1,0,0,0,1,0,0,0,1,0,0,0,1,0},
+//         {0,0,1,1,1,0,0,0,0,0,1,1,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 2: Settings (Gear for 15x15 - adjust as needed)
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,1,1,0,0,1,1,1,0,0,1,1,0,0},
+//         {0,1,0,0,1,1,0,0,0,1,1,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,1,0,0,0,1,1,1,0,0,0,1,0,0},
+//         {0,1,0,0,0,1,1,0,1,1,0,0,0,1,0},
+//         {0,1,0,0,0,1,0,0,0,1,0,0,0,1,0},
+//         {0,1,0,0,0,1,1,0,1,1,0,0,0,1,0},
+//         {0,0,1,0,0,0,1,1,1,0,0,0,1,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,1,1,0,0,0,1,1,0,0,1,0},
+//         {0,0,1,1,0,0,1,1,1,0,0,1,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 3: Info
+//     {{
+//       {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//       {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
+//       {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
+//       {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
+//       {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
+//       {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//       {1,0,0,0,0,1,1,1,0,0,0,0,0,0,1},
+//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
+//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
+//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
+//       {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
+//       {0,1,0,0,0,1,1,1,1,1,0,0,0,1,0},
+//       {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//       {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
+//       {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//     }},
+//     // Icon Type 4: Game Snake
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,1,1,1,0,0,0,0},
+//         {0,0,0,1,1,1,1,1,1,1,1,0,0,0,0},
+//         {0,0,0,1,1,1,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 5: Game Tetris
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,1,1,0,0,0,0},
+//         {0,0,1,1,1,0,0,0,1,1,1,0,0,0,0},
+//         {0,0,1,1,1,0,0,0,1,1,1,0,0,0,0},
+//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
+//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
+//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
+//         {0,0,1,1,1,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
+//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
+//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 6: Game Pong
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,1,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,1,1,1,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,1,0,0,0,1,1,0},
+//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 7: Game Maze
+//     {{
+//       {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//       {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+//       {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
+//       {0,1,0,0,0,0,0,1,0,1,0,0,0,1,0},
+//       {0,1,1,1,1,1,1,1,0,0,0,0,0,1,0},
+//       {0,1,0,0,0,0,0,1,1,1,0,0,0,1,0},
+//       {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//       {0,1,0,0,0,1,0,0,0,0,0,0,0,1,0},
+//       {0,1,0,0,0,1,0,0,0,0,0,0,0,1,0},
+//       {0,1,0,0,0,1,1,1,1,1,1,0,0,1,0},
+//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
+//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
+//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
+//       {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+//       {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 8: Navigation Back Arrow
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 9: Network WiFi Symbol
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
+//         {0,0,1,1,0,0,0,0,0,0,0,1,1,0,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {1,0,0,0,0,1,1,1,1,1,0,0,0,0,1},
+//         {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,1,1,0,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,1,0,0,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 10: Network Bluetooth Symbol
+//     {{
+//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,1,0,0,0},
+//         {0,0,0,1,0,0,1,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,1,1,1,0,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,1,1,1,0,1,0,0,0,0,0,0},
+//         {0,0,0,1,0,0,1,0,0,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,1,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 11: Tool Jamming
+//     {{
+//         {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,1,0,0,1,0,0,0,0,0,1,0,0,1,0},
+//         {0,1,0,1,0,0,0,0,0,0,0,1,0,1,0},
+//         {0,1,0,1,0,0,1,0,1,0,0,1,0,1,0},
+//         {0,1,0,1,0,0,1,0,1,0,0,1,0,1,0},
+//         {0,1,0,0,1,0,1,0,1,0,1,0,0,1,0},
+//         {0,0,1,0,0,0,1,0,1,0,0,0,1,0,0},
+//         {0,0,0,1,0,1,1,1,1,1,0,1,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,0,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//     }},
+//     // Icon Type 12: Tool Injection
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,1,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,1,1,0},
+//         {0,0,0,0,0,0,0,0,0,1,0,1,1,1,1},
+//         {0,0,0,0,0,0,0,0,1,1,1,1,1,0,1},
+//         {0,0,0,0,0,0,0,1,0,0,1,1,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,1,1,0,0},
+//         {0,0,0,0,0,1,0,0,0,0,0,1,0,0,0},
+//         {0,0,0,0,1,1,0,0,0,0,1,0,0,0,0},
+//         {0,0,0,1,1,1,1,0,0,1,0,0,0,0,0},
+//         {0,0,0,1,1,1,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,1,1,1,1,0,0,0,0,0,0,0},
+//         {0,0,0,1,0,1,1,0,0,0,0,0,0,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 13: Settings Display
+//     {{
+//         {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+//         {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
+//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 14: Settings Sound
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,0,0,0,1,0,0},
+//         {0,0,0,0,0,1,0,0,0,1,0,0,1,0,0},
+//         {0,0,0,0,1,1,0,1,0,0,1,0,0,1,0},
+//         {0,0,0,1,1,1,0,0,1,0,0,1,0,1,0},
+//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
+//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
+//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
+//         {0,0,0,1,1,1,0,0,1,0,0,1,0,1,0},
+//         {0,0,0,0,1,1,0,1,0,0,1,0,0,1,0},
+//         {0,0,0,0,0,1,0,0,0,1,0,0,1,0,0},
+//         {0,0,0,0,0,0,0,0,1,0,0,0,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
+//     }},
+//     // Icon Type 15: Firmware Update
+//     {{
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//       {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
+//       {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
+//       {1,1,1,1,0,0,1,1,1,0,0,1,1,1,1},
+//       {0,0,0,1,0,1,0,0,0,1,0,1,0,0,0},
+//       {1,1,1,1,0,1,0,0,0,1,0,1,1,1,1},
+//       {0,0,0,1,0,1,0,0,0,1,0,1,0,0,0},
+//       {1,1,1,1,0,0,1,1,1,0,0,1,1,1,1},
+//       {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
+//       {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
+//     }},
+//     // Icon Type 16: UI Refresh/Rescan
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,1,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,1,0,1,0,0,0,0,0,1,1,0,0,0},
+//         {0,0,1,1,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,1,1,1,1,0,0,0,0,0,0,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 17: UI Charging
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 18: Vibration
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {1,0,0,1,0,0,1,1,1,0,0,1,0,0,1},
+//         {1,0,1,0,0,1,0,1,0,1,0,0,1,0,1},
+//         {1,0,1,0,0,1,0,0,0,1,0,0,1,0,1},
+//         {1,0,1,0,0,1,0,0,0,1,0,0,1,0,1},
+//         {1,0,0,1,0,0,1,1,1,0,0,1,0,0,1},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 19: Laser
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
+//         {0,1,0,0,0,0,0,1,0,0,1,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,1,0,1,0,1,0,0},
+//         {0,1,0,0,0,0,0,0,0,1,1,1,0,0,0},
+//         {0,1,0,0,0,0,1,1,1,1,1,1,1,1,1},
+//         {0,1,1,1,0,0,0,0,0,1,1,1,0,0,0},
+//         {0,0,0,0,0,0,0,0,1,0,1,0,1,0,0},
+//         {0,0,0,0,0,0,0,1,0,0,1,0,0,1,0},
+//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
+//         {0,0,0,1,0,1,0,0,0,0,0,0,0,0,0},
+//         {0,0,1,1,1,0,0,0,0,0,0,0,0,0,0},
+//         {0,1,1,1,1,1,0,0,0,0,0,0,0,0,0},
+//         {1,1,0,1,1,0,0,0,0,0,0,0,0,0,0},
+//         {1,1,1,1,0,0,0,0,0,0,0,0,0,0,0},
+//         {1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 20: Flashlight
+//     {{
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//         {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
+//         {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
+//         {0,0,0,1,0,0,0,1,0,0,0,1,0,0,0},
+//         {0,0,0,0,1,0,0,1,0,0,1,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
+//         {0,0,0,0,1,0,0,1,0,0,1,0,0,0,0},
+//         {0,0,0,1,0,0,0,1,0,0,0,1,0,0,0},
+//         {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
+//         {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
+//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+//     }},
+//     // Icon Type 21: Utilities
+//     {{
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
+//         {0,0,0,0,0,1,0,0,0,1,0,0,0,0,0},
+//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+//         {0,0,1,1,1,1,1,1,1,1,1,1,1,0,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,1,0,0,0,0,0,0,0,1,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
+//         {0,0,1,1,1,1,1,1,1,1,1,1,1,0,0},
+//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+//     }}
+// };
+
+// // ==== END OF ICON DEFINITIONS AND STRUCTURE ====
+
+
 
 // Externs for Wi-Fi data (defined in KivaMain.ino)
 extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
@@ -380,7 +807,7 @@ void drawWifiSetupScreen() {
           current_content_x += 6;
         }
       } else if (action_icon_type != -1) {
-        drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false);
+        drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type);
         current_content_x += 10;
       } else {
         current_content_x += 10;
@@ -628,7 +1055,7 @@ void drawWifiConnectionResultScreen() {
   WifiConnectionStatus lastStatus = getCurrentWifiConnectionStatus();
 
   if (lastStatus == WIFI_CONNECTED_SUCCESS) {
-    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 3, true);  // Success icon
+    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 3);  // Success icon
 
     String connectedPrefix = "Connected: ";
     String ssidName = "";
@@ -676,7 +1103,7 @@ void drawWifiConnectionResultScreen() {
     }
 
   } else {                                                            // Error case
-    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 11, true);  // Error icon
+    drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 11);  // Error icon
     int msgWidth = u8g2.getStrWidth(resultMsgFull);
     // For error messages, just display as before but shifted down
     if (msgWidth > u8g2.getDisplayWidth() - 4) {
@@ -1107,7 +1534,7 @@ void drawSDFirmwareListScreen() {
     int icon_y_center_for_draw = item_center_on_screen_y;
 
     if (action_icon_type != -1) {
-      drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, false);  // Small icon
+      drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type);  // Small icon
       current_content_x += 10;                                                                 // Space for icon
     } else {
       current_content_x += 10;  // Default padding if no icon
@@ -1179,7 +1606,7 @@ void drawRfToolkitOverviewMenu() {
             u8g2.setDrawColor(0); // Text color for filled box
             int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
             int icon_y_pos = card_y_abs + icon_margin_top;
-            drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true); // Large icon
+            drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item);
 
             int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
             int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
@@ -1648,7 +2075,7 @@ void drawStatusBar() {
     int charge_icon_y_top = ((STATUS_BAR_H - charge_icon_height) / 2) - 2;
     if (charge_icon_y_top < 0) charge_icon_y_top = 0;
     u8g2.setDrawColor(1);
-    drawCustomIcon(current_x_origin_for_battery, charge_icon_y_top, 17, false);
+    drawCustomIcon(current_x_origin_for_battery, charge_icon_y_top, 17, RENDER_SIZE_SMALL);
   }
 
   char batteryStr[6];
@@ -1715,7 +2142,7 @@ void drawMainMenu() {
     else if (strcmp(itms[i], "Utilities") == 0) iconType = 21;
     else if (strcmp(itms[i], "Info") == 0) iconType = 3;
 
-    drawCustomIcon(icon_x_pos, icon_y_pos, iconType, true);
+    drawCustomIcon(icon_x_pos, icon_y_pos, iconType);
 
     u8g2.setFont(u8g2_font_6x10_tf);
     int text_width_pixels = u8g2.getStrWidth(itms[i]);
@@ -1831,7 +2258,7 @@ void drawCarouselMenu() {
       u8g2.setDrawColor(0);
       int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
       int icon_y_pos = card_y_abs + icon_margin_top;
-      drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item, true);
+      drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item);
 
       int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
       int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
@@ -1980,341 +2407,97 @@ void drawToolGridScreen() {
   u8g2.setMaxClipWindow();
 }
 
-void drawCustomIcon(int x, int y, int iconType, bool isLarge) {
-  switch (iconType) {
-    case 0:  // Tools Icon
-      if (isLarge) {
-        u8g2.drawLine(x + 4, y + 11, x + 11, y + 4);
-        u8g2.drawBox(x + 2, y + 9, 4, 4);
-        u8g2.drawPixel(x + 3, y + 10);
-        u8g2.drawPixel(x + 4, y + 9);
-        u8g2.drawBox(x + 10, y + 2, 4, 4);
-        u8g2.drawPixel(x + 11, y + 5);
-        u8g2.drawPixel(x + 12, y + 4);
-        u8g2.drawLine(x + 4, y + 4, x + 11, y + 11);
-        u8g2.drawBox(x + 2, y + 2, 4, 4);
-        u8g2.drawBox(x + 10, y + 10, 4, 3);
-      } else {
-        u8g2.drawLine(x + 1, y + 5, x + 4, y + 2);
-        u8g2.drawPixel(x + 0, y + 5);
-        u8g2.drawPixel(x + 1, y + 6);
-        u8g2.drawPixel(x + 4, y + 1);
-        u8g2.drawPixel(x + 5, y + 2);
-        u8g2.drawLine(x + 1, y + 1, x + 5, y + 5);
-        u8g2.drawPixel(x + 0, y + 0);
-        u8g2.drawPixel(x + 1, y + 0);
-        u8g2.drawPixel(x + 0, y + 1);
-        u8g2.drawPixel(x + 5, y + 6);
-        u8g2.drawPixel(x + 6, y + 5);
-        u8g2.drawPixel(x + 6, y + 6);
-      }
-      break;
-    case 1:  // Games Icon
-      if (isLarge) {
-        u8g2.drawRFrame(x + 1, y + 4, 14, 8, 3);
-        u8g2.drawBox(x + 3, y + 6, 2, 4);
-        u8g2.drawBox(x + 2, y + 7, 4, 2);
-        u8g2.drawDisc(x + 10, y + 7, 1);
-        u8g2.drawDisc(x + 12, y + 9, 1);
-      } else {
-        u8g2.drawRFrame(x + 0, y + 2, 8, 4, 1);
-        u8g2.drawPixel(x + 2, y + 3);
-        u8g2.drawPixel(x + 5, y + 4);
-      }
-      break;
-    case 2:  // Settings Icon
-      if (isLarge) {
-        u8g2.drawCircle(x + 8, y + 8, 5);
-        u8g2.drawCircle(x + 8, y + 8, 2);
-        for (int k = 0; k < 8; k++) {
-          float angle = k * PI / 4.0;
-          int tx1 = x + 8 + round(cos(angle) * 4);
-          int ty1 = y + 8 + round(sin(angle) * 4);
-          u8g2.drawTriangle(tx1, ty1,
-                            x + 8 + round(cos(angle + 0.15) * 7), y + 8 + round(sin(angle + 0.15) * 7),
-                            x + 8 + round(cos(angle - 0.15) * 7), y + 8 + round(sin(angle - 0.15) * 7));
+void drawCustomIcon(int x_top_left, int y_top_left, int iconType, IconRenderSize size /*= RENDER_SIZE_DEFAULT*/) {
+    const unsigned char* xbm_data = nullptr;
+    int w = 0, h = 0;
+    bool icon_resolved = false; // Flag to track if we've successfully resolved an icon to draw
+
+    // --- Phase 1: Try to resolve a small icon if requested and available ---
+    if (size == RENDER_SIZE_SMALL) {
+        switch (static_cast<IconType>(iconType)) { // Cast to IconType enum for switch
+            case ICON_UI_CHARGING_BOLT:
+                xbm_data = icon_ui_charging_bolt_small_bits; // Assumes this is defined in icons.cpp
+                w = SMALL_ICON_WIDTH;
+                h = SMALL_ICON_HEIGHT;
+                icon_resolved = true;
+                break;
+            // Add other cases here for icons that have specific _small_bits definitions
+            // case ICON_ANOTHER_WITH_SMALL_VERSION:
+            //     xbm_data = icon_another_specific_small_bits;
+            //     w = SMALL_ICON_WIDTH;
+            //     h = SMALL_ICON_HEIGHT;
+            //     icon_resolved = true;
+            //     break;
+            default:
+                // No specific small version for this iconType, will fall through to large/default
+                break;
         }
-      } else {
-        u8g2.drawCircle(x + 4, y + 4, 3);
-        u8g2.drawPixel(x + 4, y + 4);
-        u8g2.drawPixel(x + 4, y + 0);
-        u8g2.drawPixel(x + 4, y + 7);
-        u8g2.drawPixel(x + 0, y + 4);
-        u8g2.drawPixel(x + 7, y + 4);
-        u8g2.drawPixel(x + 1, y + 1);
-        u8g2.drawPixel(x + 6, y + 1);
-        u8g2.drawPixel(x + 1, y + 6);
-        u8g2.drawPixel(x + 6, y + 6);
-      }
-      break;
-    case 3:  // Info Icon
-      if (isLarge) {
-        u8g2.drawCircle(x + 8, y + 8, 7);
-        u8g2.drawDisc(x + 8, y + 4, 1.5);
-        u8g2.drawBox(x + 7, y + 7, 3, 6);
-      } else {
-        u8g2.drawCircle(x + 4, y + 4, 3);
-        u8g2.drawPixel(x + 4, y + 2);
-        u8g2.drawVLine(x + 4, y + 3, 3);
-      }
-      break;
-    case 4:  // Game Icon: Snake
-      if (isLarge) {
-        u8g2.drawBox(x + 2, y + 7, 3, 3);
-        u8g2.drawBox(x + 5, y + 7, 3, 3);
-        u8g2.drawBox(x + 8, y + 7, 3, 3);
-        u8g2.drawBox(x + 11, y + 7, 3, 3);
-        u8g2.drawBox(x + 11, y + 4, 3, 3);
-        u8g2.drawBox(x + 11, y + 1, 3, 3);
-        u8g2.drawPixel(x + 3, y + 8);
-      } else {
-        u8g2.drawHLine(x + 1, y + 4, 4);
-        u8g2.drawVLine(x + 4, y + 2, 3);
-        u8g2.drawPixel(x + 1, y + 3);
-      }
-      break;
-    case 5:  // Game Icon: Tetris blocks
-      if (isLarge) {
-        u8g2.drawBox(x + 2, y + 9, 3, 3);
-        u8g2.drawBox(x + 2, y + 6, 3, 3);
-        u8g2.drawBox(x + 2, y + 3, 3, 3);
-        u8g2.drawBox(x + 5, y + 9, 3, 3);
-        u8g2.drawBox(x + 9, y + 5, 3, 3);
-        u8g2.drawBox(x + 12, y + 5, 3, 3);
-        u8g2.drawBox(x + 6, y + 5, 3, 3);
-        u8g2.drawBox(x + 9, y + 2, 3, 3);
-      } else {
-        u8g2.drawBox(x + 1, y + 4, 2, 2);
-        u8g2.drawBox(x + 1, y + 2, 2, 2);
-        u8g2.drawBox(x + 3, y + 4, 2, 2);
-        u8g2.drawBox(x + 5, y + 1, 2, 2);
-        u8g2.drawBox(x + 5, y + 3, 2, 2);
-      }
-      break;
-    case 6:  // Game Icon: Pong paddles and ball
-      if (isLarge) {
-        u8g2.drawBox(x + 2, y + 4, 2, 8);
-        u8g2.drawBox(x + 12, y + 4, 2, 8);
-        u8g2.drawDisc(x + 8, y + 8, 1.5);
-      } else {
-        u8g2.drawVLine(x + 1, y + 2, 4);
-        u8g2.drawVLine(x + 6, y + 2, 4);
-        u8g2.drawPixel(x + 3, y + 3);
-      }
-      break;
-    case 7:  // Game Icon: Maze
-      if (isLarge) {
-        u8g2.drawFrame(x + 1, y + 1, 14, 14);
-        u8g2.drawVLine(x + 4, y + 1, 10);
-        u8g2.drawVLine(x + 10, y + 4, 11);
-        u8g2.drawHLine(x + 4, y + 4, 7);
-        u8g2.drawHLine(x + 1, y + 10, 7);
-        u8g2.drawPixel(x + 13, y + 2);
-      } else {
-        u8g2.drawFrame(x + 0, y + 0, 8, 8);
-        u8g2.drawVLine(x + 2, y + 0, 5);
-        u8g2.drawHLine(x + 2, y + 5, 4);
-        u8g2.drawVLine(x + 5, y + 2, 6);
-      }
-      break;
-    case 8:  // Navigation Icon: Back Arrow
-      if (isLarge) {
-        u8g2.drawLine(x + 10, y + 3, x + 4, y + 8);
-        u8g2.drawLine(x + 10, y + 4, x + 5, y + 8);
-        u8g2.drawLine(x + 10, y + 13, x + 4, y + 8);
-        u8g2.drawLine(x + 10, y + 12, x + 5, y + 8);
-      } else {
-        u8g2.drawLine(x + 5, y + 1, x + 2, y + 4);
-        u8g2.drawLine(x + 5, y + 6, x + 2, y + 4);
-      }
-      break;
-    case 9:  // Network Icon: WiFi Symbol
-      if (isLarge) {
-        int cx = x + 8;
-        int cy = y + 12;
-        u8g2.drawDisc(cx, cy, 1.5);
-        u8g2.drawCircle(cx, cy, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-        u8g2.drawCircle(cx, cy, 7, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-        u8g2.drawCircle(cx, cy, 10, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-      } else {
-        int cx = x + 4;
-        int cy = y + 6;
-        u8g2.drawDisc(cx, cy, 0);
-        u8g2.drawCircle(cx, cy, 2, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-        u8g2.drawCircle(cx, cy, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-      }
-      break;
-    case 10:  // Network Icon: Bluetooth Symbol
-      if (isLarge) {
-        u8g2.drawLine(x + 8, y + 1, x + 8, y + 15);
-        u8g2.drawLine(x + 8, y + 1, x + 13, y + 5);
-        u8g2.drawLine(x + 13, y + 5, x + 5, y + 10);
-        u8g2.drawLine(x + 5, y + 6, x + 13, y + 11);
-        u8g2.drawLine(x + 13, y + 11, x + 8, y + 15);
-      } else {
-        u8g2.drawLine(x + 4, y + 0, x + 4, y + 7);
-        u8g2.drawLine(x + 4, y + 0, x + 6, y + 2);
-        u8g2.drawLine(x + 6, y + 2, x + 2, y + 5);
-        u8g2.drawLine(x + 2, y + 3, x + 6, y + 5);
-        u8g2.drawLine(x + 6, y + 5, x + 4, y + 7);
-      }
-      break;
-    case 11:  // Tool Icon: Jamming
-      if (isLarge) {
-        u8g2.drawLine(x + 8, y + 2, x + 5, y + 7);
-        u8g2.drawLine(x + 5, y + 7, x + 10, y + 6);
-        u8g2.drawLine(x + 10, y + 6, x + 6, y + 11);
-        u8g2.drawLine(x + 6, y + 11, x + 11, y + 10);
-        u8g2.drawLine(x + 11, y + 10, x + 8, y + 14);
-      } else {
-        u8g2.drawLine(x + 4, y + 0, x + 2, y + 3);
-        u8g2.drawLine(x + 2, y + 3, x + 5, y + 3);
-        u8g2.drawLine(x + 5, y + 3, x + 3, y + 6);
-        u8g2.drawLine(x + 3, y + 6, x + 4, y + 7);
-      }
-      break;
-    case 12:  // Tool Icon: Injection
-      if (isLarge) {
-        u8g2.drawLine(x + 3, y + 3, x + 8, y + 8);
-        u8g2.drawLine(x + 4, y + 3, x + 8, y + 7);
-        u8g2.drawRFrame(x + 7, y + 7, 6, 6, 1);
-        u8g2.drawBox(x + 9, y + 10, 2, 4);
-        u8g2.drawBox(x + 8, y + 13, 4, 2);
-      } else {
-        u8g2.drawLine(x + 1, y + 1, x + 3, y + 3);
-        u8g2.drawFrame(x + 2, y + 2, 4, 4);
-        u8g2.drawVLine(x + 4, y + 4, 3);
-        u8g2.drawHLine(x + 3, y + 6, 3);
-      }
-      break;
-    case 13:  // Settings Icon: Display Options
-      if (isLarge) {
-        u8g2.drawRFrame(x + 2, y + 2, 12, 9, 1);
-        u8g2.drawBox(x + 5, y + 11, 6, 2);
-        u8g2.drawVLine(x + 7, y + 11, 2);
-        u8g2.drawVLine(x + 8, y + 11, 2);
-      } else {
-        u8g2.drawFrame(x + 1, y + 1, 6, 4);
-        u8g2.drawBox(x + 2, y + 5, 4, 1);
-        u8g2.drawVLine(x + 3, y + 5, 2);
-      }
-      break;
-    case 14:  // Settings Icon: Sound Setup
-      if (isLarge) {
-        u8g2.drawBox(x + 3, y + 4, 5, 8);
-        u8g2.drawTriangle(x + 7, y + 4, x + 7, y + 11, x + 10, y + 8);
-        u8g2.drawCircle(x + 12, y + 8, 2, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
-        u8g2.drawCircle(x + 13, y + 8, 4, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
-      } else {
-        u8g2.drawBox(x + 1, y + 2, 3, 4);
-        u8g2.drawLine(x + 5, y + 3, x + 6, y + 3);
-        u8g2.drawLine(x + 5, y + 5, x + 7, y + 5);
-      }
-      break;
-    case 15:  // Settings Icon: System Info
-      if (isLarge) {
-        u8g2.drawRFrame(x + 3, y + 3, 10, 10, 1);
-        u8g2.drawRFrame(x + 5, y + 5, 6, 6, 0);
-        for (int k = 0; k < 3; ++k) {
-          u8g2.drawHLine(x + 0, y + 4 + (k * 3), 3);
-          u8g2.drawHLine(x + 13, y + 4 + (k * 3), 3);
-          u8g2.drawVLine(x + 4 + (k * 3), y + 0, 3);
-          u8g2.drawVLine(x + 4 + (k * 3), y + 13, 3);
+    }
+
+    // --- Phase 2: Resolve to large/default icon if small wasn't resolved or wasn't requested ---
+    // This also handles RENDER_SIZE_DEFAULT: if a small one was specifically defined for RENDER_SIZE_SMALL above
+    // and RENDER_SIZE_DEFAULT is passed, it would have already been picked. Otherwise, default is large.
+    // It also handles RENDER_SIZE_LARGE explicitly.
+    if (!icon_resolved) {
+        w = LARGE_ICON_WIDTH;
+        h = LARGE_ICON_HEIGHT;
+        icon_resolved = true; // Assume a large version exists for all valid icon types
+
+        switch (static_cast<IconType>(iconType)) {
+            case ICON_TOOLS: xbm_data = icon_tools_large_bits; break;
+            case ICON_GAMES: xbm_data = icon_games_large_bits; break;
+            case ICON_SETTINGS: xbm_data = icon_settings_large_bits; break;
+            case ICON_INFO: xbm_data = icon_info_large_bits; break;
+            case ICON_GAME_SNAKE: xbm_data = icon_game_snake_large_bits; break;
+            case ICON_GAME_TETRIS: xbm_data = icon_game_tetris_large_bits; break;
+            case ICON_GAME_PONG: xbm_data = icon_game_pong_large_bits; break;
+            case ICON_GAME_MAZE: xbm_data = icon_game_maze_large_bits; break;
+            case ICON_NAV_BACK: xbm_data = icon_nav_back_large_bits; break;
+            case ICON_NET_WIFI: xbm_data = icon_net_wifi_large_bits; break;
+            case ICON_NET_BLUETOOTH: xbm_data = icon_net_bluetooth_large_bits; break;
+            case ICON_TOOL_JAMMING: xbm_data = icon_tool_jamming_large_bits; break;
+            case ICON_TOOL_INJECTION: xbm_data = icon_tool_injection_large_bits; break;
+            case ICON_SETTING_DISPLAY: xbm_data = icon_setting_display_large_bits; break;
+            case ICON_SETTING_SOUND: xbm_data = icon_setting_sound_large_bits; break;
+            case ICON_SETTING_SYSTEM: xbm_data = icon_setting_system_large_bits; break;
+            case ICON_UI_REFRESH: xbm_data = icon_ui_refresh_large_bits; break;
+            case ICON_UI_CHARGING_BOLT: // This is the large version, used if small wasn't explicitly chosen or doesn't exist
+                xbm_data = icon_ui_charging_bolt_large_bits;
+                break;
+            case ICON_UI_VIBRATION: xbm_data = icon_ui_vibration_large_bits; break;
+            case ICON_UI_LASER: xbm_data = icon_ui_laser_large_bits; break;
+            case ICON_UI_FLASHLIGHT: xbm_data = icon_ui_flashlight_large_bits; break;
+            case ICON_UTILITIES_CATEGORY: xbm_data = icon_utilities_category_large_bits; break;
+            default:
+                icon_resolved = false; // Invalid iconType, or iconType out of range
+                break;
         }
-      } else {
-        u8g2.drawFrame(x + 1, y + 1, 6, 6);
-        u8g2.drawFrame(x + 2, y + 2, 4, 4);
-        u8g2.drawPixel(x + 0, y + 3);
-        u8g2.drawPixel(x + 7, y + 3);
-        u8g2.drawPixel(x + 3, y + 0);
-        u8g2.drawPixel(x + 3, y + 7);
-      }
-      break;
-    case 16:  // UI Icon: Refresh / Rescan
-      if (isLarge) {
-        u8g2.drawCircle(x + 8, y + 8, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT);
-        u8g2.drawLine(x + 8, y + 2, x + 5, y + 3);
-        u8g2.drawLine(x + 5, y + 3, x + 6, y + 5);
-        u8g2.drawLine(x + 5, y + 3, x + 3, y + 5);
-      } else {
-        u8g2.drawCircle(x + 4, y + 4, 3, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT | U8G2_DRAW_LOWER_LEFT);
-        u8g2.drawLine(x + 4, y + 1, x + 4 - 2, y + 1 + 1);
-        u8g2.drawLine(x + 4, y + 1, x + 4 - 1, y + 1 + 2);
-      }
-      break;
-    case 17:  // UI Icon: Small Lightning Bolt
-      if (isLarge) {
-        u8g2.drawLine(x + 5, y + 0, x + 2, y + 6);
-        u8g2.drawLine(x + 2, y + 6, x + 7, y + 5);
-        u8g2.drawLine(x + 7, y + 5, x + 4, y + 13);
-      } else {
-        u8g2.drawLine(x + 2, y + 0, x + 0, y + 3);
-        u8g2.drawLine(x + 0, y + 3, x + 4, y + 3);
-        u8g2.drawLine(x + 4, y + 3, x + 2, y + 6);
-      }
-      break;
-    case 18:  // UI Icon: Vibration Motor
-      if (isLarge) {
-        u8g2.drawCircle(x + 8, y + 8, 6);
-        u8g2.drawBox(x + 8 - 1, y + 8 - 4, 2, 3);
-        u8g2.drawDisc(x + 8, y + 8, 1);
-      } else {
-        u8g2.drawCircle(x + 4, y + 4, 3);
-        u8g2.drawPixel(x + 4, y + 1);
-        u8g2.drawPixel(x + 4, y + 4);
-      }
-      break;
-    case 19:  // UI Icon: Laser Beam
-      if (isLarge) {
-        u8g2.drawDisc(x + 8, y + 8, 2);
-        for (int k = 0; k < 8; k++) {
-          float angle = k * PI / 4.0;
-          u8g2.drawLine(x + 8 + round(cos(angle) * 3), y + 8 + round(sin(angle) * 3),
-                        x + 8 + round(cos(angle) * 7), y + 8 + round(sin(angle) * 7));
+    }
+
+    // --- Phase 3: Draw the resolved icon or a placeholder ---
+    if (icon_resolved && xbm_data != nullptr && w > 0 && h > 0) {
+        u8g2.drawXBM(x_top_left, y_top_left, w, h, xbm_data);
+    } else {
+        // Fallback placeholder for unknown icon type or if XBM data is somehow null
+        // Determine placeholder size based on what was intended
+        int placeholder_w, placeholder_h;
+        if (size == RENDER_SIZE_SMALL) {
+            placeholder_w = SMALL_ICON_WIDTH;
+            placeholder_h = SMALL_ICON_HEIGHT;
+        } else { // RENDER_SIZE_LARGE or RENDER_SIZE_DEFAULT
+            placeholder_w = LARGE_ICON_WIDTH;
+            placeholder_h = LARGE_ICON_HEIGHT;
         }
-      } else {
-        u8g2.drawDisc(x + 4, y + 4, 1);
-        u8g2.drawLine(x + 4, y + 0, x + 4, y + 7);
-        u8g2.drawLine(x + 0, y + 4, x + 7, y + 4);
-        u8g2.drawLine(x + 1, y + 1, x + 6, y + 6);
-        u8g2.drawLine(x + 1, y + 6, x + 6, y + 1);
-      }
-      break;
-    case 20:  // UI Icon: Flashlight
-      if (isLarge) {
-        u8g2.drawTriangle(x + 4, y + 2, x + 12, y + 2, x + 8, y + 0);
-        u8g2.drawBox(x + 6, y + 2, 4, 5);
-        u8g2.drawLine(x + 2, y + 8, x + 6, y + 14);
-        u8g2.drawLine(x + 8, y + 8, x + 8, y + 14);
-        u8g2.drawLine(x + 14, y + 8, x + 10, y + 14);
-      } else {
-        u8g2.drawBox(x + 2, y + 0, 4, 3);
-        u8g2.drawLine(x + 0, y + 4, x + 3, y + 7);
-        u8g2.drawLine(x + 4, y + 4, x + 4, y + 7);
-        u8g2.drawLine(x + 7, y + 4, x + 5, y + 7);
-      }
-      break;
-    case 21:  // UI Icon: Utilities
-      if (isLarge) {
-        u8g2.drawRFrame(x + 2, y + 5, 12, 8, 1);
-        u8g2.drawBox(x + 1, y + 3, 14, 2);
-        u8g2.drawRFrame(x + 6, y + 1, 4, 3, 1);
-        u8g2.drawPixel(x + 4, y + 8);
-        u8g2.drawPixel(x + 11, y + 8);
-      } else {
-        u8g2.drawFrame(x + 1, y + 3, 6, 4);
-        u8g2.drawHLine(x + 0, y + 2, 8);
-        u8g2.drawFrame(x + 3, y + 0, 2, 2);
-      }
-      break;
-    default:
-      if (isLarge) {
-        u8g2.drawFrame(x + 2, y + 2, 12, 12);
-      } else {
-        u8g2.drawFrame(x + 2, y + 2, 4, 4);
-      }
-      break;
-  }
+        // If w and h were resolved but xbm_data was null, use those dimensions for placeholder
+        if (w > 0) placeholder_w = w;
+        if (h > 0) placeholder_h = h;
+
+
+        u8g2.setDrawColor(1); // Ensure placeholder is drawn in foreground color
+        u8g2.drawFrame(x_top_left, y_top_left, placeholder_w, placeholder_h);
+        u8g2.drawLine(x_top_left, y_top_left, x_top_left + placeholder_w - 1, y_top_left + placeholder_h - 1);
+        u8g2.drawLine(x_top_left + placeholder_w - 1, y_top_left, x_top_left, y_top_left + placeholder_h - 1);
+    }
 }
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill) {

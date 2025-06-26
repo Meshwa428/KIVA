@@ -22,7 +22,7 @@ const char* wifiAttackMenuItems[] = {  // <--- NEW ARRAY (Example for sub-menu)
   "Beacon Flood", "Deauth Attack", "Probe Flood", "Capture Handshake", "Back"
 };
 const char* gamesMenuItems[] = { "Snake Game", "Tetris Clone", "Classic Pong", "2D Maze", "Back" }; 
-const char* settingsMenuItems[] = { "Wi-Fi Setup", "Display Opts", "Sound Setup", "Firmware Update", "System Info", "About Kiva", "Back" };
+const char* settingsMenuItems[] = { "Wi-Fi Setup", "Display Opts", "Sound Setup", "Firmware Update", "System Info", "Back" };
 const char* utilitiesMenuItems[] = { "Vibration", "Laser", "Flashlight", "Back" };
 const char* toolsMenuItems[] = { "Injection", "Wi-Fi Attacks", "BLE/BT Attacks", "NRF Recon", "Jamming", "Back" };  // Jamming is index 4
 const char* injectionToolItems[] = { "MouseJack", "Wireless Keystroke", "Fake HID", "BLE HID Inject", "RF Payload", "Back" };
