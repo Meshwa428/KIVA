@@ -7,6 +7,7 @@
 #include "ui_drawing.h"
 #include "menu_logic.h"
 #include "wifi_manager.h"
+#include "wifi_attack_tools.h"
 #include "sd_card_manager.h"
 #include "jamming.h"
 #include "ota_manager.h"
@@ -127,6 +128,9 @@ unsigned long lastBatteryCheck = 0;
 float currentBatteryVoltage = 4.0f;
 bool batteryNeedsUpdate = true;
 bool isCharging = false;
+
+bool isBeaconSpamActive = false;
+bool isRickRollActive = false;
 
 bool vibrationOn = false;
 bool laserOn = false;
@@ -447,6 +451,28 @@ void loop() {
     Serial.println("WARN: NRF Jamming stopped, resetting currentRfMode to RF_MODE_OFF.");
     currentRfMode = RF_MODE_OFF;
     // This implies stopActiveJamming() should also update currentRfMode.
+  }
+
+  // ADD THE BEACON SPAM ACTIVE BLOCK
+  if (isBeaconSpamActive || isRickRollActive) {
+    run_beacon_spam_cycle(); // Run the attack cycle
+
+    if (currentTime - lastJammingInputCheckTime > currentInputPollInterval) {
+      updateInputs();
+      if (btnPress1[NAV_BACK] || btnPress0[ENC_BTN]) {
+        if (btnPress1[NAV_BACK]) btnPress1[NAV_BACK] = false;
+        if (btnPress0[ENC_BTN]) btnPress0[ENC_BTN] = false;
+        
+        // This will call handleMenuBackNavigation() which correctly stops the attack
+        // and sets the menu state.
+        handleMenuBackNavigation();
+        drawUI(); // Draw the UI once after stopping
+      }
+      lastJammingInputCheckTime = currentTime;
+    }
+    // Loop ends here for beacon spam to maximize performance
+    delay(1); 
+    return;
   }
 
   // Priority 1: OTA Update processes (if active, they take precedence)

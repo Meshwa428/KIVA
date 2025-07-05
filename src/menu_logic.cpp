@@ -5,28 +5,23 @@
 #include "pcf_utils.h"
 #include "keyboard_layout.h"
 #include "jamming.h"
+#include "wifi_attack_tools.h"
 #include "ota_manager.h"
 #include "firmware_metadata.h"  // For availableSdFirmwareCount
 
 // --- Menu Item Arrays ---
 const char* mainMenuItems[] = {
-  "Tools", "RF Toolkit", "Games", "Settings", "Utilities", "Info"  // <--- MODIFIED: Added "RF Toolkit"
+  "Tools", "Games", "Settings", "Utilities", "Info"  // <--- MODIFIED: Added "RF Toolkit"
 };
-const char* rfToolkitMenuItems[] = {  // <--- NEW ARRAY
-  "Wi-Fi Scanning", "Wi-Fi Attacks", /* "Bluetooth (ESP32)", "LAN Tools", */ "Back"
-};
-const char* wifiSniffingMenuItems[] = {  // <--- NEW ARRAY (Example for sub-menu)
-  "Scan APs (Adv)", "Scan Stations", "Scan Probes", "Packet Monitor", "Back"
-};
-const char* wifiAttackMenuItems[] = {  // <--- NEW ARRAY (Example for sub-menu)
-  "Beacon Flood", "Deauth Attack", "Probe Flood", "Capture Handshake", "Back"
-};
-const char* gamesMenuItems[] = { "Snake Game", "Tetris Clone", "Classic Pong", "2D Maze", "Back" }; 
+const char* gamesMenuItems[] = { "Snake Game", "Tetris Clone", "Classic Pong", "2D Maze", "Back" };
 const char* settingsMenuItems[] = { "Wi-Fi Setup", "Display Opts", "Sound Setup", "Firmware Update", "System Info", "Back" };
 const char* utilitiesMenuItems[] = { "Vibration", "Laser", "Flashlight", "Back" };
 const char* toolsMenuItems[] = { "Injection", "Wi-Fi Attacks", "BLE/BT Attacks", "NRF Recon", "Jamming", "Back" };  // Jamming is index 4
 const char* injectionToolItems[] = { "MouseJack", "Wireless Keystroke", "Fake HID", "BLE HID Inject", "RF Payload", "Back" };
-const char* wifiAttackToolItems[] = { "Beacon Spam", "Deauth Attack", "Probe Flood", "Fake AP", "Karma AP", "DNS Spoof", "Packet Inject", "Packet Replay", "Back" };
+const char* wifiAttackToolItems[] = {
+  "Beacon Spam", "Rick Roll Spam", "Deauth Attack", "Probe Flood", "Fake AP",  // <--- ADDED "Rick Roll Spam"
+  "Karma AP", "DNS Spoof", "Packet Inject", "Packet Replay", "Back"
+};
 const char* bleAttackToolItems[] = { "BLE Ad Spam", "BLE Scanner", "BLE DoS", "BLE Name Spoof", "BT MAC Spoof", "Back" };
 const char* nrfReconToolItems[] = { "NRF Scanner", "ShockBurst Sniff", "Key Sniffer", "NRF Brute", "Custom Flood", "RF Spammer", "BLE Ad Disrupt", "Dual Interference", "Back" };
 const char* jammingToolItems[] = {
@@ -44,17 +39,8 @@ const char* otaMenuItems[] = {  // <--- NEW ARRAY
 int getMainMenuItemsCount() {
   return sizeof(mainMenuItems) / sizeof(mainMenuItems[0]);
 }
-int getRfToolkitMenuItemsCount() { // <--- NEW GETTER
-  return sizeof(rfToolkitMenuItems) / sizeof(rfToolkitMenuItems[0]);
-}
-int getWifiSniffingMenuItemsCount() { // <--- NEW GETTER (Example)
-  return sizeof(wifiSniffingMenuItems) / sizeof(wifiSniffingMenuItems[0]);
-}
-int getWifiAttackMenuItemsCount() {   // <--- NEW GETTER (Example)
-  return sizeof(wifiAttackMenuItems) / sizeof(wifiAttackMenuItems[0]);
-}
 int getGamesMenuItemsCount() {
-  return sizeof(gamesMenuItems) / sizeof(gamesMenuItems[0]); // This line
+  return sizeof(gamesMenuItems) / sizeof(gamesMenuItems[0]);  // This line
 }
 int getToolsMenuItemsCount() {
   return sizeof(toolsMenuItems) / sizeof(toolsMenuItems[0]);
@@ -118,24 +104,21 @@ void initializeCurrentMenu() {
 
 
   // Updated radio interval logic based on currentRfMode
-  if (currentRfMode == RF_MODE_NRF_JAMMING) { // NRF Jamming takes precedence
-      currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_JAMMING;
-      currentInputPollInterval = INPUT_POLL_INTERVAL_JAMMING;
+  if (currentRfMode == RF_MODE_NRF_JAMMING) {  // NRF Jamming takes precedence
+    currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_JAMMING;
+    currentInputPollInterval = INPUT_POLL_INTERVAL_JAMMING;
   } else if (currentRfMode == RF_MODE_WIFI_SNIFF_PROMISC || currentRfMode == RF_MODE_WIFI_INJECT_AP) {
-      // Potentially different intervals for Wi-Fi sniffing/injection if needed
-      currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_JAMMING; // Example: reuse jamming interval
-      currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL; // Sniffing might need faster input
+    // Potentially different intervals for Wi-Fi sniffing/injection if needed
+    currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_JAMMING;  // Example: reuse jamming interval
+    currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;         // Sniffing might need faster input
   } else {
-      currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
-      currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
+    currentBatteryCheckInterval = BATTERY_CHECK_INTERVAL_NORMAL;
+    currentInputPollInterval = INPUT_POLL_INTERVAL_NORMAL;
   }
 
 
   switch (currentMenu) {
     case MAIN_MENU: maxMenuItems = getMainMenuItemsCount(); break;
-    case RF_TOOLKIT_OVERVIEW_MENU: maxMenuItems = getRfToolkitMenuItemsCount(); break; // <--- NEW CASE
-    // case WIFI_SCANNING_TOOLS_MENU: maxMenuItems = getWifiSniffingMenuItemsCount(); break; // Example for later
-    // case WIFI_ATTACK_TOOLS_MENU: maxMenuItems = getWifiAttackMenuItemsCount(); break;   // Example for later
     case GAMES_MENU: maxMenuItems = getGamesMenuItemsCount(); break;
     case TOOLS_MENU: maxMenuItems = getToolsMenuItemsCount(); break;
     case SETTINGS_MENU: maxMenuItems = getSettingsMenuItemsCount(); break;
@@ -179,6 +162,12 @@ void initializeCurrentMenu() {
     case OTA_BASIC_ACTIVE:
       maxMenuItems = 0;
       break;
+    case WIFI_BEACON_SPAM_ACTIVE_SCREEN:
+      maxMenuItems = 0;
+      break;
+    case WIFI_RICK_ROLL_ACTIVE_SCREEN:
+      maxMenuItems = 0;
+      break;
     default: maxMenuItems = 0; break;
   }
 
@@ -199,13 +188,6 @@ void initializeCurrentMenu() {
   switch (currentMenu) {
     case MAIN_MENU:
       mainMenuAnim.startIntro(menuIndex, maxMenuItems);
-      gridAnimatingIn = false;
-      break;
-    case RF_TOOLKIT_OVERVIEW_MENU: // <--- NEW CASE (Treat as a carousel/list for now)
-    // case WIFI_SCANNING_TOOLS_MENU:
-    // case WIFI_ATTACK_TOOLS_MENU:
-      subMenuAnim.init(); // Or use mainMenuAnim if it's a vertical list
-      subMenuAnim.setTargets(menuIndex, maxMenuItems);
       gridAnimatingIn = false;
       break;
     case GAMES_MENU:
@@ -248,6 +230,12 @@ void initializeCurrentMenu() {
     case OTA_BASIC_ACTIVE:
       gridAnimatingIn = false;
       break;
+    case WIFI_BEACON_SPAM_ACTIVE_SCREEN:  // <--- ADD THIS CASE
+      gridAnimatingIn = false;
+      break;
+    case WIFI_RICK_ROLL_ACTIVE_SCREEN:  // <--- ADD THIS CASE
+      gridAnimatingIn = false;
+      break;
   }
 }
 
@@ -287,7 +275,6 @@ void handleMenuSelection() {
     if (menuIndex >= 0 && menuIndex < getMainMenuItemsCount()) {
       const char* selectedItem = mainMenuItems[menuIndex];
       if (strcmp(selectedItem, "Tools") == 0) targetMenu = TOOLS_MENU;
-      else if (strcmp(selectedItem, "RF Toolkit") == 0) targetMenu = RF_TOOLKIT_OVERVIEW_MENU; // <--- NEW
       else if (strcmp(selectedItem, "Games") == 0) targetMenu = GAMES_MENU;
       else if (strcmp(selectedItem, "Settings") == 0) targetMenu = SETTINGS_MENU;
       else if (strcmp(selectedItem, "Utilities") == 0) targetMenu = UTILITIES_MENU;
@@ -307,34 +294,6 @@ void handleMenuSelection() {
       needsReinit = false;  // No change occurred
     }
 
-  } else if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) { // <--- NEW CASE
-      if (menuIndex == getRfToolkitMenuItemsCount() - 1) { // "Back" selected
-          currentMenu = MAIN_MENU;
-          // Find "RF Toolkit" in main menu to set mainMenuSavedIndex correctly
-          for(int i=0; i < getMainMenuItemsCount(); ++i) {
-              if(strcmp(mainMenuItems[i], "RF Toolkit") == 0) {
-                  menuIndex = i;
-                  mainMenuSavedIndex = i;
-                  break;
-              }
-          }
-      } else {
-          // Placeholder: Navigate to sub-menus for Wi-Fi Scanning/Attacks (Phase 1+)
-          const char* selectedItem = rfToolkitMenuItems[menuIndex];
-          if (strcmp(selectedItem, "Wi-Fi Scanning") == 0) {
-              // currentMenu = WIFI_SCANNING_TOOLS_MENU; // Example for later
-              Serial.println("Wi-Fi Scanning selected (NYI)");
-              needsReinit = false; 
-          } else if (strcmp(selectedItem, "Wi-Fi Attacks") == 0) {
-              // currentMenu = WIFI_ATTACK_TOOLS_MENU; // Example for later
-              Serial.println("Wi-Fi Attacks selected (NYI)");
-              needsReinit = false;
-          } else {
-              Serial.printf("RF Toolkit item: %s (NYI)\n", selectedItem);
-              needsReinit = false;
-          }
-          // menuIndex = newMenuIndexForSubMenu; // Reset for sub-menu
-      }
   } else if (currentMenu == TOOLS_MENU) {
     if (menuIndex == getToolsMenuItemsCount() - 1) {  // "Back" selected
       currentMenu = MAIN_MENU;
@@ -369,7 +328,8 @@ void handleMenuSelection() {
 
       if (!wifiHardwareEnabled) {
         Serial.println("handleMenuSelection (Wi-Fi Setup): Enabling Wi-Fi...");
-        setWifiHardwareState(true, RF_MODE_NORMAL_STA);;
+        setWifiHardwareState(true, RF_MODE_NORMAL_STA);
+        ;
         delay(300);
       } else {
         delay(100);
@@ -555,12 +515,44 @@ void handleMenuSelection() {
         needsReinit = false;  // No valid jam type selected
       }
     } else if (!isJammingCat && currentMaxItemsInGrid > 0 && menuIndex >= 0 && menuIndex < (currentMaxItemsInGrid - 1)) {
-      const char* catName = (toolsCategoryIndex >= 0 && toolsCategoryIndex < getToolsMenuItemsCount()) ? toolsMenuItems[toolsCategoryIndex] : "Unknown Cat";
       const char* itemName = (currentToolItemsListPtr && menuIndex < currentMaxItemsInGrid) ? currentToolItemsListPtr[menuIndex] : "Unknown Item";
-      Serial.printf("Tool '%s' from cat '%s' (NYI)\n", itemName, catName);
-      needsReinit = false;
+
+      if (strcmp(itemName, "Beacon Spam") == 0) {
+        start_beacon_spam(false, 1);  // Start Beacon Spam (not Rick Roll) on channel 1
+        if (isBeaconSpamActive) {
+          currentMenu = WIFI_BEACON_SPAM_ACTIVE_SCREEN;
+          initializeCurrentMenu();  // Prepare the new screen's state
+          drawUI();                 // FORCE a draw call HERE to show the "Active" screen
+        }
+        needsReinit = false;  // We handled the state change and drawing manually
+      } else if (strcmp(itemName, "Rick Roll Spam") == 0) {
+        start_beacon_spam(true, 1);  // Start Rick Roll on channel 1
+        if (isRickRollActive) {
+          currentMenu = WIFI_RICK_ROLL_ACTIVE_SCREEN;
+          initializeCurrentMenu();  // Prepare the new screen's state
+          drawUI();                 // FORCE a draw call HERE
+        }
+        needsReinit = false;  // We handled the state change and drawing manually
+      } else {
+        const char* catName = (toolsCategoryIndex >= 0 && toolsCategoryIndex < getToolsMenuItemsCount()) ? toolsMenuItems[toolsCategoryIndex] : "Unknown Cat";
+        Serial.printf("Tool '%s' from cat '%s' (NYI)\n", itemName, catName);
+        needsReinit = false;
+      }
     } else {
       needsReinit = false;  // e.g. invalid index if grid is empty
+    }
+  } else if (currentMenu == WIFI_BEACON_SPAM_ACTIVE_SCREEN) {
+    // 0: Start/Stop, 1: Back
+    if (menuIndex == 0) {  // Start/Stop selected
+      if (isBeaconSpamActive) {
+        stop_beacon_spam();
+      } else {
+        start_beacon_spam(false, 1);  // Start on channel 1 by default
+      }
+      needsReinit = false;         // No menu change, but UI will update based on isBeaconSpamActive flag
+    } else if (menuIndex == 1) {   // Back selected
+      handleMenuBackNavigation();  // Use the existing back navigation logic
+      needsReinit = false;         // Back navigation already handles re-init
     }
   } else if (currentMenu == WIFI_SETUP_MENU) {
     MenuState nextWiFiMenu = currentMenu;
@@ -576,7 +568,8 @@ void handleMenuSelection() {
           }
         }
       } else if (maxMenuItems > 0 && wifiMenuIndex == 0) {
-        setWifiHardwareState(true, RF_MODE_NORMAL_STA);;
+        setWifiHardwareState(true, RF_MODE_NORMAL_STA);
+        ;
         delay(300);
 
         if (wifiHardwareEnabled) {
@@ -744,21 +737,9 @@ void handleMenuSelection() {
 
 void handleMenuBackNavigation() {
   MenuState previousMenuState = currentMenu;
-  bool menuChanged = true; 
+  bool menuChanged = true;
 
-  if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) { // <--- NEW CASE
-      currentMenu = MAIN_MENU;
-      for (int i = 0; i < getMainMenuItemsCount(); ++i) {
-          if (strcmp(mainMenuItems[i], "RF Toolkit") == 0) {
-              menuIndex = i;
-              mainMenuSavedIndex = i;
-              break;
-          }
-      }
-  // } else if (currentMenu == WIFI_SCANNING_TOOLS_MENU || currentMenu == WIFI_ATTACK_TOOLS_MENU) { // Example for later
-  //     currentMenu = RF_TOOLKIT_OVERVIEW_MENU;
-  //     menuIndex = 0; // Or last selected index in RF_TOOLKIT_OVERVIEW_MENU
-  } else if (currentMenu == OTA_WEB_ACTIVE) {
+  if (currentMenu == OTA_WEB_ACTIVE) {
     stopWebOtaUpdate();
     currentMenu = FIRMWARE_UPDATE_GRID;
     menuIndex = 0;  // Select "Update via Web"
@@ -804,6 +785,24 @@ void handleMenuBackNavigation() {
     int numJammingItems = getJammingToolItemsCount();
     if (numJammingItems > 0) menuIndex = constrain(menuIndex, 0, numJammingItems - 1);
     else menuIndex = 0;
+  } else if (currentMenu == WIFI_BEACON_SPAM_ACTIVE_SCREEN || currentMenu == WIFI_RICK_ROLL_ACTIVE_SCREEN) {  // <--- ADD THIS BLOCK
+    stop_beacon_spam();
+    currentMenu = TOOL_CATEGORY_GRID;
+    // Find "Wi-Fi Attacks" category to restore grid state
+    for (int i = 0; i < getToolsMenuItemsCount(); ++i) {
+      if (strcmp(toolsMenuItems[i], "Wi-Fi Attacks") == 0) {
+        toolsCategoryIndex = i;
+        break;
+      }
+    }
+    // Find "Beacon Spam" item to restore selected index
+    int wifiAttackItemsCount = getWifiAttackToolItemsCount();
+    for (int i = 0; i < wifiAttackItemsCount; i++) {
+      if (strcmp(wifiAttackToolItems[i], "Beacon Spam") == 0) {
+        menuIndex = i;
+        break;
+      }
+    }
   } else if (currentMenu == MAIN_MENU) {
     menuChanged = false;  // Cannot go back from main menu
   } else if (currentMenu == WIFI_PASSWORD_INPUT) {
@@ -883,7 +882,7 @@ void handleMenuBackNavigation() {
         break;
       }
     }
-  } else if (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU) { // Modified this slightly
+  } else if (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU) {  // Modified this slightly
     currentMenu = MAIN_MENU;
     // Find the correct index in mainMenuItems based on previousMenuState
     const char* targetMainMenuItem = nullptr;
@@ -891,21 +890,20 @@ void handleMenuBackNavigation() {
     else if (previousMenuState == TOOLS_MENU) targetMainMenuItem = "Tools";
     else if (previousMenuState == SETTINGS_MENU) targetMainMenuItem = "Settings";
     else if (previousMenuState == UTILITIES_MENU) targetMainMenuItem = "Utilities";
-    // Note: RF_TOOLKIT_OVERVIEW_MENU back navigation is handled above separately.
 
     if (targetMainMenuItem) {
-        for (int i = 0; i < getMainMenuItemsCount(); ++i) {
-            if (strcmp(mainMenuItems[i], targetMainMenuItem) == 0) {
-                mainMenuSavedIndex = i;
-                break;
-            }
+      for (int i = 0; i < getMainMenuItemsCount(); ++i) {
+        if (strcmp(mainMenuItems[i], targetMainMenuItem) == 0) {
+          mainMenuSavedIndex = i;
+          break;
         }
-    } else { // Fallback if previousMenuState was not one of these
-        mainMenuSavedIndex = 0; 
+      }
+    } else {  // Fallback if previousMenuState was not one of these
+      mainMenuSavedIndex = 0;
     }
     menuIndex = mainMenuSavedIndex;
   } else {
-    menuChanged = false; 
+    menuChanged = false;
   }
 
   if (menuChanged) {

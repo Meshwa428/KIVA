@@ -98,34 +98,22 @@ enum ActiveRfOperationMode {
 // === Menu System ===
 enum MenuState {
   MAIN_MENU,
-  // RF_TOOLKIT_MENU,         // <--- NEW TOP-LEVEL (Alternative: Add to Tools)
-  // WIFI_SNIFFING_MENU,    // <--- Submenu
-  //   ADV_AP_SCAN_MENU,      // <--- Example Sniffing Option
-  //   STATION_SCAN_MENU,   // <--- Example Sniffing Option
-  //   PROBE_SCAN_MENU,     // <--- Example Sniffing Option
-  // WIFI_ATTACKS_MENU,     // <--- Submenu
-  //   BEACON_FLOOD_MENU,   // <--- Example Attack Option
-  //   DEAUTH_ATTACK_MENU,  // <--- Example Attack Option
   GAMES_MENU,
-  TOOLS_MENU,             // <--- We will add sub-menus for RF tools under this for now
-    // Sub-menus for specific RF tools will be added here later like WIFI_SNIFFING_SUBMENU etc.
+  TOOLS_MENU,
   SETTINGS_MENU,
   UTILITIES_MENU,
-  // LAN_SCAN_MENU,         // Example for later
-  TOOL_CATEGORY_GRID,     // Existing for NRF tools, can be reused or new grid for Wi-Fi tools
+  TOOL_CATEGORY_GRID,
   WIFI_SETUP_MENU,
   FLASHLIGHT_MODE,
   WIFI_PASSWORD_INPUT,
   WIFI_CONNECTING,
   WIFI_CONNECTION_INFO,
-  JAMMING_ACTIVE_SCREEN,  // Existing for NRF tools
+  JAMMING_ACTIVE_SCREEN,
   FIRMWARE_UPDATE_GRID,
   FIRMWARE_SD_LIST_MENU, 
   OTA_WEB_ACTIVE,
   OTA_SD_STATUS,
   OTA_BASIC_ACTIVE,
-  // New RF tool-specific screens will be added here
-  RF_TOOLKIT_OVERVIEW_MENU, // <--- NEW Top-level menu for all RF tools
   WIFI_SCANNING_TOOLS_MENU,
   WIFI_ATTACK_TOOLS_MENU,
   // Placeholder for specific scan/attack screens:
@@ -133,7 +121,8 @@ enum MenuState {
   WIFI_STATION_SCAN_SCREEN,
   WIFI_PROBE_REQUEST_SCAN_SCREEN,
   WIFI_PACKET_MONITOR_SCREEN,
-  WIFI_BEACON_SPAM_CONFIG_SCREEN,
+  WIFI_BEACON_SPAM_ACTIVE_SCREEN,
+  WIFI_RICK_ROLL_ACTIVE_SCREEN,
   WIFI_DEAUTH_CONFIG_SCREEN
   // ... more to be added
 };
@@ -148,6 +137,8 @@ extern int gridCols;
 extern int targetGridScrollOffset_Y;
 extern float currentGridScrollOffset_Y_anim;
 extern bool isCharging;
+extern bool isBeaconSpamActive;
+extern bool isRickRollActive;
 
 
 extern bool vibrationOn;
@@ -155,12 +146,12 @@ extern bool laserOn;
 extern bool wifiHardwareEnabled;
 
 extern uint8_t pcf0Output;
-extern ActiveRfOperationMode currentRfMode; // <--- NEW EXTERN
+extern ActiveRfOperationMode currentRfMode;
 
 // --- NEW EXTERN DECLARATIONS FOR INTERVALS ---
 extern unsigned long currentBatteryCheckInterval;
 extern unsigned long currentInputPollInterval;
-extern int lastSelectedJammingToolGridIndex;
+extern int lastSelectedItemInGridIndex;
 
 // --- Extern OTA Global Variables ---
 // extern WebServer otaWebServer;

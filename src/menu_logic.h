@@ -6,7 +6,6 @@
 
 // Extern Menu Item Arrays (defined in menu_logic.cpp)
 extern const char* mainMenuItems[];
-extern const char* rfToolkitMenuItems[];    // <--- NEW
 extern const char* wifiSniffingMenuItems[]; // <--- NEW (Example for sub-menu)
 extern const char* wifiAttackMenuItems[];   // <--- NEW (Example for sub-menu)
 extern const char* gamesMenuItems[];
@@ -24,7 +23,6 @@ extern FirmwareInfo g_firmwareToInstallFromSd; // Make it accessible to menu_log
 
 // --- Getter Functions for Menu Item Counts ---
 int getMainMenuItemsCount();
-int getRfToolkitMenuItemsCount();    // <--- NEW
 int getWifiSniffingMenuItemsCount(); // <--- NEW (Example)
 int getWifiAttackMenuItemsCount();   // <--- NEW (Example)
 int getGamesMenuItemsCount();

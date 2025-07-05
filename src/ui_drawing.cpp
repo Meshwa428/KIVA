@@ -5,437 +5,14 @@
 #include "keyboard_layout.h"
 #include "wifi_manager.h"
 #include "jamming.h"
-#include "ota_manager.h"  // For OTA status variables
+#include "ota_manager.h"
 #include "firmware_metadata.h"
-#include "ui_drawing.h" // Your main UI drawing header
-#include "icons.h"      // The new header for icon definitions and declarations
-#include <U8g2lib.h>    // For the u8g2 object
+#include "wifi_attack_tools.h"  // <--- ADD THIS INCLUDE
+#include "ui_drawing.h"
+#include "icons.h"
+#include <U8g2lib.h>
 #include <Arduino.h>
 #include <math.h>
-
-// const int ICON_WIDTH = 15;
-// const int ICON_HEIGHT = 15;
-
-// const int SMALL_ICON_WIDTH = 7;
-// const int SMALL_ICON_HEIGHT = 7;
-
-// // Structure to hold the bitmap for an 15x15 icon
-// struct IconData {
-//     uint8_t bitmap[ICON_HEIGHT][ICON_WIDTH];         // For 15x15
-//     uint8_t small_bitmap[SMALL_ICON_HEIGHT][SMALL_ICON_WIDTH]; // For 7x7
-//     bool has_small_version;
-// };
-
-// // Total number of unique icon types you have
-// // Please update this count if you add/remove icons
-// #define NUM_ICON_TYPES 22
-
-// // Predefined icons array (15x15)
-// // IMPORTANT: You need to design the 15x15 pixel art for each icon.
-// // Below are EXAMPLES and placeholders. You'll need to fill these out.
-
-// const IconData predefinedIcons[NUM_ICON_TYPES] = {
-//     // Icon Type 0: Tools (Wrench example for 15x15)
-//     {{
-//         {1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
-//         {1,0,0,0,0,1,0,0,0,0,1,1,1,1,0},
-//         {1,0,1,0,0,1,0,0,0,0,1,1,0,1,0},
-//         {1,0,0,1,1,1,0,0,0,0,1,0,1,1,0},
-//         {1,0,0,1,1,0,0,0,0,0,1,1,1,1,0},
-//         {0,1,1,1,0,1,0,0,0,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,1,0,0,0,1,0,0,0,0,0},
-//         {0,1,1,1,1,0,0,0,0,0,1,0,0,0,0},
-//         {0,1,1,0,1,0,0,0,0,0,0,1,0,0,0},
-//         {0,1,0,1,1,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,1,1,0,0,0,0,0,0,0,1,1,1},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,1},
-//     }},
-//     // Icon Type 1: Games (Simple Gamepad for 15x15)
-//     {{
-//         {0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//         {0,0,1,1,1,1,0,1,0,1,1,1,1,0,0},
-//         {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,1,0,0,0,0,0,1,1,0,0,0,1},
-//         {1,0,1,1,1,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,1,0,0,0,0,0,0,0,1,1,0,1},
-//         {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
-//         {0,1,0,0,0,1,0,0,0,1,0,0,0,1,0},
-//         {0,0,1,1,1,0,0,0,0,0,1,1,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 2: Settings (Gear for 15x15 - adjust as needed)
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,1,1,0,0,1,1,1,0,0,1,1,0,0},
-//         {0,1,0,0,1,1,0,0,0,1,1,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,1,0,0,0,1,1,1,0,0,0,1,0,0},
-//         {0,1,0,0,0,1,1,0,1,1,0,0,0,1,0},
-//         {0,1,0,0,0,1,0,0,0,1,0,0,0,1,0},
-//         {0,1,0,0,0,1,1,0,1,1,0,0,0,1,0},
-//         {0,0,1,0,0,0,1,1,1,0,0,0,1,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,1,1,0,0,0,1,1,0,0,1,0},
-//         {0,0,1,1,0,0,1,1,1,0,0,1,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 3: Info
-//     {{
-//       {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//       {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
-//       {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
-//       {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
-//       {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
-//       {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//       {1,0,0,0,0,1,1,1,0,0,0,0,0,0,1},
-//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
-//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
-//       {1,0,0,0,0,0,1,1,1,0,0,0,0,0,1},
-//       {0,1,0,0,0,0,1,1,1,0,0,0,0,1,0},
-//       {0,1,0,0,0,1,1,1,1,1,0,0,0,1,0},
-//       {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//       {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
-//       {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//     }},
-//     // Icon Type 4: Game Snake
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,1,1,1,0,0,0,0},
-//         {0,0,0,1,1,1,1,1,1,1,1,0,0,0,0},
-//         {0,0,0,1,1,1,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 5: Game Tetris
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,1,1,0,0,0,0},
-//         {0,0,1,1,1,0,0,0,1,1,1,0,0,0,0},
-//         {0,0,1,1,1,0,0,0,1,1,1,0,0,0,0},
-//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
-//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
-//         {0,0,1,1,1,0,1,1,1,1,1,1,1,0,0},
-//         {0,0,1,1,1,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
-//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
-//         {0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 6: Game Pong
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,1,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,1,1,1,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,1,0,0,0,1,1,0},
-//         {0,1,1,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 7: Game Maze
-//     {{
-//       {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//       {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
-//       {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
-//       {0,1,0,0,0,0,0,1,0,1,0,0,0,1,0},
-//       {0,1,1,1,1,1,1,1,0,0,0,0,0,1,0},
-//       {0,1,0,0,0,0,0,1,1,1,0,0,0,1,0},
-//       {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//       {0,1,0,0,0,1,0,0,0,0,0,0,0,1,0},
-//       {0,1,0,0,0,1,0,0,0,0,0,0,0,1,0},
-//       {0,1,0,0,0,1,1,1,1,1,1,0,0,1,0},
-//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
-//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
-//       {0,1,0,0,0,0,0,0,0,0,1,0,0,1,0},
-//       {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
-//       {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 8: Navigation Back Arrow
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 9: Network WiFi Symbol
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
-//         {0,0,1,1,0,0,0,0,0,0,0,1,1,0,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {1,0,0,0,0,1,1,1,1,1,0,0,0,0,1},
-//         {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,1,1,0,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,1,0,0,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 10: Network Bluetooth Symbol
-//     {{
-//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,1,0,0,0},
-//         {0,0,0,1,0,0,1,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,1,1,1,0,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,1,1,1,0,1,0,0,0,0,0,0},
-//         {0,0,0,1,0,0,1,0,0,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,1,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 11: Tool Jamming
-//     {{
-//         {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,1,0,0,1,0,0,0,0,0,1,0,0,1,0},
-//         {0,1,0,1,0,0,0,0,0,0,0,1,0,1,0},
-//         {0,1,0,1,0,0,1,0,1,0,0,1,0,1,0},
-//         {0,1,0,1,0,0,1,0,1,0,0,1,0,1,0},
-//         {0,1,0,0,1,0,1,0,1,0,1,0,0,1,0},
-//         {0,0,1,0,0,0,1,0,1,0,0,0,1,0,0},
-//         {0,0,0,1,0,1,1,1,1,1,0,1,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,0,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//     }},
-//     // Icon Type 12: Tool Injection
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,1,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,1,1,0},
-//         {0,0,0,0,0,0,0,0,0,1,0,1,1,1,1},
-//         {0,0,0,0,0,0,0,0,1,1,1,1,1,0,1},
-//         {0,0,0,0,0,0,0,1,0,0,1,1,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,1,1,0,0},
-//         {0,0,0,0,0,1,0,0,0,0,0,1,0,0,0},
-//         {0,0,0,0,1,1,0,0,0,0,1,0,0,0,0},
-//         {0,0,0,1,1,1,1,0,0,1,0,0,0,0,0},
-//         {0,0,0,1,1,1,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,1,1,1,1,0,0,0,0,0,0,0},
-//         {0,0,0,1,0,1,1,0,0,0,0,0,0,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 13: Settings Display
-//     {{
-//         {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {1,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-//         {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
-//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
-//         {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 14: Settings Sound
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,0,0,0,1,0,0},
-//         {0,0,0,0,0,1,0,0,0,1,0,0,1,0,0},
-//         {0,0,0,0,1,1,0,1,0,0,1,0,0,1,0},
-//         {0,0,0,1,1,1,0,0,1,0,0,1,0,1,0},
-//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
-//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
-//         {0,1,1,1,1,1,0,0,0,1,0,1,0,1,0},
-//         {0,0,0,1,1,1,0,0,1,0,0,1,0,1,0},
-//         {0,0,0,0,1,1,0,1,0,0,1,0,0,1,0},
-//         {0,0,0,0,0,1,0,0,0,1,0,0,1,0,0},
-//         {0,0,0,0,0,0,0,0,1,0,0,0,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
-//     }},
-//     // Icon Type 15: Firmware Update
-//     {{
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//       {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
-//       {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
-//       {1,1,1,1,0,0,1,1,1,0,0,1,1,1,1},
-//       {0,0,0,1,0,1,0,0,0,1,0,1,0,0,0},
-//       {1,1,1,1,0,1,0,0,0,1,0,1,1,1,1},
-//       {0,0,0,1,0,1,0,0,0,1,0,1,0,0,0},
-//       {1,1,1,1,0,0,1,1,1,0,0,1,1,1,1},
-//       {0,0,0,1,0,0,0,0,0,0,0,1,0,0,0},
-//       {0,0,0,0,1,1,1,1,1,1,1,0,0,0,0},
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//       {0,0,0,0,0,1,0,1,0,1,0,0,0,0,0},
-//     }},
-//     // Icon Type 16: UI Refresh/Rescan
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,1,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,1,0,1,0,0,0,0,0,1,1,0,0,0},
-//         {0,0,1,1,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,1,1,1,1,0,0,0,0,0,0,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,0,1,1,0,0,0,0,0,1,1,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 17: UI Charging
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 18: Vibration
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {1,0,0,1,0,0,1,1,1,0,0,1,0,0,1},
-//         {1,0,1,0,0,1,0,1,0,1,0,0,1,0,1},
-//         {1,0,1,0,0,1,0,0,0,1,0,0,1,0,1},
-//         {1,0,1,0,0,1,0,0,0,1,0,0,1,0,1},
-//         {1,0,0,1,0,0,1,1,1,0,0,1,0,0,1},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,1,0,0,0,0,0,0,0,0,0,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 19: Laser
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,1,0,0,0,0},
-//         {0,1,0,0,0,0,0,1,0,0,1,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,1,0,1,0,1,0,0},
-//         {0,1,0,0,0,0,0,0,0,1,1,1,0,0,0},
-//         {0,1,0,0,0,0,1,1,1,1,1,1,1,1,1},
-//         {0,1,1,1,0,0,0,0,0,1,1,1,0,0,0},
-//         {0,0,0,0,0,0,0,0,1,0,1,0,1,0,0},
-//         {0,0,0,0,0,0,0,1,0,0,1,0,0,1,0},
-//         {0,0,0,0,0,0,1,0,0,0,1,0,0,0,0},
-//         {0,0,0,1,0,1,0,0,0,0,0,0,0,0,0},
-//         {0,0,1,1,1,0,0,0,0,0,0,0,0,0,0},
-//         {0,1,1,1,1,1,0,0,0,0,0,0,0,0,0},
-//         {1,1,0,1,1,0,0,0,0,0,0,0,0,0,0},
-//         {1,1,1,1,0,0,0,0,0,0,0,0,0,0,0},
-//         {1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 20: Flashlight
-//     {{
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//         {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
-//         {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
-//         {0,0,0,1,0,0,0,1,0,0,0,1,0,0,0},
-//         {0,0,0,0,1,0,0,1,0,0,1,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,0,1,1,1,1,1,0,0,0,0,0},
-//         {0,0,0,0,1,0,0,1,0,0,1,0,0,0,0},
-//         {0,0,0,1,0,0,0,1,0,0,0,1,0,0,0},
-//         {0,0,1,0,0,0,0,1,0,0,0,0,1,0,0},
-//         {0,1,0,0,0,0,0,1,0,0,0,0,0,1,0},
-//         {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
-//     }},
-//     // Icon Type 21: Utilities
-//     {{
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//         {0,0,0,0,0,0,1,1,1,0,0,0,0,0,0},
-//         {0,0,0,0,0,1,0,0,0,1,0,0,0,0,0},
-//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-//         {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-//         {0,0,1,1,1,1,1,1,1,1,1,1,1,0,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,1,0,0,0,0,0,0,0,1,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,1,0,0,0,0,0,0,0,0,0,0,0,1,0},
-//         {0,0,1,1,1,1,1,1,1,1,1,1,1,0,0},
-//         {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-//     }}
-// };
-
-// // ==== END OF ICON DEFINITIONS AND STRUCTURE ====
-
-
 
 // Externs for Wi-Fi data (defined in KivaMain.ino)
 extern WifiNetwork scannedNetworks[MAX_WIFI_NETWORKS];
@@ -807,7 +384,7 @@ void drawWifiSetupScreen() {
           current_content_x += 6;
         }
       } else if (action_icon_type != -1) {
-        drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type);
+        drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type, RENDER_SIZE_SMALL);
         current_content_x += 10;
       } else {
         current_content_x += 10;
@@ -1102,7 +679,7 @@ void drawWifiConnectionResultScreen() {
       }
     }
 
-  } else {                                                            // Error case
+  } else {                                                      // Error case
     drawCustomIcon(u8g2.getDisplayWidth() / 2 - 8, iconY, 11);  // Error icon
     int msgWidth = u8g2.getStrWidth(resultMsgFull);
     // For error messages, just display as before but shifted down
@@ -1535,7 +1112,7 @@ void drawSDFirmwareListScreen() {
 
     if (action_icon_type != -1) {
       drawCustomIcon(current_content_x, icon_y_center_for_draw - 4, action_icon_type);  // Small icon
-      current_content_x += 10;                                                                 // Space for icon
+      current_content_x += 10;                                                          // Space for icon
     } else {
       current_content_x += 10;  // Default padding if no icon
     }
@@ -1561,97 +1138,38 @@ void drawSDFirmwareListScreen() {
   u8g2.setMaxClipWindow();
 }
 
-// NEW Function: drawRfToolkitOverviewMenu
-void drawRfToolkitOverviewMenu() {
-    // This will be very similar to drawCarouselMenu or drawMainMenu
-    // For simplicity, let's adapt drawCarouselMenu
-    subMenuAnim.update(); // Use subMenuAnim for consistency with other sub-menus
-    const int carousel_center_y_abs = 44;
-    const int screen_center_x_abs = 64;
-    const int card_internal_padding = 3;
-    const int icon_render_size = 16;
-    const int icon_margin_top = 3;
-    const int text_margin_from_icon = 2;
+void drawBeaconSpamActiveScreen() {
+  u8g2.setFont(u8g2_font_7x13B_tr);
+  u8g2.setDrawColor(1);
 
-    u8g2.setFont(u8g2_font_6x10_tf);
+  // Title
+  const char* title = "Beacon Spam Active";
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(title)) / 2, 24, title);
 
-    for (int i = 0; i < maxMenuItems; i++) { // maxMenuItems should be set by initializeCurrentMenu
-        float current_item_scale = subMenuAnim.itemScale[i];
-        if (current_item_scale <= 0.05f) continue;
+  // Show which mode is active
+  u8g2.setFont(u8g2_font_6x10_tf);
+  BeaconSsidMode mode = get_beacon_ssid_mode();
+  const char* mode_text = (mode == BeaconSsidMode::FROM_FILE) ? "Mode: SD Card" : "Mode: Random";
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(mode_text)) / 2, 42, mode_text);
 
-        float current_item_offset_x = subMenuAnim.itemOffsetX[i];
-        int card_w_scaled = (int)(CarouselAnimation().cardBaseW * current_item_scale);
-        int card_h_scaled = (int)(CarouselAnimation().cardBaseH * current_item_scale);
-        int card_x_abs = screen_center_x_abs + (int)current_item_offset_x - (card_w_scaled / 2);
-        int card_y_abs = carousel_center_y_abs - (card_h_scaled / 2);
-        bool is_selected_item = (i == menuIndex);
-
-        const char* itemTextToDisplay = rfToolkitMenuItems[i]; // Use the correct menu item array
-        int icon_type_for_item = 9; // Default to Wi-Fi icon
-
-        // Assign specific icons if needed for items within RF_TOOLKIT_OVERVIEW_MENU
-        if (strcmp(itemTextToDisplay, "Wi-Fi Scanning") == 0) icon_type_for_item = 9; // Wi-Fi icon
-        else if (strcmp(itemTextToDisplay, "Wi-Fi Attacks") == 0) icon_type_for_item = 11; // Jamming/Attack icon
-        // else if (strcmp(itemTextToDisplay, "Bluetooth (ESP32)") == 0) icon_type_for_item = 10; // BT Icon
-        // else if (strcmp(itemTextToDisplay, "LAN Tools") == 0) icon_type_for_item = 0; // Generic Tools Icon
-        else if (strcmp(itemTextToDisplay, "Back") == 0) icon_type_for_item = 8; // Back arrow
-
-
-        if (card_w_scaled <= 0 || card_h_scaled <= 0) continue;
-
-        if (is_selected_item) {
-            u8g2.setDrawColor(1);
-            drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 3, true); // Fill selected
-
-            u8g2.setDrawColor(0); // Text color for filled box
-            int icon_x_pos = card_x_abs + (card_w_scaled - icon_render_size) / 2;
-            int icon_y_pos = card_y_abs + icon_margin_top;
-            drawCustomIcon(icon_x_pos, icon_y_pos, icon_type_for_item);
-
-            int text_area_y_start_abs = card_y_abs + icon_margin_top + icon_render_size + text_margin_from_icon;
-            int text_area_h_available = card_h_scaled - (text_area_y_start_abs - card_y_abs) - card_internal_padding;
-            int text_baseline_y_render = text_area_y_start_abs + (text_area_h_available - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent() - 1;
-            
-            int card_inner_content_width = card_w_scaled - 2 * card_internal_padding;
-            updateMarquee(card_inner_content_width, itemTextToDisplay);
-
-            int clip_x1 = card_x_abs + card_internal_padding;
-            // ... (rest of clipping and text drawing logic from drawCarouselMenu, adapted for itemTextToDisplay) ...
-            int clip_y1 = text_area_y_start_abs;
-            int clip_x2 = card_x_abs + card_w_scaled - card_internal_padding;
-            int clip_y2 = card_y_abs + card_h_scaled - card_internal_padding;
-
-            clip_y1 = max(clip_y1, card_y_abs);
-            clip_y2 = min(clip_y2, card_y_abs + card_h_scaled);
-
-            if (clip_x1 < clip_x2 && clip_y1 < clip_y2) {
-                u8g2.setClipWindow(clip_x1, clip_y1, clip_x2, clip_y2);
-                if (marqueeActive) {
-                    u8g2.drawStr(card_x_abs + card_internal_padding + (int)marqueeOffset, text_baseline_y_render, marqueeText);
-                } else {
-                    int text_width_pixels = u8g2.getStrWidth(itemTextToDisplay);
-                    u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, itemTextToDisplay);
-                }
-                u8g2.setMaxClipWindow();
-            }
-
-        } else { // Not selected
-            u8g2.setDrawColor(1);
-            drawRndBox(card_x_abs, card_y_abs, card_w_scaled, card_h_scaled, 2, false); // Frame non-selected
-
-            if (current_item_scale > 0.5) { // Only draw text if reasonably scaled
-                u8g2.setFont(u8g2_font_5x7_tf); // Smaller font for non-selected scaled items
-                char* display_text_truncated = truncateText(itemTextToDisplay, card_w_scaled - 2 * card_internal_padding, u8g2);
-                int text_width_pixels = u8g2.getStrWidth(display_text_truncated);
-                int text_baseline_y_render = card_y_abs + (card_h_scaled - (u8g2.getAscent() - u8g2.getDescent())) / 2 + u8g2.getAscent();
-                u8g2.drawStr(card_x_abs + (card_w_scaled - text_width_pixels) / 2, text_baseline_y_render, display_text_truncated);
-                u8g2.setFont(u8g2_font_6x10_tf); // Reset font
-            }
-        }
-    }
-    u8g2.setDrawColor(1); // Reset draw color
+  // Instruction Text
+  const char* instruction = "Press BACK to Stop";
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(instruction)) / 2, 58, instruction);
 }
 
+void drawRickRollActiveScreen() {
+  u8g2.setFont(u8g2_font_7x13B_tr);
+  u8g2.setDrawColor(1);
+
+  // Title
+  const char* title = "Rick Roll Active";
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(title)) / 2, 32, title);
+
+  // Instruction Text
+  u8g2.setFont(u8g2_font_6x10_tf);
+  const char* instruction = "Press BACK to Stop";
+  u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getStrWidth(instruction)) / 2, 58, instruction);
+}
 
 void drawUI() {
   unsigned long currentTime = millis();  // Ensure currentTime is available for animations
@@ -1677,7 +1195,7 @@ void drawUI() {
   u8g2.clearBuffer();
 
   bool drawDefaultStatusBar = true;
-  if (currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || currentMenu == JAMMING_ACTIVE_SCREEN || currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE) {
+  if (currentMenu == WIFI_PASSWORD_INPUT || currentMenu == WIFI_CONNECTING || currentMenu == WIFI_CONNECTION_INFO || currentMenu == JAMMING_ACTIVE_SCREEN || currentMenu == OTA_WEB_ACTIVE || currentMenu == OTA_SD_STATUS || currentMenu == OTA_BASIC_ACTIVE || currentMenu == WIFI_BEACON_SPAM_ACTIVE_SCREEN) {  // <-- ADDED
     drawDefaultStatusBar = false;
   }
   if (drawDefaultStatusBar) { drawStatusBar(); }
@@ -1727,8 +1245,6 @@ void drawUI() {
     drawToolGridScreen();
   } else if (currentMenu == MAIN_MENU) {
     drawMainMenu();
-  } else if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) { // <--- ADDED CASE
-    drawRfToolkitOverviewMenu();
   } else if (currentMenu == WIFI_SETUP_MENU) {
     drawWifiSetupScreen();
   } else if (currentMenu == WIFI_PASSWORD_INPUT) {
@@ -1741,6 +1257,10 @@ void drawUI() {
     drawOtaStatusScreen();
   } else if (currentMenu == FIRMWARE_SD_LIST_MENU) {
     drawSDFirmwareListScreen();
+  } else if (currentMenu == WIFI_BEACON_SPAM_ACTIVE_SCREEN) {
+    drawBeaconSpamActiveScreen();
+  } else if (currentMenu == WIFI_RICK_ROLL_ACTIVE_SCREEN) {
+    drawRickRollActiveScreen();
   } else {
     if (currentMenu == GAMES_MENU || currentMenu == TOOLS_MENU || currentMenu == SETTINGS_MENU || currentMenu == UTILITIES_MENU) {
       drawCarouselMenu();
@@ -2044,8 +1564,6 @@ void drawStatusBar() {
     titleText = "Update from SD";
   } else if (currentMenu != MAIN_MENU && mainMenuSavedIndex >= 0 && mainMenuSavedIndex < getMainMenuItemsCount()) {
     titleText = mainMenuItems[mainMenuSavedIndex];
-  } else if (currentMenu == RF_TOOLKIT_OVERVIEW_MENU) {  // <--- NEW
-    titleText = "RF Toolkit";
   }
 
   char titleBuffer[14];
@@ -2136,7 +1654,6 @@ void drawMainMenu() {
 
     int iconType = 0;
     if (strcmp(itms[i], "Tools") == 0) iconType = 0;
-    else if (strcmp(itms[i], "RF Toolkit") == 0) iconType = 9;
     else if (strcmp(itms[i], "Games") == 0) iconType = 1;
     else if (strcmp(itms[i], "Settings") == 0) iconType = 2;
     else if (strcmp(itms[i], "Utilities") == 0) iconType = 21;
@@ -2408,96 +1925,102 @@ void drawToolGridScreen() {
 }
 
 void drawCustomIcon(int x_top_left, int y_top_left, int iconType, IconRenderSize size /*= RENDER_SIZE_DEFAULT*/) {
-    const unsigned char* xbm_data = nullptr;
-    int w = 0, h = 0;
-    bool icon_resolved = false; // Flag to track if we've successfully resolved an icon to draw
+  const unsigned char* xbm_data = nullptr;
+  int w = 0, h = 0;
+  bool icon_resolved = false;  // Flag to track if we've successfully resolved an icon to draw
 
-    // --- Phase 1: Try to resolve a small icon if requested and available ---
+  // --- Phase 1: Try to resolve a small icon if requested and available ---
+  if (size == RENDER_SIZE_SMALL) {
+    switch (static_cast<IconType>(iconType)) {  // Cast to IconType enum for switch
+      case ICON_UI_CHARGING_BOLT:
+        xbm_data = icon_ui_charging_bolt_small_bits;  // Assumes this is defined in icons.cpp
+        w = SMALL_ICON_WIDTH;
+        h = SMALL_ICON_HEIGHT;
+        icon_resolved = true;
+        break;
+      // Add other cases here for icons that have specific _small_bits definitions
+      case ICON_UI_REFRESH:
+        xbm_data = icon_ui_refresh_small_bits;
+        w = SMALL_ICON_WIDTH;
+        h = SMALL_ICON_HEIGHT;
+        icon_resolved = true;
+        break;
+      case ICON_NAV_BACK:
+        xbm_data = icon_nav_back_small_bits;
+        w = SMALL_ICON_WIDTH;
+        h = SMALL_ICON_HEIGHT;
+        icon_resolved = true;
+        break;
+      default:
+        // No specific small version for this iconType, will fall through to large/default
+        break;
+    }
+  }
+
+  // --- Phase 2: Resolve to large/default icon if small wasn't resolved or wasn't requested ---
+  // This also handles RENDER_SIZE_DEFAULT: if a small one was specifically defined for RENDER_SIZE_SMALL above
+  // and RENDER_SIZE_DEFAULT is passed, it would have already been picked. Otherwise, default is large.
+  // It also handles RENDER_SIZE_LARGE explicitly.
+  if (!icon_resolved) {
+    w = LARGE_ICON_WIDTH;
+    h = LARGE_ICON_HEIGHT;
+    icon_resolved = true;  // Assume a large version exists for all valid icon types
+
+    switch (static_cast<IconType>(iconType)) {
+      case ICON_TOOLS: xbm_data = icon_tools_large_bits; break;
+      case ICON_GAMES: xbm_data = icon_games_large_bits; break;
+      case ICON_SETTINGS: xbm_data = icon_settings_large_bits; break;
+      case ICON_INFO: xbm_data = icon_info_large_bits; break;
+      case ICON_GAME_SNAKE: xbm_data = icon_game_snake_large_bits; break;
+      case ICON_GAME_TETRIS: xbm_data = icon_game_tetris_large_bits; break;
+      case ICON_GAME_PONG: xbm_data = icon_game_pong_large_bits; break;
+      case ICON_GAME_MAZE: xbm_data = icon_game_maze_large_bits; break;
+      case ICON_NAV_BACK: xbm_data = icon_nav_back_large_bits; break;
+      case ICON_NET_WIFI: xbm_data = icon_net_wifi_large_bits; break;
+      case ICON_NET_BLUETOOTH: xbm_data = icon_net_bluetooth_large_bits; break;
+      case ICON_TOOL_JAMMING: xbm_data = icon_tool_jamming_large_bits; break;
+      case ICON_TOOL_INJECTION: xbm_data = icon_tool_injection_large_bits; break;
+      case ICON_SETTING_DISPLAY: xbm_data = icon_setting_display_large_bits; break;
+      case ICON_SETTING_SOUND: xbm_data = icon_setting_sound_large_bits; break;
+      case ICON_SETTING_SYSTEM: xbm_data = icon_setting_system_large_bits; break;
+      case ICON_UI_REFRESH: xbm_data = icon_ui_refresh_large_bits; break;
+      case ICON_UI_CHARGING_BOLT:  // This is the large version, used if small wasn't explicitly chosen or doesn't exist
+        xbm_data = icon_ui_charging_bolt_large_bits;
+        break;
+      case ICON_UI_VIBRATION: xbm_data = icon_ui_vibration_large_bits; break;
+      case ICON_UI_LASER: xbm_data = icon_ui_laser_large_bits; break;
+      case ICON_UI_FLASHLIGHT: xbm_data = icon_ui_flashlight_large_bits; break;
+      case ICON_UTILITIES_CATEGORY: xbm_data = icon_utilities_category_large_bits; break;
+      default:
+        icon_resolved = false;  // Invalid iconType, or iconType out of range
+        break;
+    }
+  }
+
+  // --- Phase 3: Draw the resolved icon or a placeholder ---
+  if (icon_resolved && xbm_data != nullptr && w > 0 && h > 0) {
+    u8g2.drawXBM(x_top_left, y_top_left, w, h, xbm_data);
+  } else {
+    // Fallback placeholder for unknown icon type or if XBM data is somehow null
+    // Determine placeholder size based on what was intended
+    int placeholder_w, placeholder_h;
     if (size == RENDER_SIZE_SMALL) {
-        switch (static_cast<IconType>(iconType)) { // Cast to IconType enum for switch
-            case ICON_UI_CHARGING_BOLT:
-                xbm_data = icon_ui_charging_bolt_small_bits; // Assumes this is defined in icons.cpp
-                w = SMALL_ICON_WIDTH;
-                h = SMALL_ICON_HEIGHT;
-                icon_resolved = true;
-                break;
-            // Add other cases here for icons that have specific _small_bits definitions
-            // case ICON_ANOTHER_WITH_SMALL_VERSION:
-            //     xbm_data = icon_another_specific_small_bits;
-            //     w = SMALL_ICON_WIDTH;
-            //     h = SMALL_ICON_HEIGHT;
-            //     icon_resolved = true;
-            //     break;
-            default:
-                // No specific small version for this iconType, will fall through to large/default
-                break;
-        }
+      placeholder_w = SMALL_ICON_WIDTH;
+      placeholder_h = SMALL_ICON_HEIGHT;
+    } else {  // RENDER_SIZE_LARGE or RENDER_SIZE_DEFAULT
+      placeholder_w = LARGE_ICON_WIDTH;
+      placeholder_h = LARGE_ICON_HEIGHT;
     }
-
-    // --- Phase 2: Resolve to large/default icon if small wasn't resolved or wasn't requested ---
-    // This also handles RENDER_SIZE_DEFAULT: if a small one was specifically defined for RENDER_SIZE_SMALL above
-    // and RENDER_SIZE_DEFAULT is passed, it would have already been picked. Otherwise, default is large.
-    // It also handles RENDER_SIZE_LARGE explicitly.
-    if (!icon_resolved) {
-        w = LARGE_ICON_WIDTH;
-        h = LARGE_ICON_HEIGHT;
-        icon_resolved = true; // Assume a large version exists for all valid icon types
-
-        switch (static_cast<IconType>(iconType)) {
-            case ICON_TOOLS: xbm_data = icon_tools_large_bits; break;
-            case ICON_GAMES: xbm_data = icon_games_large_bits; break;
-            case ICON_SETTINGS: xbm_data = icon_settings_large_bits; break;
-            case ICON_INFO: xbm_data = icon_info_large_bits; break;
-            case ICON_GAME_SNAKE: xbm_data = icon_game_snake_large_bits; break;
-            case ICON_GAME_TETRIS: xbm_data = icon_game_tetris_large_bits; break;
-            case ICON_GAME_PONG: xbm_data = icon_game_pong_large_bits; break;
-            case ICON_GAME_MAZE: xbm_data = icon_game_maze_large_bits; break;
-            case ICON_NAV_BACK: xbm_data = icon_nav_back_large_bits; break;
-            case ICON_NET_WIFI: xbm_data = icon_net_wifi_large_bits; break;
-            case ICON_NET_BLUETOOTH: xbm_data = icon_net_bluetooth_large_bits; break;
-            case ICON_TOOL_JAMMING: xbm_data = icon_tool_jamming_large_bits; break;
-            case ICON_TOOL_INJECTION: xbm_data = icon_tool_injection_large_bits; break;
-            case ICON_SETTING_DISPLAY: xbm_data = icon_setting_display_large_bits; break;
-            case ICON_SETTING_SOUND: xbm_data = icon_setting_sound_large_bits; break;
-            case ICON_SETTING_SYSTEM: xbm_data = icon_setting_system_large_bits; break;
-            case ICON_UI_REFRESH: xbm_data = icon_ui_refresh_large_bits; break;
-            case ICON_UI_CHARGING_BOLT: // This is the large version, used if small wasn't explicitly chosen or doesn't exist
-                xbm_data = icon_ui_charging_bolt_large_bits;
-                break;
-            case ICON_UI_VIBRATION: xbm_data = icon_ui_vibration_large_bits; break;
-            case ICON_UI_LASER: xbm_data = icon_ui_laser_large_bits; break;
-            case ICON_UI_FLASHLIGHT: xbm_data = icon_ui_flashlight_large_bits; break;
-            case ICON_UTILITIES_CATEGORY: xbm_data = icon_utilities_category_large_bits; break;
-            default:
-                icon_resolved = false; // Invalid iconType, or iconType out of range
-                break;
-        }
-    }
-
-    // --- Phase 3: Draw the resolved icon or a placeholder ---
-    if (icon_resolved && xbm_data != nullptr && w > 0 && h > 0) {
-        u8g2.drawXBM(x_top_left, y_top_left, w, h, xbm_data);
-    } else {
-        // Fallback placeholder for unknown icon type or if XBM data is somehow null
-        // Determine placeholder size based on what was intended
-        int placeholder_w, placeholder_h;
-        if (size == RENDER_SIZE_SMALL) {
-            placeholder_w = SMALL_ICON_WIDTH;
-            placeholder_h = SMALL_ICON_HEIGHT;
-        } else { // RENDER_SIZE_LARGE or RENDER_SIZE_DEFAULT
-            placeholder_w = LARGE_ICON_WIDTH;
-            placeholder_h = LARGE_ICON_HEIGHT;
-        }
-        // If w and h were resolved but xbm_data was null, use those dimensions for placeholder
-        if (w > 0) placeholder_w = w;
-        if (h > 0) placeholder_h = h;
+    // If w and h were resolved but xbm_data was null, use those dimensions for placeholder
+    if (w > 0) placeholder_w = w;
+    if (h > 0) placeholder_h = h;
 
 
-        u8g2.setDrawColor(1); // Ensure placeholder is drawn in foreground color
-        u8g2.drawFrame(x_top_left, y_top_left, placeholder_w, placeholder_h);
-        u8g2.drawLine(x_top_left, y_top_left, x_top_left + placeholder_w - 1, y_top_left + placeholder_h - 1);
-        u8g2.drawLine(x_top_left + placeholder_w - 1, y_top_left, x_top_left, y_top_left + placeholder_h - 1);
-    }
+    u8g2.setDrawColor(1);  // Ensure placeholder is drawn in foreground color
+    u8g2.drawFrame(x_top_left, y_top_left, placeholder_w, placeholder_h);
+    u8g2.drawLine(x_top_left, y_top_left, x_top_left + placeholder_w - 1, y_top_left + placeholder_h - 1);
+    u8g2.drawLine(x_top_left + placeholder_w - 1, y_top_left, x_top_left, y_top_left + placeholder_h - 1);
+  }
 }
 
 void drawRndBox(int x, int y, int w, int h, int r, bool fill) {
