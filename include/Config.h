@@ -5,7 +5,8 @@
 #include <cstdint> // For uint8_t
 
 // Menu System Enums
-enum class MenuType {
+enum class MenuType
+{
     NONE,
     BACK,
     MAIN,
@@ -14,11 +15,14 @@ enum class MenuType {
     SETTINGS_CAROUSEL,
     UTILITIES_CAROUSEL,
     WIFI_TOOLS_GRID,
-    JAMMING_TOOLS_GRID
+    JAMMING_TOOLS_GRID,
+    WIFI_LIST,
+    TEXT_INPUT 
 };
 
 // Input Event System
-enum class InputEvent {
+enum class InputEvent
+{
     NONE,
     ENCODER_CW,
     ENCODER_CCW,
@@ -32,12 +36,13 @@ enum class InputEvent {
 };
 
 // I2C & Hardware Pins
-namespace Pins {
+namespace Pins
+{
     static constexpr uint8_t MUX_ADDR = 0x70;
     static constexpr uint8_t PCF0_ADDR = 0x24;
     static constexpr uint8_t PCF1_ADDR = 0x20;
     static constexpr uint8_t MUX_CHANNEL_PCF0_ENCODER = 0;
-    static constexpr uint8_t MUX_CHANNEL_PCF1_NAV     = 1;
+    static constexpr uint8_t MUX_CHANNEL_PCF1_NAV = 1;
     static constexpr uint8_t MUX_CHANNEL_MAIN_DISPLAY = 4;
     static constexpr uint8_t MUX_CHANNEL_SECOND_DISPLAY = 2;
 
@@ -53,13 +58,15 @@ namespace Pins {
     static constexpr uint8_t NAV_UP = 5;
     static constexpr uint8_t NAV_DOWN = 6;
     static constexpr uint8_t NAV_RIGHT = 7;
-    
-    // --- NEW: ADC Pin ---
+
     static constexpr uint8_t ADC_PIN = 3;
+
+    static constexpr uint8_t SD_CS_PIN = 21;
 }
 
 // Battery Monitor Constants
-namespace Battery {
+namespace Battery
+{
     static constexpr float ADC_REF_VOLTAGE = 3.3f;
     static constexpr int ADC_RESOLUTION = 4095;
     static constexpr float VOLTAGE_DIVIDER_RATIO = 1.50f; // (R1+R2)/R2

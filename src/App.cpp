@@ -1,14 +1,16 @@
 #include "App.h"
 #include "Icons.h" 
 #include "UI_Utils.h"
-
-
+#include <algorithm>
+#include <cmath>
+#include <SdCardManager.h>
 
 App::App() :
     currentMenu_(nullptr),
+    currentProgressBarFillPx_(0.0f),
     toolsMenu_("Tools", {
-        {"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
-        {"Jamming", IconType::TOOL_JAMMING, MenuType::NONE},
+        {"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID}, // Corrected Icon
+        {"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID}, // Corrected Target
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     gamesMenu_("Games", {
@@ -17,7 +19,7 @@ App::App() :
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     settingsMenu_("Settings", {
-        {"WiFi", IconType::NET_WIFI, MenuType::NONE},
+        {"WiFi", IconType::NET_WIFI, MenuType::WIFI_LIST},
         {"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
@@ -30,24 +32,97 @@ App::App() :
         {"Beacon Spam", IconType::TOOL_INJECTION, MenuType::NONE},
         {"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
-    }, 2)
+    }, 2),
+    wifiListMenu_(),      // <-- Add this
+    textInputMenu_()  // <-- Add this
 {
+    // Initialize the small display log buffer
+    for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
+        smallDisplayLogBuffer_[i][0] = '\0';
+    }
 }
 
 void App::setup() {
     Serial.begin(115200);
-    // Give a moment for Serial to initialize before logging
-    delay(500); 
-    Serial.println("\n\n[APP-LOG] App setup started.");
+    delay(100); 
+    Wire.begin();
 
-    hardware_.setup();
+    // --- NEW CONTINUOUS BOOT SEQUENCE ---
+    Serial.println("\n[APP-LOG] Starting Kiva Boot Sequence...");
+
+    // Initialize displays early
+    hardware_.getMainDisplay().begin();
+    hardware_.getMainDisplay().enableUTF8Print();
+    hardware_.getSmallDisplay().begin();
+    hardware_.getSmallDisplay().enableUTF8Print();
     
+    const unsigned long TOTAL_BOOT_DURATION_MS = 3000;
+    const unsigned long bootStartTime = millis();
+    unsigned long currentTime = 0;
+
+    // Define boot task milestones (in milliseconds)
+    const unsigned long MILESTONE_I2C = 200;
+    const unsigned long MILESTONE_HW_MANAGER = 800;
+    const unsigned long MILESTONE_WIFI = 1400;
+    const unsigned long MILESTONE_JAMMER = 2000;
+    const unsigned long MILESTONE_READY = 2600;
+    
+    bool i2c_done = false, hw_done = false, wifi_done = false, jammer_done = false, ready_done = false;
+
+    logToSmallDisplay("Kiva Boot Agent v1.0", nullptr);
+
+    // This loop runs for the total duration of the boot animation.
+    while ((currentTime = millis()) - bootStartTime < TOTAL_BOOT_DURATION_MS) {
+        unsigned long elapsedTime = currentTime - bootStartTime;
+
+        // Perform boot tasks as we pass their milestones
+        if (!i2c_done && elapsedTime >= MILESTONE_I2C) {
+            logToSmallDisplay("I2C Bus Initialized", "OK");
+            i2c_done = true;
+        }
+        if (!hw_done && elapsedTime >= MILESTONE_HW_MANAGER) {
+            hardware_.setup();
+            logToSmallDisplay("Hardware Manager", "OK");
+            hw_done = true;
+        }
+        if (!wifi_done && elapsedTime >= MILESTONE_WIFI) {
+            logToSmallDisplay("WiFi Subsystem", "INIT");
+            wifi_done = true;
+        }
+        if (!jammer_done && elapsedTime >= MILESTONE_JAMMER) {
+            logToSmallDisplay("Jamming System", "INIT");
+            jammer_done = true;
+        }
+        if (!ready_done && elapsedTime >= MILESTONE_READY) {
+            logToSmallDisplay("Main Display OK", "READY");
+            ready_done = true;
+        }
+        
+        // Continuously update and draw the smooth progress bar
+        updateAndDrawBootScreen(bootStartTime, TOTAL_BOOT_DURATION_MS);
+        delay(16); // Maintain ~60 FPS update rate
+    }
+
+    // Ensure the bar is 100% full at the end and show the final log
+    logToSmallDisplay("KivaOS Loading...");
+    updateAndDrawBootScreen(bootStartTime, TOTAL_BOOT_DURATION_MS); // Final draw at 100%
+    delay(500); // Pause on the full bar for a moment
+
+    // --- Boot Sequence End. Transition to main application ---
+    Serial.println("[APP-LOG] Boot sequence finished. Initializing menus.");
+
+    SdCardManager::setup(); // Setup SD Card first
+    wifiManager_.setup();   // Then WifiManager which may depend on it
+    
+    // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
     menuRegistry_[MenuType::SETTINGS_CAROUSEL] = &settingsMenu_;
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
+    menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
+     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -56,14 +131,12 @@ void App::setup() {
 
 void App::loop() {
     hardware_.update();
+    wifiManager_.update();
     
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
-        Serial.printf("[APP-LOG] Received event: %d. Passing to current menu.\n", static_cast<int>(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
-        } else {
-            Serial.println("[APP-LOG] WARNING: Event received but no current menu to handle it!");
         }
     }
 
@@ -82,52 +155,13 @@ void App::loop() {
     drawSecondaryDisplay();
 }
 
-void App::drawSecondaryDisplay() {
-    U8G2& display = hardware_.getSmallDisplay();
-    display.clearBuffer();
-    display.setDrawColor(1);
-
-    // Battery Info
-    char batInfoStr[16];
-    snprintf(batInfoStr, sizeof(batInfoStr), "%.2fV %s%d%%", 
-             hardware_.getBatteryVoltage(), 
-             hardware_.isCharging() ? "+" : "", 
-             hardware_.getBatteryPercentage());
-    display.setFont(u8g2_font_5x7_tf);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(batInfoStr)) / 2, 8, batInfoStr);
-
-    // Current Menu Info
-    const char* modeText = "KivaOS";
-    if (currentMenu_) {
-        modeText = currentMenu_->getTitle();
-    }
-    display.setFont(u8g2_font_6x12_tr);
-    char truncated[22];
-    strncpy(truncated, modeText, sizeof(truncated) - 1);
-    truncated[sizeof(truncated) - 1] = '\0';
-    if(display.getStrWidth(truncated) > display.getDisplayWidth() - 4) {
-        // A simple truncation if needed, marquee is too complex for here.
-        truncated[sizeof(truncated) - 2] = '.';
-        truncated[sizeof(truncated) - 3] = '.';
-    }
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 28, truncated);
-    
-    display.sendBuffer();
-}
-
 void App::changeMenu(MenuType type, bool isForwardNav) {
     if (type == MenuType::NONE) return;
-
-    // Add logging to menu changes
-    Serial.printf("[APP-LOG] changeMenu called. Type: %d, isForward: %d\n", static_cast<int>(type), isForwardNav);
 
     if (type == MenuType::BACK) {
         if (navigationStack_.size() > 1) {
             navigationStack_.pop_back();
-            // The recursive call will be logged
             changeMenu(navigationStack_.back(), false);
-        } else {
-             Serial.println("[APP-LOG] BACK ignored, at bottom of stack.");
         }
         return;
     }
@@ -136,16 +170,13 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
     if (it != menuRegistry_.end()) {
         IMenu* newMenu = it->second;
         if (currentMenu_ == newMenu && !isForwardNav) {
-            Serial.println("[APP-LOG] changeMenu ignored, already on target menu during back navigation.");
             return;
         }
 
         if (currentMenu_) {
-            Serial.printf("[APP-LOG] Exiting menu: %s\n", currentMenu_->getTitle());
             currentMenu_->onExit(this);
         }
         currentMenu_ = newMenu;
-        Serial.printf("[APP-LOG] Entering menu: %s\n", currentMenu_->getTitle());
         currentMenu_->onEnter(this);
 
         if (isForwardNav) {
@@ -153,8 +184,47 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
                  navigationStack_.push_back(type);
             }
         }
+    }
+}
+
+void App::drawSecondaryDisplay() {
+    if (currentMenu_ && currentMenu_->getMenuType() == MenuType::TEXT_INPUT) {
+        // The PasswordInputMenu's draw function will handle drawing the keyboard
+        // on the small display. We get the display and pass it.
+        U8G2& smallDisplay = hardware_.getSmallDisplay();
+        // The cast is safe because we've checked the menu type.
+        static_cast<TextInputMenu*>(currentMenu_)->draw(this, smallDisplay);
     } else {
-        Serial.printf("[APP-LOG] WARNING: Menu type %d not found in registry!\n", static_cast<int>(type));
+        U8G2& display = hardware_.getSmallDisplay();
+        display.clearBuffer();
+        display.setDrawColor(1);
+
+        // Battery Info
+        char batInfoStr[16];
+        snprintf(batInfoStr, sizeof(batInfoStr), "%.2fV %s%d%%", 
+                hardware_.getBatteryVoltage(), 
+                hardware_.isCharging() ? "+" : "", 
+                hardware_.getBatteryPercentage());
+        display.setFont(u8g2_font_5x7_tf);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(batInfoStr)) / 2, 8, batInfoStr);
+
+        // Current Menu Info
+        const char* modeText = "KivaOS";
+        if (currentMenu_) {
+            modeText = currentMenu_->getTitle();
+        }
+        display.setFont(u8g2_font_6x12_tr);
+        char truncated[22];
+        strncpy(truncated, modeText, sizeof(truncated) - 1);
+        truncated[sizeof(truncated) - 1] = '\0';
+        if(display.getStrWidth(truncated) > display.getDisplayWidth() - 4) {
+            // A simple truncation if needed, marquee is too complex for here.
+            truncated[sizeof(truncated) - 2] = '.';
+            truncated[sizeof(truncated) - 3] = '.';
+        }
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 28, truncated);
+        
+        display.sendBuffer();
     }
 }
 
@@ -209,4 +279,71 @@ void App::drawStatusBar() {
     
     // Bottom line
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
+}
+
+void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration) {
+    U8G2& display = hardware_.getMainDisplay();
+
+    float progress_t = (float)(millis() - bootStartTime) / totalBootDuration;
+    progress_t = std::max(0.0f, std::min(1.0f, progress_t));
+
+    float eased_t = progress_t < 0.5f 
+                    ? 4.0f * progress_t * progress_t * progress_t 
+                    : 1.0f - pow(-2.0f * progress_t + 2.0f, 3) / 2.0f;
+
+    int progressBarDrawableWidth = display.getDisplayWidth() - 40 - 2;
+    currentProgressBarFillPx_ = progressBarDrawableWidth * eased_t;
+
+    display.clearBuffer();
+    drawCustomIcon(display, 0, -2, IconType::BOOT_LOGO);
+
+    int progressBarY = IconSize::BOOT_LOGO_HEIGHT - 12;
+    int progressBarHeight = 7;
+    int progressBarWidth = display.getDisplayWidth() - 40;
+    int progressBarX = (display.getDisplayWidth() - progressBarWidth) / 2;
+
+    display.setDrawColor(1);
+    display.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1);
+
+    int fillWidthToDraw = (int)round(currentProgressBarFillPx_);
+    fillWidthToDraw = std::max(0, std::min(fillWidthToDraw, progressBarDrawableWidth));
+
+    if (fillWidthToDraw > 0) {
+        display.drawRBox(progressBarX + 1, progressBarY + 1, fillWidthToDraw, progressBarHeight - 2, 0);
+    }
+    
+    display.sendBuffer();
+}
+
+void App::logToSmallDisplay(const char* message, const char* status) {
+    U8G2& display = hardware_.getSmallDisplay();
+    display.setFont(u8g2_font_5x7_tf);
+
+    char fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
+    fullMessage[0] = '\0';
+    int charsWritten = 0;
+
+    if (status && strlen(status) > 0) {
+        charsWritten = snprintf(fullMessage, sizeof(fullMessage), "[%s] ", status);
+    }
+    if (charsWritten < (int)sizeof(fullMessage) - 1) {
+        snprintf(fullMessage + charsWritten, sizeof(fullMessage) - charsWritten, "%.*s",
+                 (int)(sizeof(fullMessage) - charsWritten - 1), message);
+    }
+
+    for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY - 1; ++i) {
+        strncpy(smallDisplayLogBuffer_[i], smallDisplayLogBuffer_[i + 1], MAX_LOG_LINE_LENGTH_SMALL_DISPLAY);
+    }
+
+    strncpy(smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY - 1], fullMessage, MAX_LOG_LINE_LENGTH_SMALL_DISPLAY);
+    smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY - 1][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY - 1] = '\0';
+
+    display.clearBuffer();
+    display.setDrawColor(1);
+    const int lineHeight = 8;
+    int yPos = display.getAscent();
+    for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
+        display.drawStr(2, yPos + (i * lineHeight), smallDisplayLogBuffer_[i]);
+    }
+    display.sendBuffer();
 }

@@ -85,7 +85,7 @@ private:
     float lastValidRawVoltage_; // Renamed for clarity
 
     // Variables for Linear Regression
-    static const int TREND_SAMPLES = 20;
+    static const int TREND_SAMPLES = 25;
     float voltageTrendBuffer_[TREND_SAMPLES];
     int trendBufferIndex_;
     bool trendBufferFilled_;

@@ -6,8 +6,8 @@ HardwareManager::HardwareManager() : u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
                                      u8g2_small_(U8G2_R0, U8X8_PIN_NONE),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false),
-                                     batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.2f),
-                                     isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.2f),
+                                     batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
+                                     isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.5f),
                                      trendBufferIndex_(0), trendBufferFilled_(false)
 {
     // Initialize input button states
@@ -35,28 +35,21 @@ HardwareManager::HardwareManager() : u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
 
 void HardwareManager::setup()
 {
-    Wire.begin();
-
-    // --- FIX #2: Correct Initialization Logic for PCF0 ---
-    // Start with all pins HIGH (0xFF), then specifically pull the output pins LOW.
+    // Note: Wire.begin() and display.begin() are now called from App::setup()
+    // to allow the boot screen to show up before this method is called.
+    
+    // Correctly initialize PCF0 outputs (laser/vibration motor off)
     pcf0_output_state_ = 0xFF;
     pcf0_output_state_ &= ~((1 << Pins::LASER_PIN_PCF0) | (1 << Pins::MOTOR_PIN_PCF0));
     selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
     writePCF(Pins::PCF0_ADDR, pcf0_output_state_);
 
-    // --- FIX #3: Add explicit initialization for PCF1 ---
-    // All pins on PCF1 are inputs, so we write all HIGH.
+    // Initialize PCF1 for inputs
     selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
     writePCF(Pins::PCF1_ADDR, 0xFF);
 
     analogReadResolution(12);
-    updateBattery();
-
-    getMainDisplay().begin();
-    getMainDisplay().enableUTF8Print();
-
-    getSmallDisplay().begin();
-    getSmallDisplay().enableUTF8Print();
+    updateBattery(); // Get an initial battery reading
 
     // Prime the encoder's initial state
     selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
@@ -84,33 +77,26 @@ void HardwareManager::update()
     processButtonRepeats();
 }
 
-void HardwareManager::updateBattery()
-{
+void HardwareManager::updateBattery() {
     unsigned long currentTime = millis();
-    if (currentTime - lastBatteryCheckTime_ < Battery::CHECK_INTERVAL_MS)
-    {
+    if (currentTime - lastBatteryCheckTime_ < Battery::CHECK_INTERVAL_MS) {
         return;
     }
     lastBatteryCheckTime_ = currentTime;
 
+    // 1. Get a reliable raw voltage reading
     float rawVoltage = readRawBatteryVoltage();
 
-    if (!batteryInitialized_)
-    {
-        for (int i = 0; i < Battery::NUM_SAMPLES; i++)
-        {
-            batteryReadings_[i] = rawVoltage;
-        }
+    // 2. Perform weighted moving average smoothing for a stable display value
+    if (!batteryInitialized_) {
+        for (int i = 0; i < Battery::NUM_SAMPLES; i++) { batteryReadings_[i] = rawVoltage; }
         batteryInitialized_ = true;
         currentSmoothedVoltage_ = rawVoltage;
-    }
-    else
-    {
+    } else {
         batteryReadings_[batteryIndex_] = rawVoltage;
         batteryIndex_ = (batteryIndex_ + 1) % Battery::NUM_SAMPLES;
         float weightedSum = 0, totalWeight = 0;
-        for (int i = 0; i < Battery::NUM_SAMPLES; i++)
-        {
+        for (int i = 0; i < Battery::NUM_SAMPLES; i++) {
             float weight = 1.0f + (float)i / Battery::NUM_SAMPLES;
             int idx = (batteryIndex_ - 1 - i + Battery::NUM_SAMPLES) % Battery::NUM_SAMPLES;
             weightedSum += batteryReadings_[idx] * weight;
@@ -119,49 +105,58 @@ void HardwareManager::updateBattery()
         currentSmoothedVoltage_ = (totalWeight > 0) ? (weightedSum / totalWeight) : rawVoltage;
     }
 
+    // 3. Update the trend buffer with the NEWLY SMOOTHED voltage
     voltageTrendBuffer_[trendBufferIndex_] = currentSmoothedVoltage_;
     trendBufferIndex_ = (trendBufferIndex_ + 1) % TREND_SAMPLES;
-    if (!trendBufferFilled_ && trendBufferIndex_ == 0)
-    {
+    if (!trendBufferFilled_ && trendBufferIndex_ == 0) {
         trendBufferFilled_ = true;
     }
 
-    if (trendBufferFilled_)
-    {
+    // 4. --- NEW HYBRID CHARGING DETECTION LOGIC ---
+    const float FULLY_CHARGED_THRESHOLD = 4.25f; // A voltage at which charging current typically drops to near zero.
+    
+    if (trendBufferFilled_) {
+        // We have enough data for trend analysis.
+        
+        // Calculate the slope of the voltage trend.
         float sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
-        for (int i = 0; i < TREND_SAMPLES; ++i)
-        {
+        for (int i = 0; i < TREND_SAMPLES; ++i) {
             float y = voltageTrendBuffer_[i];
             float x = (float)i;
-            sum_x += x;
-            sum_y += y;
-            sum_xy += x * y;
-            sum_x2 += x * x;
+            sum_x += x; sum_y += y; sum_xy += x * y; sum_x2 += x * x;
         }
-
+        
         float denominator = (TREND_SAMPLES * sum_x2) - (sum_x * sum_x);
-        if (abs(denominator) > 0.001f)
-        {
-            float slope = ((TREND_SAMPLES * sum_xy) - (sum_x * sum_y)) / denominator;
-
-            // --- MODIFIED: Widen thresholds for more stability ---
-            const float chargingSlopeThreshold = 0.002f;     // Need a clear >2mV/sec rise
-            const float dischargingSlopeThreshold = -0.001f; // A >1mV/sec drop is a clear discharge
-
-            if (slope > chargingSlopeThreshold)
-            {
-                isCharging_ = true;
-            }
-            else if (slope < dischargingSlopeThreshold)
-            {
-                isCharging_ = false;
-            }
-            // If slope is in the "dead zone", the state remains unchanged.
+        float slope = 0.0f;
+        if (abs(denominator) > 0.001f) {
+            slope = ((TREND_SAMPLES * sum_xy) - (sum_x * sum_y)) / denominator;
         }
-    }
-    else
-    {
-        isCharging_ = (currentSmoothedVoltage_ > 4.19f); // Use a tighter threshold for initial check
+
+        const float chargingSlopeThreshold = 0.0015f;  // A rise of 1.5mV/sec indicates charging
+        const float dischargingSlopeThreshold = -0.001f; // A drop of 1mV/sec indicates discharging
+
+        // Now, apply the hybrid logic
+        if (currentSmoothedVoltage_ >= FULLY_CHARGED_THRESHOLD) {
+            // If voltage is at or above the 'full' threshold, the charging indicator should
+            // only be on if the voltage is STILL actively rising. Otherwise, it's full and idle.
+            if (slope > chargingSlopeThreshold) {
+                isCharging_ = true; // Still in the final constant-voltage charging phase
+            } else {
+                isCharging_ = false; // Battery is full and stable, charger has stopped.
+            }
+        } else {
+            // If we are below the 'full' threshold, we rely purely on the slope.
+            if (slope > chargingSlopeThreshold) {
+                isCharging_ = true; // Actively charging
+            } else if (slope < dischargingSlopeThreshold) {
+                isCharging_ = false; // Actively discharging
+            }
+            // If in the dead-zone here, state is maintained. This is correct for an idle, partially-charged battery.
+        }
+
+    } else {
+        // Fallback before we have enough data for regression: use a simple voltage threshold.
+        isCharging_ = (currentSmoothedVoltage_ > FULLY_CHARGED_THRESHOLD);
     }
 }
 

@@ -8,6 +8,9 @@
 #include "GridMenu.h"
 #include <vector>
 #include <map>
+#include "WifiManager.h"
+#include "WifiListMenu.h"
+#include "TextInputMenu.h"
 
 class App {
 public:
@@ -17,12 +20,28 @@ public:
 
     void changeMenu(MenuType type, bool isForwardNav = true);
     HardwareManager& getHardwareManager() { return hardware_; }
+    WifiManager& getWifiManager() { return wifiManager_; }
+    TextInputMenu& getTextInputMenu() { return textInputMenu_; }
 
 private:
     void drawStatusBar();
-    void drawSecondaryDisplay(); // --- NEW: Declaration added ---
+    void drawSecondaryDisplay();
+    
+    // --- REVISED BOOT SEQUENCE METHODS & VARS ---
+    void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
+    void logToSmallDisplay(const char* message, const char* status = nullptr);
+    
+    // These variables are only used during the setup() boot sequence.
+    // They are not needed after setup completes.
+    float currentProgressBarFillPx_;
+
+    static const int MAX_LOG_LINES_SMALL_DISPLAY = 4;
+    static const int MAX_LOG_LINE_LENGTH_SMALL_DISPLAY = 32;
+    char smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
+    // --- END REVISED VARS ---
 
     HardwareManager hardware_;
+    WifiManager wifiManager_;
     
     std::map<MenuType, IMenu*> menuRegistry_;
     IMenu* currentMenu_;
@@ -36,6 +55,8 @@ private:
     CarouselMenu settingsMenu_;
     CarouselMenu utilitiesMenu_;
     GridMenu wifiToolsMenu_;
+    WifiListMenu wifiListMenu_;
+    TextInputMenu textInputMenu_;
 };
 
 #endif

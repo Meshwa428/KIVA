@@ -4,24 +4,46 @@
 #include <cstdint>
 
 // Icon Dimensions
-namespace IconSize {
+namespace IconSize
+{
     static constexpr int LARGE_WIDTH = 15;
     static constexpr int LARGE_HEIGHT = 15;
     static constexpr int SMALL_WIDTH = 7;
     static constexpr int SMALL_HEIGHT = 7;
+    static constexpr int BOOT_LOGO_WIDTH = 128;
+    static constexpr int BOOT_LOGO_HEIGHT = 64;
 }
 
 // Icon type indices
-enum class IconType {
-    TOOLS, GAMES, SETTINGS, INFO,
-    GAME_SNAKE, GAME_TETRIS, GAME_PONG, GAME_MAZE,
-    NAV_BACK, NET_WIFI, NET_BLUETOOTH,
-    TOOL_JAMMING, TOOL_INJECTION,
-    SETTING_DISPLAY, SETTING_SOUND, SETTING_SYSTEM,
-    UI_REFRESH, UI_CHARGING_BOLT, UI_VIBRATION, UI_LASER, UI_FLASHLIGHT,
+enum class IconType
+{
+    TOOLS,
+    GAMES,
+    SETTINGS,
+    INFO,
+    GAME_SNAKE,
+    GAME_TETRIS,
+    GAME_PONG,
+    GAME_MAZE,
+    NAV_BACK,
+    NET_WIFI,
+    NET_BLUETOOTH,
+    TOOL_JAMMING,
+    TOOL_INJECTION,
+    SETTING_DISPLAY,
+    SETTING_SOUND,
+    SETTING_SYSTEM,
+    UI_REFRESH,
+    UI_CHARGING_BOLT,
+    UI_VIBRATION,
+    UI_LASER,
+    UI_FLASHLIGHT,
     UTILITIES_CATEGORY,
+    BOOT_LOGO,
     NUM_ICON_TYPES
 };
+
+extern const unsigned char icon_boot_logo_bits[];
 
 // Extern Declarations for XBM Icon Data
 extern const unsigned char icon_tools_large_bits[];
