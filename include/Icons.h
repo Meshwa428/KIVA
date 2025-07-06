@@ -1,0 +1,55 @@
+#ifndef ICONS_H
+#define ICONS_H
+
+#include <cstdint>
+
+// Icon Dimensions
+namespace IconSize {
+    static constexpr int LARGE_WIDTH = 15;
+    static constexpr int LARGE_HEIGHT = 15;
+    static constexpr int SMALL_WIDTH = 7;
+    static constexpr int SMALL_HEIGHT = 7;
+}
+
+// Icon type indices
+enum class IconType {
+    TOOLS, GAMES, SETTINGS, INFO,
+    GAME_SNAKE, GAME_TETRIS, GAME_PONG, GAME_MAZE,
+    NAV_BACK, NET_WIFI, NET_BLUETOOTH,
+    TOOL_JAMMING, TOOL_INJECTION,
+    SETTING_DISPLAY, SETTING_SOUND, SETTING_SYSTEM,
+    UI_REFRESH, UI_CHARGING_BOLT, UI_VIBRATION, UI_LASER, UI_FLASHLIGHT,
+    UTILITIES_CATEGORY,
+    NUM_ICON_TYPES
+};
+
+// Extern Declarations for XBM Icon Data
+extern const unsigned char icon_tools_large_bits[];
+extern const unsigned char icon_games_large_bits[];
+extern const unsigned char icon_settings_large_bits[];
+extern const unsigned char icon_info_large_bits[];
+extern const unsigned char icon_game_snake_large_bits[];
+extern const unsigned char icon_game_tetris_large_bits[];
+extern const unsigned char icon_game_pong_large_bits[];
+extern const unsigned char icon_game_maze_large_bits[];
+extern const unsigned char icon_nav_back_large_bits[];
+extern const unsigned char icon_net_wifi_large_bits[];
+extern const unsigned char icon_net_bluetooth_large_bits[];
+extern const unsigned char icon_tool_jamming_large_bits[];
+extern const unsigned char icon_tool_injection_large_bits[];
+extern const unsigned char icon_setting_display_large_bits[];
+extern const unsigned char icon_setting_sound_large_bits[];
+extern const unsigned char icon_setting_system_large_bits[];
+extern const unsigned char icon_ui_refresh_large_bits[];
+extern const unsigned char icon_ui_charging_bolt_large_bits[];
+extern const unsigned char icon_ui_vibration_large_bits[];
+extern const unsigned char icon_ui_laser_large_bits[];
+extern const unsigned char icon_ui_flashlight_large_bits[];
+extern const unsigned char icon_utilities_category_large_bits[];
+
+// Small Icons
+extern const unsigned char icon_ui_charging_bolt_small_bits[];
+extern const unsigned char icon_ui_refresh_small_bits[];
+extern const unsigned char icon_nav_back_small_bits[];
+
+#endif // ICONS_H
