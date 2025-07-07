@@ -33,8 +33,9 @@ App::App() :
         {"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    wifiListMenu_(),      // <-- Add this
-    textInputMenu_()  // <-- Add this
+    wifiListMenu_(),
+    textInputMenu_(),
+    connectionStatusMenu_()
 {
     // Initialize the small display log buffer
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
@@ -122,7 +123,8 @@ void App::setup() {
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
-     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
+    menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
+    menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);

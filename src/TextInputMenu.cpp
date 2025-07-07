@@ -25,19 +25,15 @@ void TextInputMenu::configure(std::string title, OnSubmitCallback callback, bool
 }
 
 void TextInputMenu::onEnter(App* app) {
-    // Reset keyboard state upon entering
     currentLayer_ = KeyboardLayer::LOWERCASE;
     capsLock_ = false;
     focusRow_ = 0;
     focusCol_ = 0;
 }
 
-void TextInputMenu::onUpdate(App* app) {
-    // The main loop handles redrawing, no specific update logic needed here.
-}
+void TextInputMenu::onUpdate(App* app) {}
 
 void TextInputMenu::onExit(App* app) {
-    // Clear buffer and callback when leaving
     inputBuffer_[0] = '\0';
     onSubmit_ = nullptr;
 }
@@ -58,14 +54,22 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_DOWN_PRESS:
             moveFocus(1, 0);
             break;
+        case InputEvent::BTN_A_PRESS: // NAV_A is now SHIFT
+            processKeyPress(KB_KEY_SHIFT);
+            break;
+        case InputEvent::BTN_B_PRESS: // NAV_B is now CYCLE
+            processKeyPress(KB_KEY_CYCLE_LAYOUT);
+            break;
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
                 const KeyboardKey& key = KeyboardLayout::getKey(KeyboardLayout::getLayout(currentLayer_), focusRow_, focusCol_);
                 if (key.value == KB_KEY_ENTER) {
                     if (onSubmit_) {
-                        // Correct: call the callback with the app context and buffer
-                        onSubmit_(app, inputBuffer_);
+                        // 1. Execute the callback to start the connection
+                        onSubmit_(app, inputBuffer_); 
+                        // 2. Immediately change to the status screen
+                        app->changeMenu(MenuType::WIFI_CONNECTION_STATUS); 
                     }
                 } else {
                     processKeyPress(key.value);
@@ -80,16 +84,119 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
     }
 }
 
+void TextInputMenu::processKeyPress(int keyValue) {
+    if (keyValue > 0 && keyValue < 127) { // Printable ASCII
+        if (cursorPosition_ < TEXT_INPUT_MAX_LEN) {
+            memmove(&inputBuffer_[cursorPosition_ + 1], &inputBuffer_[cursorPosition_], TEXT_INPUT_MAX_LEN - cursorPosition_ - 1);
+            inputBuffer_[cursorPosition_] = (char)keyValue;
+            cursorPosition_++;
+            inputBuffer_[TEXT_INPUT_MAX_LEN] = '\0';
+        }
+    } else {
+        switch (keyValue) {
+            case KB_KEY_BACKSPACE:
+                if (cursorPosition_ > 0) {
+                    memmove(&inputBuffer_[cursorPosition_ - 1], &inputBuffer_[cursorPosition_], TEXT_INPUT_MAX_LEN - cursorPosition_);
+                    cursorPosition_--;
+                }
+                break;
+            case KB_KEY_SPACE:
+                 if (cursorPosition_ < TEXT_INPUT_MAX_LEN) {
+                    memmove(&inputBuffer_[cursorPosition_ + 1], &inputBuffer_[cursorPosition_], TEXT_INPUT_MAX_LEN - cursorPosition_ - 1);
+                    inputBuffer_[cursorPosition_] = ' ';
+                    cursorPosition_++;
+                    inputBuffer_[TEXT_INPUT_MAX_LEN] = '\0';
+                 }
+                break;
+            case KB_KEY_SHIFT:
+                // This now handles both the virtual shift key and NAV_A
+                if (currentLayer_ == KeyboardLayer::LOWERCASE) currentLayer_ = KeyboardLayer::UPPERCASE;
+                else if (currentLayer_ == KeyboardLayer::UPPERCASE) currentLayer_ = KeyboardLayer::LOWERCASE;
+                break;
+            case KB_KEY_CYCLE_LAYOUT: // This now handles NAV_B
+                if (currentLayer_ == KeyboardLayer::LOWERCASE || currentLayer_ == KeyboardLayer::UPPERCASE) {
+                    currentLayer_ = KeyboardLayer::NUMBERS;
+                } else if (currentLayer_ == KeyboardLayer::NUMBERS) {
+                    currentLayer_ = KeyboardLayer::SYMBOLS;
+                } else if (currentLayer_ == KeyboardLayer::SYMBOLS) {
+                    currentLayer_ = KeyboardLayer::LOWERCASE;
+                }
+                capsLock_ = false; // Always turn off caps lock when cycling
+                focusRow_ = 0;
+                focusCol_ = 0;
+                break;
+            case KB_KEY_TO_NUM: currentLayer_ = KeyboardLayer::NUMBERS; break;
+            case KB_KEY_TO_SYM: currentLayer_ = KeyboardLayer::SYMBOLS; break;
+            case KB_KEY_TO_LOWER: currentLayer_ = KeyboardLayer::LOWERCASE; break;
+        }
+    }
+}
+
+
+void TextInputMenu::moveFocus(int dRow, int dCol) {
+    const KeyboardKey* layout = KeyboardLayout::getLayout(currentLayer_);
+    int oldRow = focusRow_;
+    int oldCol = focusCol_;
+
+    int newRow = focusRow_ + dRow;
+    newRow = (newRow + KB_ROWS) % KB_ROWS; // Wrap around rows
+
+    int newCol = focusCol_ + dCol;
+    
+    // --- INTELLIGENT NAVIGATION LOGIC ---
+
+    // Handle Left/Right movement
+    if (dCol != 0) {
+        int direction = (dCol > 0) ? 1 : -1;
+        int attempts = 0;
+        do {
+            newCol = (focusCol_ + direction + KB_LOGICAL_COLS) % KB_LOGICAL_COLS;
+            // When moving right from a wide key, jump to the key after it
+            if (direction > 0) {
+                const KeyboardKey& currentKey = KeyboardLayout::getKey(layout, focusRow_, focusCol_);
+                if(currentKey.colSpan > 1) {
+                    newCol = (focusCol_ + currentKey.colSpan) % KB_LOGICAL_COLS;
+                }
+            }
+            focusCol_ = newCol;
+            if (KeyboardLayout::getKey(layout, focusRow_, focusCol_).colSpan > 0) break;
+            attempts++;
+        } while (attempts < KB_LOGICAL_COLS);
+    }
+    
+    // Handle Up/Down movement
+    if (dRow != 0) {
+        focusRow_ = newRow;
+        // After moving up/down, find the key that occupies the same horizontal space
+        const KeyboardKey& sourceKey = KeyboardLayout::getKey(layout, oldRow, oldCol);
+        int sourceKeyCenter = oldCol * 12 + (sourceKey.colSpan * 12) / 2; // Approximate center
+
+        int bestMatchCol = 0;
+        int smallestDist = 1000;
+
+        for (int c = 0; c < KB_LOGICAL_COLS; ) {
+            const KeyboardKey& targetKey = KeyboardLayout::getKey(layout, focusRow_, c);
+            if(targetKey.colSpan > 0) {
+                int targetKeyCenter = c * 12 + (targetKey.colSpan * 12) / 2;
+                if(abs(targetKeyCenter - sourceKeyCenter) < smallestDist) {
+                    smallestDist = abs(targetKeyCenter - sourceKeyCenter);
+                    bestMatchCol = c;
+                }
+                c += targetKey.colSpan;
+            } else {
+                c++;
+            }
+        }
+        focusCol_ = bestMatchCol;
+    }
+}
+
 void TextInputMenu::draw(App* app, U8G2& display) {
-    // If the display passed is the small display, draw the keyboard.
-    // Otherwise, draw the input field on the main display.
-    if (display.getDisplayHeight() < 40) { // Heuristic to detect small display
+    if (display.getDisplayHeight() < 40) {
         drawKeyboard(display);
     } else {
-        // --- Draw Input Field on Main Display ---
         display.setFont(u8g2_font_6x10_tf);
         display.setDrawColor(1);
-
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(title_.c_str())) / 2, 22, title_.c_str());
 
         int fieldX = 5, fieldY = 32, fieldW = 118, fieldH = 12;
@@ -107,7 +214,6 @@ void TextInputMenu::draw(App* app, U8G2& display) {
         int textY = fieldY + 9;
         display.drawStr(textX, textY, displayBuffer);
 
-        // Draw blinking cursor
         if ((millis() / 500) % 2 == 0) {
             char sub[cursorPosition_ + 1];
             strncpy(sub, displayBuffer, cursorPosition_);
@@ -121,65 +227,6 @@ void TextInputMenu::draw(App* app, U8G2& display) {
     }
 }
 
-
-void TextInputMenu::processKeyPress(int keyValue) {
-    if (keyValue > 0 && keyValue < 127) { // Printable ASCII
-        if (cursorPosition_ < TEXT_INPUT_MAX_LEN) {
-            inputBuffer_[cursorPosition_++] = (char)keyValue;
-            inputBuffer_[cursorPosition_] = '\0';
-        }
-    } else {
-        switch (keyValue) {
-            case KB_KEY_BACKSPACE:
-                if (cursorPosition_ > 0) {
-                    inputBuffer_[--cursorPosition_] = '\0';
-                }
-                break;
-            case KB_KEY_SPACE:
-                if (cursorPosition_ < TEXT_INPUT_MAX_LEN) {
-                    inputBuffer_[cursorPosition_++] = ' ';
-                    inputBuffer_[cursorPosition_] = '\0';
-                }
-                break;
-            case KB_KEY_ENTER:
-                if (onSubmit_) {
-                    // This is where we call back to the system to handle the text.
-                    // The App object is not available here, so the callback needs it.
-                    // This will be fixed when we implement the calling menu (e.g. WifiListMenu)
-                }
-                break;
-            case KB_KEY_SHIFT:
-                if (currentLayer_ == KeyboardLayer::LOWERCASE) currentLayer_ = KeyboardLayer::UPPERCASE;
-                else if (currentLayer_ == KeyboardLayer::UPPERCASE) currentLayer_ = KeyboardLayer::LOWERCASE;
-                break;
-            case KB_KEY_TO_NUM: currentLayer_ = KeyboardLayer::NUMBERS; break;
-            case KB_KEY_TO_SYM: currentLayer_ = KeyboardLayer::SYMBOLS; break;
-            case KB_KEY_TO_LOWER: currentLayer_ = KeyboardLayer::LOWERCASE; break;
-        }
-    }
-}
-
-
-void TextInputMenu::moveFocus(int dRow, int dCol) {
-    const KeyboardKey* layout = KeyboardLayout::getLayout(currentLayer_);
-    
-    focusRow_ += dRow;
-    if (focusRow_ < 0) focusRow_ = KB_ROWS - 1;
-    if (focusRow_ >= KB_ROWS) focusRow_ = 0;
-
-    int attempts = 0;
-    int direction = dCol > 0 ? 1 : -1;
-    do {
-        focusCol_ += direction;
-        if (focusCol_ < 0) focusCol_ = KB_LOGICAL_COLS - 1;
-        if (focusCol_ >= KB_LOGICAL_COLS) focusCol_ = 0;
-        
-        if (KeyboardLayout::getKey(layout, focusRow_, focusCol_).colSpan > 0) break;
-        attempts++;
-    } while (attempts < KB_LOGICAL_COLS);
-}
-
-
 void TextInputMenu::drawKeyboard(U8G2& display) {
     display.clearBuffer();
     display.setFont(u8g2_font_5x7_tf);
@@ -187,15 +234,20 @@ void TextInputMenu::drawKeyboard(U8G2& display) {
     const KeyboardKey* layout = KeyboardLayout::getLayout(currentLayer_);
     const int keyHeight = 8;
     const int keyWidthBase = 12;
+    const int interKeySpacingX = 1;
 
     for (int r = 0; r < KB_ROWS; ++r) {
         int currentX = 0;
+        int keyY = r * keyHeight;
         for (int c = 0; c < KB_LOGICAL_COLS;) {
             const KeyboardKey& key = KeyboardLayout::getKey(layout, r, c);
             if (key.colSpan == 0) { c++; continue; }
 
-            int keyW = key.colSpan * keyWidthBase + (key.colSpan - 1);
-            int keyY = r * keyHeight;
+            // Use the exact drawing logic from your reference code
+            int keyW = key.colSpan * keyWidthBase + (key.colSpan - 1) * interKeySpacingX;
+            if (currentX + keyW > display.getDisplayWidth()) {
+                keyW = display.getDisplayWidth() - currentX;
+            }
 
             if (r == focusRow_ && c == focusCol_) {
                 display.setDrawColor(1);
@@ -207,9 +259,19 @@ void TextInputMenu::drawKeyboard(U8G2& display) {
             }
 
             char str[2] = {key.displayChar, '\0'};
-            display.drawStr(currentX + (keyW - display.getStrWidth(str)) / 2, keyY + 6, str);
-
-            currentX += keyW + 1;
+            if (key.value == KB_KEY_ENTER) str[0] = 'E';
+            else if (key.value == KB_KEY_BACKSPACE) str[0] = '<';
+            else if (key.value == KB_KEY_SHIFT) str[0] = capsLock_ ? 's' : 'S'; 
+            else if (key.value == KB_KEY_TO_NUM) str[0] = '1';
+            else if (key.value == KB_KEY_TO_SYM) str[0] = '%';
+            else if (key.value == KB_KEY_TO_LOWER) str[0] = 'a';
+            
+            if(str[0] != ' ' && str[0] != '\0'){
+                 int charWidth = display.getStrWidth(str);
+                 display.drawStr(currentX + (keyW - charWidth) / 2, keyY + 6, str);
+            }
+           
+            currentX += keyW + interKeySpacingX;
             c += key.colSpan;
         }
     }

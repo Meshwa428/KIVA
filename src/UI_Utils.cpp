@@ -32,6 +32,11 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
             h = IconSize::SMALL_HEIGHT;
             icon_resolved = true;
             break;
+        case IconType::NET_WIFI_LOCK:
+            xbm_data = icon_lock_small_bits;
+            w = IconSize::SMALL_WIDTH;
+            h = IconSize::SMALL_HEIGHT;
+            icon_resolved = true;
         default:
             break; // Fall through to large icon
         }

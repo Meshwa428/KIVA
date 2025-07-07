@@ -12,9 +12,22 @@ WifiListMenu::WifiListMenu() :
 }
 
 void WifiListMenu::onEnter(App* app) {
-    app->getWifiManager().startScan();
+    // --- MODIFIED: Scan only if coming from a different menu ---
+    // The navigation stack helps us know where we came from.
+    const auto& navStack = app->getNavigationStack(); // Assuming App provides this getter
+    bool cameFromTextInput = (navStack.size() > 1 && navStack[navStack.size() - 2] == MenuType::TEXT_INPUT);
+    bool cameFromStatus = (navStack.size() > 1 && navStack[navStack.size() - 2] == MenuType::WIFI_CONNECTION_STATUS);
+
+    if (cameFromTextInput || cameFromStatus) {
+        // We are returning from a sub-menu, just rebuild the list with existing data
+        rebuildDisplayItems(app);
+    } else {
+        // We are entering for the first time (e.g., from Settings), so start a scan.
+        app->getWifiManager().startScan();
+        displayItems_.clear(); // Clear old items while scanning
+    }
+
     lastKnownState_ = app->getWifiManager().getState();
-    displayItems_.clear(); // Clear old items while scanning
     selectedIndex_ = 0;
 }
 
@@ -37,14 +50,36 @@ void WifiListMenu::onExit(App* app) {
 
 void WifiListMenu::rebuildDisplayItems(App* app) {
     displayItems_.clear();
-    const auto& networks = app->getWifiManager().getScannedNetworks();
-    for (size_t i = 0; i < networks.size(); ++i) {
-        displayItems_.push_back({networks[i].ssid, ListItemType::NETWORK, (int)i});
+    
+    WifiManager& wifi = app->getWifiManager();
+    const auto& networks = wifi.getScannedNetworks();
+    std::string connectedSsid = wifi.getCurrentSsid().c_str();
+    
+    // Find the connected network to move it to the top
+    if (!connectedSsid.empty()) {
+        for (size_t i = 0; i < networks.size(); ++i) {
+            if (connectedSsid == networks[i].ssid) {
+                // Add the connected network first with an asterisk
+                displayItems_.push_back({"* " + std::string(networks[i].ssid), ListItemType::NETWORK, (int)i});
+                break;
+            }
+        }
     }
+
+    // Add the rest of the networks, skipping the one we already added
+    for (size_t i = 0; i < networks.size(); ++i) {
+        if (connectedSsid != networks[i].ssid) {
+            displayItems_.push_back({networks[i].ssid, ListItemType::NETWORK, (int)i});
+        }
+    }
+    
+    // Add standard options
     displayItems_.push_back({"Scan Again", ListItemType::SCAN, -1});
     displayItems_.push_back({"Back", ListItemType::BACK, -1});
     
-    selectedIndex_ = 0;
+    // If a network is connected, select it by default
+    selectedIndex_ = (displayItems_.size() > 0 && !connectedSsid.empty()) ? 0 : 0;
+
     animation_.init();
     animation_.startIntro(selectedIndex_, displayItems_.size());
 }
@@ -78,30 +113,37 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
                 switch(selectedItem.type) {
                     case ListItemType::SCAN:
                         wifi.startScan();
+                        displayItems_.clear(); // Clear list to show "Scanning..."
                         break;
                     case ListItemType::BACK:
                         app->changeMenu(MenuType::BACK);
                         break;
                     case ListItemType::NETWORK:
                         const auto& netInfo = wifi.getScannedNetworks()[selectedItem.networkIndex];
-                        wifi.setSsidToConnect(netInfo.ssid);
+                        
+                        // If already connected, disconnect
+                        if (netInfo.isConnected) {
+                            wifi.disconnect();
+                            rebuildDisplayItems(app); // Rebuild list to remove asterisk
+                            break;
+                        }
 
+                        wifi.setSsidToConnect(netInfo.ssid);
+                        
                         if (netInfo.isSecure) {
-                            // Configure and switch to the text input menu
                             TextInputMenu& textMenu = app->getTextInputMenu();
                             textMenu.configure(
                                 "Enter Password", 
-                                // This C++ lambda is the callback function
                                 [&](App* cb_app, const char* password) {
                                     cb_app->getWifiManager().connectWithPassword(password);
-                                    // After submitting, go back to the list menu to see status
-                                    cb_app->changeMenu(MenuType::WIFI_LIST);
+                                    cb_app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
                                 },
-                                true // Mask input for password
+                                true
                             );
                             app->changeMenu(MenuType::TEXT_INPUT);
                         } else {
                             wifi.connectOpen(netInfo.ssid);
+                            app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
                         }
                         break;
                 }
@@ -145,7 +187,6 @@ void WifiListMenu::draw(App* app, U8G2& display) {
         return;
     }
     
-    // Animate and draw the list
     display.setClipWindow(0, list_start_y, 127, 63);
     display.setFont(u8g2_font_6x10_tf);
 
@@ -169,24 +210,35 @@ void WifiListMenu::draw(App* app, U8G2& display) {
         }
 
         int content_x = 4;
-        // Draw icon or signal strength
-        if (displayItems_[i].type == ListItemType::NETWORK) {
-            const auto& netInfo = wifi.getScannedNetworks()[displayItems_[i].networkIndex];
-            drawWifiSignal(display, content_x + 2, item_center_y_abs, netInfo.rssi);
-            if(netInfo.isSecure) {
-                 drawCustomIcon(display, content_x + 15, item_center_y_abs - 4, IconType::TOOL_JAMMING, IconRenderSize::SMALL);
-            }
-        } else if (displayItems_[i].type == ListItemType::SCAN) {
+        const auto& item = displayItems_[i];
+        
+        // --- Draw Left-side Icon (Signal, Scan, Back) ---
+        if (item.type == ListItemType::NETWORK) {
+            const auto& netInfo = wifi.getScannedNetworks()[item.networkIndex];
+            drawWifiSignal(display, content_x + 2, item_top_y + 5, netInfo.rssi);
+        } else if (item.type == ListItemType::SCAN) {
             drawCustomIcon(display, content_x + 2, item_center_y_abs - 4, IconType::UI_REFRESH, IconRenderSize::SMALL);
-        } else if (displayItems_[i].type == ListItemType::BACK) {
+        } else if (item.type == ListItemType::BACK) {
             drawCustomIcon(display, content_x + 2, item_center_y_abs - 4, IconType::NAV_BACK, IconRenderSize::SMALL);
         }
         
-        // Draw text
+        // --- Draw Text and Right-side Lock Icon ---
         int text_x = content_x + 25;
         int text_y_base = item_center_y_abs + 4;
-        int text_w_avail = 128 - text_x - 4;
-        const char* text = displayItems_[i].label.c_str();
+        const char* text = item.label.c_str();
+
+        // Check if we need to draw a lock icon
+        bool drawLock = false;
+        if (item.type == ListItemType::NETWORK) {
+            const auto& netInfo = wifi.getScannedNetworks()[item.networkIndex];
+            if (netInfo.isSecure) {
+                drawLock = true;
+            }
+        }
+        
+        // Calculate available width for text, accounting for the lock icon
+        int lock_icon_width = 8;
+        int text_w_avail = (128 - text_x - 4) - (drawLock ? lock_icon_width : 0);
 
         if (isSelected) {
             updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, marqueeText_, marqueeTextLenPx_, text, text_w_avail, display);
@@ -199,24 +251,44 @@ void WifiListMenu::draw(App* app, U8G2& display) {
             char* truncated = truncateText(text, text_w_avail, display);
             display.drawStr(text_x, text_y_base, truncated);
         }
+
+        // Draw the lock icon on the far right if needed
+        if (drawLock) {
+            int lock_x = 128 - 4 - IconSize::SMALL_WIDTH;
+            int lock_y = item_center_y_abs - (IconSize::SMALL_HEIGHT / 2);
+            // Use the proper function call, not manual drawing
+            drawCustomIcon(display, lock_x, lock_y, IconType::NET_WIFI_LOCK, IconRenderSize::SMALL);
+        }
     }
     display.setDrawColor(1);
     display.setMaxClipWindow();
 }
 
-void WifiListMenu::drawWifiSignal(U8G2& display, int x, int y_center, int8_t rssi) {
-    int num_bars = 0;
-    if (rssi > -55) num_bars = 4;
-    else if (rssi > -70) num_bars = 3;
-    else if (rssi > -80) num_bars = 2;
-    else if (rssi > -90) num_bars = 1;
+void WifiListMenu::drawWifiSignal(U8G2& display, int x, int y_icon_top, int8_t rssi) {
+    int num_bars_to_draw = 0;
+    if (rssi >= -55) num_bars_to_draw = 4;
+    else if (rssi >= -80) num_bars_to_draw = 3;
+    else if (rssi >= -90) num_bars_to_draw = 2;
+    else if (rssi >= -100) num_bars_to_draw = 1;
 
-    for (int i = 0; i < 4; ++i) {
-        int bar_h = 2 + (i * 2);
-        if (i < num_bars) {
-            display.drawBox(x + i*3, y_center - bar_h/2, 2, bar_h);
+    int bar_width = 2;
+    int bar_spacing = 1;
+    int first_bar_height = 2;
+    int bar_height_increment = 2;
+    // Calculate total height of the icon to align it properly from the top
+    int max_icon_height = first_bar_height + (3 * bar_height_increment);
+
+    for (int i = 0; i < 4; i++) {
+        int current_bar_height = first_bar_height + i * bar_height_increment;
+        int bar_x_position = x + i * (bar_width + bar_spacing);
+        int y_pos_for_drawing_this_bar = y_icon_top + (max_icon_height - current_bar_height);
+        
+        if (i < num_bars_to_draw) {
+            // Draw a filled bar for active signal strength
+            display.drawBox(bar_x_position, y_pos_for_drawing_this_bar, bar_width, current_bar_height);
         } else {
-            display.drawFrame(x + i*3, y_center - bar_h/2, 2, bar_h);
+            // Draw an empty frame for inactive bars
+            display.drawFrame(bar_x_position, y_pos_for_drawing_this_bar, bar_width, current_bar_height);
         }
     }
 }

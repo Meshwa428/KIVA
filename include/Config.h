@@ -17,7 +17,8 @@ enum class MenuType
     WIFI_TOOLS_GRID,
     JAMMING_TOOLS_GRID,
     WIFI_LIST,
-    TEXT_INPUT 
+    TEXT_INPUT,
+    WIFI_CONNECTION_STATUS
 };
 
 // Input Event System
@@ -32,7 +33,9 @@ enum class InputEvent
     BTN_UP_PRESS,
     BTN_DOWN_PRESS,
     BTN_LEFT_PRESS,
-    BTN_RIGHT_PRESS
+    BTN_RIGHT_PRESS,
+    BTN_A_PRESS,
+    BTN_B_PRESS
 };
 
 // I2C & Hardware Pins
@@ -54,6 +57,8 @@ namespace Pins
 
     static constexpr uint8_t NAV_OK = 0;
     static constexpr uint8_t NAV_BACK = 1;
+    static constexpr uint8_t NAV_A = 2;
+    static constexpr uint8_t NAV_B = 3;
     static constexpr uint8_t NAV_LEFT = 4;
     static constexpr uint8_t NAV_UP = 5;
     static constexpr uint8_t NAV_DOWN = 6;

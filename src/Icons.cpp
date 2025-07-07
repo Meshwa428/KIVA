@@ -501,3 +501,13 @@ extern const unsigned char icon_nav_back_small_bits[] U8X8_PROGMEM = {
   0x18,
   0x30
 };
+
+extern const unsigned char icon_lock_small_bits[] U8X8_PROGMEM = {
+  0x1C,
+  0x22,
+  0x22,
+  0x7F,
+  0x77,
+  0x6F,
+  0x3E
+};

@@ -11,6 +11,7 @@
 #include "WifiManager.h"
 #include "WifiListMenu.h"
 #include "TextInputMenu.h"
+#include "ConnectionStatusMenu.h"
 
 class App {
 public:
@@ -22,6 +23,7 @@ public:
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
     TextInputMenu& getTextInputMenu() { return textInputMenu_; }
+    const std::vector<MenuType>& getNavigationStack() const { return navigationStack_; }
 
 private:
     void drawStatusBar();
@@ -57,6 +59,7 @@ private:
     GridMenu wifiToolsMenu_;
     WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
+    ConnectionStatusMenu connectionStatusMenu_;
 };
 
 #endif

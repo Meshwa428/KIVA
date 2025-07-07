@@ -416,7 +416,7 @@ void HardwareManager::processButtons_PCF1()
     if (millis() - setupTime_ < 300)
         return;
 
-    const int pcf1Pins[] = {Pins::NAV_OK, Pins::NAV_BACK, Pins::NAV_UP, Pins::NAV_DOWN, Pins::NAV_LEFT, Pins::NAV_RIGHT};
+    const int pcf1Pins[] = {Pins::NAV_OK, Pins::NAV_BACK, Pins::NAV_A, Pins::NAV_B, Pins::NAV_UP, Pins::NAV_DOWN, Pins::NAV_LEFT, Pins::NAV_RIGHT};
 
     for (size_t i = 0; i < sizeof(pcf1Pins) / sizeof(pcf1Pins[0]); ++i)
     {
@@ -480,6 +480,10 @@ InputEvent HardwareManager::mapPcf1PinToEvent(int pin)
         return InputEvent::BTN_OK_PRESS;
     case Pins::NAV_BACK:
         return InputEvent::BTN_BACK_PRESS;
+    case Pins::NAV_A:
+        return InputEvent::BTN_A_PRESS;
+    case Pins::NAV_B:
+        return InputEvent::BTN_B_PRESS;
     case Pins::NAV_UP:
         return InputEvent::BTN_UP_PRESS;
     case Pins::NAV_DOWN:
