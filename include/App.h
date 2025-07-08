@@ -12,6 +12,7 @@
 #include "WifiListMenu.h"
 #include "TextInputMenu.h"
 #include "ConnectionStatusMenu.h"
+#include "PopUpMenu.h"
 
 class App {
 public:
@@ -22,10 +23,13 @@ public:
     void changeMenu(MenuType type, bool isForwardNav = true);
     void returnToMenu(MenuType type);
     
+    void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm);
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
     TextInputMenu& getTextInputMenu() { return textInputMenu_; }
     IMenu* getMenu(MenuType type);
+
+    MenuType getPreviousMenuType() const;
 
 private:
     void drawStatusBar();
@@ -58,6 +62,7 @@ private:
     WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
+    PopUpMenu popUpMenu_;
 };
 
 #endif

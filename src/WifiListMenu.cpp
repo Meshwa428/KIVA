@@ -21,20 +21,25 @@ void WifiListMenu::onEnter(App* app) {
     Serial.println("\n--- WifiListMenu::onEnter ---");
     Serial.printf("Flag 'scanOnEnter_' is currently: %s\n", scanOnEnter_ ? "true" : "false");
 
+    WifiManager& wifi = app->getWifiManager();
+
     if (scanOnEnter_) {
+        // App::changeMenu has already ensured hardware is ON. We can safely start the scan.
         Serial.println("Action: Requesting a NEW scan from WifiManager.");
-        app->getWifiManager().startScan();
-        displayItems_.clear(); // Clear old items while scanning
+        wifi.startScan();
+        displayItems_.clear();
         selectedIndex_ = 0;
-        isScanning_ = true; // Set our local flag
-        lastKnownScanCount_ = app->getWifiManager().getScanCompletionCount(); // Store the current count
+        isScanning_ = true;
+        lastKnownScanCount_ = wifi.getScanCompletionCount();
     } else {
         Serial.println("Action: Skipping scan, rebuilding list from existing data.");
         rebuildDisplayItems(app);
-        isScanning_ = false; // We are not waiting for a scan
+        isScanning_ = false;
     }
     
-    Serial.printf("State at exit of onEnter: %d\n", (int)app->getWifiManager().getState());
+    // This is for logging/debugging to confirm the state.
+    Serial.printf("State at exit of onEnter: [WifiManager State: %d] [Hardware Enabled: %s]\n", 
+                  (int)wifi.getState(), wifi.isHardwareEnabled() ? "true" : "false");
     Serial.println("-----------------------------\n");
 }
 
@@ -159,26 +164,27 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
                     break;
                 case ListItemType::NETWORK:
                 {
-                    // If the item's label starts with a '*', we know it's the connected one.
                     if (selectedItem.label[0] == '*') {
-                        wifi.disconnect();
-                        // Trigger a rescan to show the change
-                        setScanOnEnter(true);
-                        onEnter(app);
+                        // --- UPDATED to use showPopUp ---
+                        app->showPopUp("Disconnect?", selectedItem.label.substr(2), [this](App* app_cb) {
+                            app_cb->getWifiManager().disconnect();
+                            this->setScanOnEnter(false);
+                            this->rebuildDisplayItems(app_cb);
+                            this->animation_.init();
+                            this->animation_.startIntro(this->selectedIndex_, this->displayItems_.size());
+                        });
+
                     } else {
-                        // Otherwise, it's a request to connect to a new network.
-                        // The networkIndex will be valid because it's from the scan list.
+                        // This block remains unchanged
                         if (selectedItem.networkIndex < 0 || (size_t)selectedItem.networkIndex >= wifi.getScannedNetworks().size()) {
-                            break; // Safety check
+                            break;
                         }
-                        
                         const auto& netInfo = wifi.getScannedNetworks()[selectedItem.networkIndex];
                         wifi.setSsidToConnect(netInfo.ssid);
-                        
                         if (netInfo.isSecure) {
                             TextInputMenu& textMenu = app->getTextInputMenu();
                             textMenu.configure(
-                                "Enter Password", 
+                                "Enter Password",
                                 [&](App* cb_app, const char* password) {
                                     cb_app->getWifiManager().connectWithPassword(password);
                                 },

@@ -1,6 +1,6 @@
 #include "WifiManager.h"
-#include "SdCardManager.h" // Uses our SD card manager
-#include <algorithm> // For std::sort
+#include "SdCardManager.h"
+#include <algorithm>
 
 // Non-member callback function required by the WiFi event system
 static void WiFiEventCallback(WiFiEvent_t event, WiFiEventInfo_t info);
@@ -12,16 +12,18 @@ WifiManager::WifiManager() :
     state_(WifiState::OFF),
     hardwareEnabled_(false),
     connectionStartTime_(0),
-    scanCompletionCount_(0) // <-- INITIALIZE THIS
+    scanCompletionCount_(0)
 {
     wifiManagerInstance = this;
     ssidToConnect_[0] = '\0';
 }
 
 void WifiManager::setup() {
-    // Register the event handler
     WiFi.onEvent(WiFiEventCallback);
+    // Initial state is OFF, so don't enable it here.
+    WiFi.mode(WIFI_OFF); // Redundant if never turned on, but safe.
     loadKnownNetworks();
+    statusMessage_ = "WiFi Off"; // Set initial status message
 }
 
 void WifiManager::update() {
@@ -37,38 +39,55 @@ void WifiManager::update() {
 void WifiManager::setHardwareState(bool enable) {
     if (enable) {
         if (!hardwareEnabled_) {
-            Serial.println("[WIFI-LOG] Enabling WiFi hardware.");
-            WiFi.mode(WIFI_STA);
-            hardwareEnabled_ = true;
-            state_ = WifiState::IDLE;
-            statusMessage_ = "Idle";
+            Serial.println("[WIFI-LOG] Enabling WiFi hardware (STA mode).");
+            // The Arduino WiFi.mode() call handles the necessary esp_wifi_init() and esp_wifi_start()
+            if (WiFi.mode(WIFI_STA)) {
+                hardwareEnabled_ = true;
+                state_ = WifiState::IDLE;
+                statusMessage_ = "Idle";
+                Serial.println("[WIFI-LOG] WiFi hardware enabled.");
+            } else {
+                Serial.println("[WIFI-LOG] ERROR: WiFi.mode(WIFI_STA) failed!");
+                hardwareEnabled_ = false;
+                state_ = WifiState::OFF;
+                statusMessage_ = "Enable Fail";
+            }
         }
-    } else {
+    } else { // disable
         if (hardwareEnabled_) {
             Serial.println("[WIFI-LOG] Disabling WiFi hardware.");
+            // These calls ensure a clean shutdown and release of resources.
             WiFi.disconnect(true, true);
             WiFi.mode(WIFI_OFF);
             hardwareEnabled_ = false;
             state_ = WifiState::OFF;
             statusMessage_ = "WiFi Off";
+            scannedNetworks_.clear(); // Clear scan results when turning off
+            Serial.println("[WIFI-LOG] WiFi hardware disabled.");
         }
     }
 }
 
 void WifiManager::startScan() {
-    if (!hardwareEnabled_) setHardwareState(true);
+    if (!hardwareEnabled_) {
+        Serial.println("[WIFI-LOG] Scan requested but hardware is OFF. Ignoring.");
+        return; // Can't scan if off
+    }
     if (state_ == WifiState::SCANNING) return;
 
     Serial.println("[WIFI-LOG] Starting WiFi scan.");
-    
+
+    // --- MODIFIED LOGIC ---
+    // If we are not connected, our primary action is scanning.
+    // If we ARE already connected, scanning is a background task, and the main state should remain CONNECTED.
     if (state_ != WifiState::CONNECTED) {
         state_ = WifiState::SCANNING;
         statusMessage_ = "Scanning...";
-    } else {
-        Serial.println("[WIFI-LOG] Performing background scan while already connected.");
     }
-    
-    WiFi.scanNetworks(true); // Async scan
+    // --- END MODIFIED LOGIC ---
+
+    // Async scan is non-blocking. The result will be handled by the event listener.
+    WiFi.scanNetworks(true);
 }
 
 void WifiManager::connectOpen(const char* ssid) {
@@ -95,6 +114,7 @@ void WifiManager::disconnect() {
 
 // --- Getters ---
 WifiState WifiManager::getState() const { return state_; }
+bool WifiManager::isHardwareEnabled() const { return hardwareEnabled_; }
 const std::vector<WifiNetworkInfo>& WifiManager::getScannedNetworks() const { return scannedNetworks_; }
 const char* WifiManager::getSsidToConnect() const { return ssidToConnect_; }
 String WifiManager::getCurrentSsid() const {
@@ -107,25 +127,22 @@ String WifiManager::getCurrentSsid() const {
     return "";
 }
 String WifiManager::getStatusMessage() const { return statusMessage_; }
+
 void WifiManager::setSsidToConnect(const char* ssid) {
     strncpy(ssidToConnect_, ssid, sizeof(ssidToConnect_) - 1);
     ssidToConnect_[sizeof(ssidToConnect_) - 1] = '\0';
 }
 
-// --- ADD THIS METHOD ---
 uint32_t WifiManager::getScanCompletionCount() const {
     return scanCompletionCount_;
 }
-
-
-// --- Private Methods ---
 
 void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     Serial.printf("[WIFI-EVENT] Event: %d\n", event);
     switch (event) {
         case ARDUINO_EVENT_WIFI_SCAN_DONE:
         {
-            scanCompletionCount_++; // <-- INCREMENT THE COUNTER HERE
+            scanCompletionCount_++;
             int n = WiFi.scanComplete();
             if (n < 0) {
                 Serial.println("[WIFI-LOG] Scan failed.");
@@ -154,17 +171,14 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
                 return a.rssi > b.rssi;
             });
 
-            // --- THE FIX ---
-            // Do not change the state if we are already connected.
             if (state_ != WifiState::CONNECTED) {
                 state_ = WifiState::IDLE;
             }
-            // The status message can be updated regardless.
+
             statusMessage_ = String(scannedNetworks_.size()) + " networks";
             break;
         }
 
-        // ... THE REST OF THE FUNCTION IS UNCHANGED ...
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
         { 
             Serial.printf("[WIFI-LOG] Got IP: %s\n", WiFi.localIP().toString().c_str());
@@ -177,6 +191,7 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
                 usedPassword = known->password;
             }
             addOrUpdateKnownNetwork(ssidToConnect_, usedPassword);
+            delay(100);
             break;
         } 
 

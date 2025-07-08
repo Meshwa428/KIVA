@@ -35,7 +35,8 @@ App::App() :
     }, 2),
     wifiListMenu_(),
     textInputMenu_(),
-    connectionStatusMenu_()
+    connectionStatusMenu_(),
+    popUpMenu_()
 {
     // Initialize the small display log buffer
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
@@ -125,6 +126,7 @@ void App::setup() {
     menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
+    menuRegistry_[MenuType::POPUP] = &popUpMenu_;
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -134,38 +136,88 @@ void App::setup() {
 void App::loop() {
     hardware_.update();
     wifiManager_.update();
-    
-    InputEvent event = hardware_.getNextInputEvent();
-    if (event != InputEvent::NONE) {
-        if (currentMenu_ != nullptr) {
-            currentMenu_->handleInput(this, event);
+
+    bool wifiIsRequired = false;
+    if (currentMenu_) {
+        MenuType currentType = currentMenu_->getMenuType();
+        if (currentType == MenuType::WIFI_LIST ||
+            currentType == MenuType::TEXT_INPUT ||
+            currentType == MenuType::WIFI_CONNECTION_STATUS ||
+            (wifiManager_.getState() == WifiState::CONNECTED)) // <-- Also keep on if connected
+        {
+            wifiIsRequired = true;
         }
+    }
+
+    // If WiFi is no longer required and is currently on, turn it off.
+    if (!wifiIsRequired && wifiManager_.isHardwareEnabled()) {
+        Serial.println("[APP-LOGIC] WiFi not required. Disabling hardware...");
+        wifiManager_.setHardwareState(false);
+    }
+
+    InputEvent event = hardware_.getNextInputEvent();
+    if (event != InputEvent::NONE && currentMenu_ != nullptr) {
+        currentMenu_->handleInput(this, event);
     }
 
     if (currentMenu_) {
         currentMenu_->onUpdate(this);
     }
-    
+
     U8G2& mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();
-    drawStatusBar();
+
+    // --- NEW DRAWING LOGIC FOR OVERLAY ---
+    // For a pop-up, we need to draw the menu underneath it first.
+    if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
+        IMenu* underlyingMenu = getMenu(getPreviousMenuType());
+        if (underlyingMenu) {
+            drawStatusBar();
+            underlyingMenu->draw(this, mainDisplay);
+        }
+    } else if (currentMenu_) {
+        drawStatusBar();
+    }
+
+    // Draw the current menu's content on top.
     if (currentMenu_) {
         currentMenu_->draw(this, mainDisplay);
     }
-    mainDisplay.sendBuffer();
 
+    mainDisplay.sendBuffer();
     drawSecondaryDisplay();
 }
 
 void App::changeMenu(MenuType type, bool isForwardNav) {
     if (type == MenuType::NONE) return;
 
+    // --- MODIFIED: Store the type of the menu we are exiting ---
+    MenuType exitingMenuType = MenuType::NONE;
+    if (currentMenu_) {
+        exitingMenuType = currentMenu_->getMenuType();
+    }
+
     if (type == MenuType::BACK) {
         if (navigationStack_.size() > 1) {
             navigationStack_.pop_back();
-            changeMenu(navigationStack_.back(), false);
+            // This is not recursive. Set the new type and isForwardNav flag for this call.
+            type = navigationStack_.back(); 
+            isForwardNav = false;
+        } else {
+            return; // Can't go back further
         }
-        return;
+    }
+
+    // Check if the DESTINATION menu requires Wi-Fi.
+    bool destinationRequiresWifi = (type == MenuType::WIFI_LIST ||
+                                    type == MenuType::TEXT_INPUT ||
+                                    type == MenuType::WIFI_CONNECTION_STATUS);
+
+    // If the destination requires Wi-Fi and it's currently off, turn it on NOW.
+    if (destinationRequiresWifi && !wifiManager_.isHardwareEnabled()) {
+        Serial.printf("[APP-LOGIC] Destination menu (%d) requires WiFi. Enabling hardware...\n", (int)type);
+        wifiManager_.setHardwareState(true);
+        delay(100); // Give hardware a moment to initialize before menu uses it.
     }
 
     auto it = menuRegistry_.find(type);
@@ -179,7 +231,10 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
             currentMenu_->onExit(this);
         }
         currentMenu_ = newMenu;
-        currentMenu_->onEnter(this);
+
+        if (isForwardNav || exitingMenuType != MenuType::POPUP) {
+            currentMenu_->onEnter(this);
+        }
 
         if (isForwardNav) {
             if (navigationStack_.empty() || navigationStack_.back() != type) {
@@ -207,6 +262,18 @@ IMenu* App::getMenu(MenuType type) {
     return (it != menuRegistry_.end()) ? it->second : nullptr;
 }
 
+void App::showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm) {
+    popUpMenu_.configure(title, message, onConfirm);
+    changeMenu(MenuType::POPUP);
+}
+
+MenuType App::getPreviousMenuType() const {
+    if (navigationStack_.size() < 2) {
+        return MenuType::MAIN;
+    }
+    // The previous menu is the one before the last element (which is the pop-up itself)
+    return navigationStack_[navigationStack_.size() - 2];
+}
 
 void App::drawSecondaryDisplay() {
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::TEXT_INPUT) {

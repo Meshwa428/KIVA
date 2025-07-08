@@ -10,6 +10,7 @@ enum class MenuType
     NONE,
     BACK,
     MAIN,
+    POPUP,
     TOOLS_CAROUSEL,
     GAMES_CAROUSEL,
     SETTINGS_CAROUSEL,

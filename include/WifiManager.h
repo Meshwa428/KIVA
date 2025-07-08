@@ -51,12 +51,13 @@ public:
 
     // --- State Getters ---
     WifiState getState() const;
+    bool isHardwareEnabled() const;
     const std::vector<WifiNetworkInfo>& getScannedNetworks() const;
     void setSsidToConnect(const char* ssid);
     const char* getSsidToConnect() const;
     String getCurrentSsid() const;
     String getStatusMessage() const;
-    uint32_t getScanCompletionCount() const; // <-- ADD THIS
+    uint32_t getScanCompletionCount() const;
 
 private:
     void loadKnownNetworks();
@@ -67,7 +68,7 @@ private:
     WifiState state_;
     bool hardwareEnabled_;
     unsigned long connectionStartTime_;
-    uint32_t scanCompletionCount_; // <-- ADD THIS
+    uint32_t scanCompletionCount_;
 
     std::vector<WifiNetworkInfo> scannedNetworks_;
     std::vector<KnownWifiNetwork> knownNetworks_;
