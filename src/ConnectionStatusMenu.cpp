@@ -10,18 +10,26 @@ void ConnectionStatusMenu::onEnter(App* app) {
 }
 
 void ConnectionStatusMenu::onUpdate(App* app) {
-    // After a few seconds, automatically go back to the Wi-Fi list
+    // --- MODIFIED: Use new navigation logic ---
     if (millis() - entryTime_ > 3000) {
-        app->changeMenu(MenuType::WIFI_LIST, false); // Go back, not forward
+        WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
+        if (wifiMenu) {
+            wifiMenu->setScanOnEnter(false);
+        }
+        app->returnToMenu(MenuType::WIFI_LIST);
     }
 }
 
 void ConnectionStatusMenu::onExit(App* app) {}
 
 void ConnectionStatusMenu::handleInput(App* app, InputEvent event) {
-    // Any button press takes you back immediately
+    // --- MODIFIED: Use new navigation logic ---
     if (event != InputEvent::NONE) {
-        app->changeMenu(MenuType::WIFI_LIST, false);
+        WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
+        if (wifiMenu) {
+            wifiMenu->setScanOnEnter(false);
+        }
+        app->returnToMenu(MenuType::WIFI_LIST);
     }
 }
 
@@ -30,16 +38,15 @@ void ConnectionStatusMenu::draw(App* app, U8G2& display) {
     WifiState state = wifi.getState();
     String msg = wifi.getStatusMessage();
 
-    IconType icon = IconType::INFO; // Default icon
+    IconType icon = IconType::INFO; 
     if (state == WifiState::CONNECTING) {
-        msg = "Connecting...";
-        // Optional: add a spinner or dots animation here
+        msg = "Connecting";
         int dots = (millis() / 300) % 4;
         for (int i=0; i<dots; ++i) msg += ".";
     } else if (state == WifiState::CONNECTED) {
         icon = IconType::NET_WIFI;
     } else if (state == WifiState::CONNECTION_FAILED) {
-        icon = IconType::NAV_BACK; // Using back as a 'fail' icon
+        icon = IconType::NAV_BACK; 
     }
     
     display.setFont(u8g2_font_7x13B_tr);

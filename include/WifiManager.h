@@ -26,7 +26,6 @@ struct WifiNetworkInfo {
     char ssid[33];
     int8_t rssi;
     bool isSecure;
-    bool isConnected;
 };
 
 // For storing credentials
@@ -57,6 +56,7 @@ public:
     const char* getSsidToConnect() const;
     String getCurrentSsid() const;
     String getStatusMessage() const;
+    uint32_t getScanCompletionCount() const; // <-- ADD THIS
 
 private:
     void loadKnownNetworks();
@@ -67,6 +67,7 @@ private:
     WifiState state_;
     bool hardwareEnabled_;
     unsigned long connectionStartTime_;
+    uint32_t scanCompletionCount_; // <-- ADD THIS
 
     std::vector<WifiNetworkInfo> scannedNetworks_;
     std::vector<KnownWifiNetwork> knownNetworks_;

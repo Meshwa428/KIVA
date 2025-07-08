@@ -3,7 +3,7 @@
 
 #include "IMenu.h"
 #include "Animation.h"
-#include "WifiManager.h" // For WifiState enum
+#include "WifiManager.h" 
 #include <vector>
 #include <string>
 
@@ -18,6 +18,8 @@ public:
 
     const char* getTitle() const override { return "Wi-Fi Setup"; }
     MenuType getMenuType() const override { return MenuType::WIFI_LIST; }
+    
+    void setScanOnEnter(bool scan);
 
 private:
     void scroll(int direction);
@@ -28,13 +30,15 @@ private:
     struct DisplayItem {
         std::string label;
         ListItemType type;
-        int networkIndex; // Index into WifiManager's network list
+        int networkIndex; 
     };
 
     std::vector<DisplayItem> displayItems_;
     int selectedIndex_;
     VerticalListAnimation animation_;
-    WifiState lastKnownState_; // To detect when a scan finishes
+    bool scanOnEnter_ = true;
+    uint32_t lastKnownScanCount_; // <-- ADD THIS
+    bool isScanning_;             // <-- ADD THIS
 
     // Marquee State
     char marqueeText_[40];

@@ -268,8 +268,8 @@ InputEvent HardwareManager::getNextInputEvent()
     InputEvent event = inputQueue_.front();
     inputQueue_.erase(inputQueue_.begin());
 
-    // LOG THE EVENT AS IT'S BEING PULLED FROM THE QUEUE
-    Serial.printf("[HW-LOG] Dequeuing event: %d\n", static_cast<int>(event));
+    // // LOG THE EVENT AS IT'S BEING PULLED FROM THE QUEUE
+    // Serial.printf("[HW-LOG] Dequeuing event: %d\n", static_cast<int>(event));
 
     return event;
 }
@@ -323,7 +323,7 @@ void HardwareManager::processEncoder()
         return;
     }
 
-    Serial.printf("[ENC-LOG] State change: %d -> %d\n", lastEncState_, currentState);
+    // Serial.printf("[ENC-LOG] State change: %d -> %d\n", lastEncState_, currentState);
 
     bool validCW = (currentState == cwTable[lastEncState_]);
     bool validCCW = (currentState == ccwTable[lastEncState_]);
@@ -335,19 +335,19 @@ void HardwareManager::processEncoder()
         if (encConsecutiveValid_ < 0)
             encConsecutiveValid_ = 0;
         encConsecutiveValid_++;
-        Serial.printf("[ENC-LOG] Valid CW step. Count: %d\n", encConsecutiveValid_);
+        // Serial.printf("[ENC-LOG] Valid CW step. Count: %d\n", encConsecutiveValid_);
     }
     else if (validCCW)
     {
         if (encConsecutiveValid_ > 0)
             encConsecutiveValid_ = 0;
         encConsecutiveValid_--;
-        Serial.printf("[ENC-LOG] Valid CCW step. Count: %d\n", encConsecutiveValid_);
+        // Serial.printf("[ENC-LOG] Valid CCW step. Count: %d\n", encConsecutiveValid_);
     }
     else
     {
         encConsecutiveValid_ = 0;
-        Serial.println("[ENC-LOG] Invalid step. Counter reset.");
+        // Serial.println("[ENC-LOG] Invalid step. Counter reset.");
         return;
     }
 
@@ -361,13 +361,13 @@ void HardwareManager::processEncoder()
     if (encConsecutiveValid_ >= requiredConsecutive)
     {
         inputQueue_.push_back(InputEvent::ENCODER_CW);
-        Serial.println("[ENC-LOG] ---> CW Event Queued! <---");
+        // Serial.println("[ENC-LOG] ---> CW Event Queued! <---");
         encConsecutiveValid_ = 0;
     }
     else if (encConsecutiveValid_ <= -requiredConsecutive)
     {
         inputQueue_.push_back(InputEvent::ENCODER_CCW);
-        Serial.println("[ENC-LOG] ---> CCW Event Queued! <---");
+        // Serial.println("[ENC-LOG] ---> CCW Event Queued! <---");
         encConsecutiveValid_ = 0;
     }
 }

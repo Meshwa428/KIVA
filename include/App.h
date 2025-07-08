@@ -20,27 +20,25 @@ public:
     void loop();
 
     void changeMenu(MenuType type, bool isForwardNav = true);
+    void returnToMenu(MenuType type);
+    
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
     TextInputMenu& getTextInputMenu() { return textInputMenu_; }
-    const std::vector<MenuType>& getNavigationStack() const { return navigationStack_; }
+    IMenu* getMenu(MenuType type);
 
 private:
     void drawStatusBar();
     void drawSecondaryDisplay();
     
-    // --- REVISED BOOT SEQUENCE METHODS & VARS ---
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
     void logToSmallDisplay(const char* message, const char* status = nullptr);
     
-    // These variables are only used during the setup() boot sequence.
-    // They are not needed after setup completes.
     float currentProgressBarFillPx_;
 
     static const int MAX_LOG_LINES_SMALL_DISPLAY = 4;
     static const int MAX_LOG_LINE_LENGTH_SMALL_DISPLAY = 32;
     char smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
-    // --- END REVISED VARS ---
 
     HardwareManager hardware_;
     WifiManager wifiManager_;

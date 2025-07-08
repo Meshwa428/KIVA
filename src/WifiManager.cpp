@@ -11,7 +11,8 @@ static WifiManager* wifiManagerInstance = nullptr;
 WifiManager::WifiManager() : 
     state_(WifiState::OFF),
     hardwareEnabled_(false),
-    connectionStartTime_(0) 
+    connectionStartTime_(0),
+    scanCompletionCount_(0) // <-- INITIALIZE THIS
 {
     wifiManagerInstance = this;
     ssidToConnect_[0] = '\0';
@@ -59,8 +60,14 @@ void WifiManager::startScan() {
     if (state_ == WifiState::SCANNING) return;
 
     Serial.println("[WIFI-LOG] Starting WiFi scan.");
-    state_ = WifiState::SCANNING;
-    statusMessage_ = "Scanning...";
+    
+    if (state_ != WifiState::CONNECTED) {
+        state_ = WifiState::SCANNING;
+        statusMessage_ = "Scanning...";
+    } else {
+        Serial.println("[WIFI-LOG] Performing background scan while already connected.");
+    }
+    
     WiFi.scanNetworks(true); // Async scan
 }
 
@@ -90,69 +97,103 @@ void WifiManager::disconnect() {
 WifiState WifiManager::getState() const { return state_; }
 const std::vector<WifiNetworkInfo>& WifiManager::getScannedNetworks() const { return scannedNetworks_; }
 const char* WifiManager::getSsidToConnect() const { return ssidToConnect_; }
-String WifiManager::getCurrentSsid() const { return (state_ == WifiState::CONNECTED) ? WiFi.SSID() : ""; }
+String WifiManager::getCurrentSsid() const {
+    if (state_ == WifiState::CONNECTED) {
+        String currentSsid = WiFi.SSID();
+        Serial.printf("[WIFI-LOG | getCurrentSsid] State is CONNECTED. Returning SSID: '%s'\n", currentSsid.c_str());
+        return currentSsid;
+    }
+    Serial.printf("[WIFI-LOG | getCurrentSsid] State is NOT CONNECTED (State: %d). Returning empty string.\n", (int)state_);
+    return "";
+}
 String WifiManager::getStatusMessage() const { return statusMessage_; }
 void WifiManager::setSsidToConnect(const char* ssid) {
     strncpy(ssidToConnect_, ssid, sizeof(ssidToConnect_) - 1);
     ssidToConnect_[sizeof(ssidToConnect_) - 1] = '\0';
 }
 
+// --- ADD THIS METHOD ---
+uint32_t WifiManager::getScanCompletionCount() const {
+    return scanCompletionCount_;
+}
+
 
 // --- Private Methods ---
+
 void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     Serial.printf("[WIFI-EVENT] Event: %d\n", event);
     switch (event) {
         case ARDUINO_EVENT_WIFI_SCAN_DONE:
         {
-            scannedNetworks_.clear();
+            scanCompletionCount_++; // <-- INCREMENT THE COUNTER HERE
             int n = WiFi.scanComplete();
-            if (n >= 0) {
-                 Serial.printf("[WIFI-LOG] Scan complete. %d networks found.\n", n);
-                for (int i = 0; i < n; ++i) {
-                    WifiNetworkInfo net;
-                    strncpy(net.ssid, WiFi.SSID(i).c_str(), sizeof(net.ssid)-1);
-                    net.ssid[sizeof(net.ssid)-1] = '\0';
-                    net.rssi = WiFi.RSSI(i);
-                    net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-                    net.isConnected = (state_ == WifiState::CONNECTED && WiFi.SSID() == WiFi.SSID(i));
-                    scannedNetworks_.push_back(net);
-                }
-                // Sort by RSSI
-                std::sort(scannedNetworks_.begin(), scannedNetworks_.end(), [](const WifiNetworkInfo& a, const WifiNetworkInfo& b) {
-                    return a.rssi > b.rssi;
-                });
-                state_ = WifiState::IDLE;
-                statusMessage_ = String(n) + " networks";
-            } else {
+            if (n < 0) {
                 Serial.println("[WIFI-LOG] Scan failed.");
-                state_ = WifiState::SCAN_FAILED;
-                statusMessage_ = "Scan Failed";
+                scannedNetworks_.clear(); 
+                // Only change state if it wasn't connected
+                if (state_ != WifiState::CONNECTED) {
+                    state_ = WifiState::SCAN_FAILED;
+                    statusMessage_ = "Scan Failed";
+                }
+                return;
             }
+            
+            Serial.printf("[WIFI-LOG] Scan complete. %d networks found.\n", n);
+            scannedNetworks_.clear(); 
+
+            for (int i = 0; i < n; ++i) {
+                WifiNetworkInfo net;
+                strncpy(net.ssid, WiFi.SSID(i).c_str(), sizeof(net.ssid)-1);
+                net.ssid[sizeof(net.ssid)-1] = '\0';
+                net.rssi = WiFi.RSSI(i);
+                net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+                scannedNetworks_.push_back(net);
+            }
+            
+            std::sort(scannedNetworks_.begin(), scannedNetworks_.end(), [](const WifiNetworkInfo& a, const WifiNetworkInfo& b) {
+                return a.rssi > b.rssi;
+            });
+
+            // --- THE FIX ---
+            // Do not change the state if we are already connected.
+            if (state_ != WifiState::CONNECTED) {
+                state_ = WifiState::IDLE;
+            }
+            // The status message can be updated regardless.
+            statusMessage_ = String(scannedNetworks_.size()) + " networks";
             break;
         }
 
-        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-            Serial.println("[WIFI-LOG] Station Connected to AP.");
-            statusMessage_ = "Connected";
-            break;
-
+        // ... THE REST OF THE FUNCTION IS UNCHANGED ...
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        { 
             Serial.printf("[WIFI-LOG] Got IP: %s\n", WiFi.localIP().toString().c_str());
             state_ = WifiState::CONNECTED;
             statusMessage_ = "Connected: " + WiFi.SSID();
-            addOrUpdateKnownNetwork(ssidToConnect_, findKnownNetwork(ssidToConnect_)->password);
+            
+            const char* usedPassword = "";
+            KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
+            if(known) {
+                usedPassword = known->password;
+            }
+            addOrUpdateKnownNetwork(ssidToConnect_, usedPassword);
             break;
+        } 
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        { 
             Serial.printf("[WIFI-LOG] Disconnected. Reason: %d\n", info.wifi_sta_disconnected.reason);
-            state_ = WifiState::IDLE;
-            statusMessage_ = "Disconnected";
-            if (connectionStartTime_ != 0) { // If we were trying to connect
+            
+            if (state_ == WifiState::CONNECTING) { 
                 state_ = WifiState::CONNECTION_FAILED;
                 statusMessage_ = "Auth Error";
+            } else {
+                state_ = WifiState::IDLE;
+                statusMessage_ = "Disconnected";
             }
             connectionStartTime_ = 0;
             break;
+        }
             
         default:
             break;

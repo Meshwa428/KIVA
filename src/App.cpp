@@ -189,6 +189,25 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
     }
 }
 
+void App::returnToMenu(MenuType type) {
+    while (!navigationStack_.empty() && navigationStack_.back() != type) {
+        navigationStack_.pop_back();
+    }
+    
+    if (navigationStack_.empty()) {
+        changeMenu(MenuType::MAIN, true);
+        return;
+    }
+
+    changeMenu(navigationStack_.back(), false);
+}
+
+IMenu* App::getMenu(MenuType type) {
+    auto it = menuRegistry_.find(type);
+    return (it != menuRegistry_.end()) ? it->second : nullptr;
+}
+
+
 void App::drawSecondaryDisplay() {
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::TEXT_INPUT) {
         // The PasswordInputMenu's draw function will handle drawing the keyboard
@@ -254,7 +273,7 @@ void App::drawStatusBar() {
     // --- LOGGING POINT #4: Value Just Before Rendering ---
     float voltageToRender = hardware_.getBatteryVoltage();
     uint8_t percentToRender = hardware_.getBatteryPercentage();
-    Serial.printf("[APP-LOG-RENDER] Drawing Status Bar. Voltage: %.2fV, Percent: %d%%\n", voltageToRender, percentToRender);
+    // Serial.printf("[APP-LOG-RENDER] Drawing Status Bar. Voltage: %.2fV, Percent: %d%%\n", voltageToRender, percentToRender);
 
     // --- Battery Drawing Logic ---
     int battery_area_x = 128 - 2;

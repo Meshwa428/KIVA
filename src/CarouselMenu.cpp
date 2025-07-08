@@ -31,6 +31,7 @@ void CarouselMenu::onExit(App* app) {
     marqueeActive_ = false;
 }
 
+
 void CarouselMenu::handleInput(App* app, InputEvent event) {
     switch(event) {
         case InputEvent::ENCODER_CW:
@@ -45,6 +46,15 @@ void CarouselMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_OK_PRESS:
             {
                 const MenuItem& selected = menuItems_[selectedIndex_];
+
+                // --- MODIFICATION: Set flag before navigating ---
+                if (selected.targetMenu == MenuType::WIFI_LIST) {
+                    WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
+                    if (wifiMenu) {
+                        wifiMenu->setScanOnEnter(true);
+                    }
+                }
+                
                 if (getMenuType() == MenuType::UTILITIES_CAROUSEL) {
                     HardwareManager& hw = app->getHardwareManager();
                     if (strcmp(selected.label, "Laser") == 0) {

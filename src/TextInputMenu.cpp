@@ -77,7 +77,13 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            {
+                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
+                if (wifiMenu) {
+                    wifiMenu->setScanOnEnter(false);
+                }
+                app->changeMenu(MenuType::BACK);
+            }
             break;
         default:
             break;
