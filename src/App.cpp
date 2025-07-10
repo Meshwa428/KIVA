@@ -153,26 +153,28 @@ void App::loop() {
     wifiManager_.update();
     otaManager_.loop();
 
-    // --- RESTART LOGIC REMOVED FROM HERE ---
-
+    // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;
     if (currentMenu_) {
         MenuType currentType = currentMenu_->getMenuType();
+        // Menus that ALWAYS require WiFi to be on
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
-            currentType == MenuType::WIFI_CONNECTION_STATUS ||
-            currentType == MenuType::OTA_STATUS || // Keep WiFi on during OTA
-            (wifiManager_.getState() == WifiState::CONNECTED))
+            currentType == MenuType::WIFI_CONNECTION_STATUS)
         {
             wifiIsRequired = true;
         }
+        // The OTA Status menu ONLY requires WiFi if an OTA process is actually running
+        else if (currentType == MenuType::OTA_STATUS && otaManager_.getState() != OtaState::IDLE) {
+            wifiIsRequired = true;
+        }
     }
-    // Also required if an OTA process is active
-    if (otaManager_.getState() != OtaState::IDLE) {
+    // Also keep WiFi on if we are connected for other reasons (e.g. background task)
+    if (wifiManager_.getState() == WifiState::CONNECTED) {
         wifiIsRequired = true;
     }
 
-    // Auto-disable WiFi
+    // Auto-disable WiFi if it's enabled but no longer required by the current context
     if (!wifiIsRequired && wifiManager_.isHardwareEnabled()) {
         wifiManager_.setHardwareState(false);
     }

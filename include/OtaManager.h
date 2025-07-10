@@ -4,6 +4,7 @@
 #include <vector>
 #include "Firmware.h"
 #include <ESPAsyncWebServer.h>
+#include <SD.h> // Include for File object
 
 // Forward declarations
 class App;
@@ -15,7 +16,8 @@ enum class OtaState {
     BASIC_ACTIVE,
     SD_UPDATING,
     ERROR,
-    SUCCESS
+    SUCCESS,
+    FLASHING // <-- NEW GENERIC FLASHING STATE
 };
 
 // --- Shared Progress Structure ---
@@ -49,7 +51,8 @@ private:
     void loadCurrentFirmware();
     void saveCurrentFirmware(const FirmwareInfo& info);
     void resetState();
-    void scheduleReboot(); // <-- RENAMED
+    void enterTerminalState();
+    void loopFlashing(); // <-- NEW FUNCTION FOR CHUNKED WRITING
 
     // --- Basic OTA ---
     void setupArduinoOta();
@@ -73,14 +76,10 @@ private:
     FirmwareInfo currentFirmware_;
     std::vector<FirmwareInfo> availableSdFirmwares_;
 
-    // Web OTA specific state
+    // OTA process state
     File uploadFile_;
-    FirmwareInfo pendingWebFwInfo_;
+    FirmwareInfo pendingFwInfo_; // Generic for SD or Web
     bool uploadError_;
-    
-    // --- NEW: For delayed reboot ---
-    bool rebootPending_ = false;
-    unsigned long rebootScheduledTime_ = 0;
 };
 
 #endif // OTA_MANAGER_H

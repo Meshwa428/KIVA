@@ -36,11 +36,13 @@ public:
 
     MenuType getPreviousMenuType() const;
 
+    // --- NEW: For post-wifi connection actions ---
     void setPostWifiAction(std::function<void(App*)> action);
     void executePostWifiAction();
+    
+    void drawStatusBar(); // <-- MOVED TO PUBLIC
 
 private:
-    void drawStatusBar();
     void drawSecondaryDisplay();
     
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
@@ -60,9 +62,10 @@ private:
     IMenu* currentMenu_;
     
     std::vector<MenuType> navigationStack_;
-
-    std::function<void(App*)> postWifiAction_ = nullptr;
     
+    // --- NEW ---
+    std::function<void(App*)> postWifiAction_ = nullptr;
+
     // Concrete Menu Instances
     MainMenu mainMenu_;
     CarouselMenu toolsMenu_;

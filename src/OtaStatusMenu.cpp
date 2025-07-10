@@ -24,9 +24,17 @@ void OtaStatusMenu::onExit(App* app) {
 }
 
 void OtaStatusMenu::handleInput(App* app, InputEvent event) {
+    if (event != InputEvent::BTN_BACK_PRESS) return;
+
     OtaManager& ota = app->getOtaManager();
-    // Only allow backing out if the process has failed or is idle.
-    if ((event == InputEvent::BTN_BACK_PRESS) && (ota.getState() == OtaState::ERROR || ota.getState() == OtaState::IDLE)) {
+    OtaState state = ota.getState();
+    const OtaProgress& progress = ota.getProgress();
+
+    // Allow user to go back if:
+    // 1. An error has occurred.
+    // 2. The process is idle (shouldn't happen, but safe).
+    // 3. Web OTA is active but the upload hasn't started yet.
+    if (state == OtaState::ERROR || state == OtaState::IDLE || (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0)) {
         app->changeMenu(MenuType::BACK);
     }
 }
@@ -45,6 +53,7 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
     if (state == OtaState::WEB_ACTIVE) strcpy(titleBuffer_, "Web Update");
     else if (state == OtaState::BASIC_ACTIVE) strcpy(titleBuffer_, "Basic OTA");
     else if (state == OtaState::SD_UPDATING) strcpy(titleBuffer_, "SD Update");
+    else if (state == OtaState::SUCCESS) strcpy(titleBuffer_, "Update Complete");
     else if (state == OtaState::ERROR) strcpy(titleBuffer_, "Update Failed");
     else strcpy(titleBuffer_, "Firmware Update");
 
@@ -85,7 +94,10 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
              const char* errorText = "Error!";
             display.setFont(u8g2_font_7x13B_tr);
             display.drawStr((display.getDisplayWidth() - display.getStrWidth(errorText)) / 2, y-4, errorText);
-        } else if (progress.totalBytes > 0) {
+        } else if (state == OtaState::SUCCESS) {
+            display.drawBox(barX + 2, barY + 2, barW - 4, barH - 4); // Full bar on success
+        }
+        else if (progress.totalBytes > 0) {
             int innerBarWidth = barW - 4;
             int fillW = ( (float)progress.receivedBytes / (float)progress.totalBytes ) * innerBarWidth;
             
