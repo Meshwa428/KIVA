@@ -25,7 +25,6 @@ public:
     virtual void onUpdate(App* app) = 0;
     virtual void onExit(App* app) = 0;
 
-    // --- MODIFIED: draw() now gets the App context ---
     virtual void draw(App* app, U8G2& display) = 0;
 
     virtual void handleInput(App* app, InputEvent event) = 0;

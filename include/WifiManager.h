@@ -10,6 +10,9 @@
 #define MAX_KNOWN_WIFI_NETWORKS 20
 #define WIFI_CONNECTION_TIMEOUT_MS 15000
 
+// Forward declaration
+class App;
+
 // State of the WifiManager itself
 enum class WifiState {
     OFF,
@@ -19,6 +22,12 @@ enum class WifiState {
     CONNECTING,
     CONNECTED,
     CONNECTION_FAILED
+};
+
+// Mode for enabling hardware
+enum class WifiMode {
+    STA,
+    AP
 };
 
 // Simplified info for UI display
@@ -37,19 +46,17 @@ struct KnownWifiNetwork {
 class WifiManager {
 public:
     WifiManager();
-    void setup();
+    void setup(App* app);
     void update();
 
-    // --- State Control ---
-    void setHardwareState(bool enable);
+    void setHardwareState(bool enable, WifiMode mode = WifiMode::STA, const char* ap_ssid = nullptr, const char* ap_password = nullptr);
     void startScan();
     void connectWithPassword(const char* password);
-    void connectOpen(const char* ssid); // Takes ssid for open networks
+    void connectOpen(const char* ssid);
     void disconnect();
 
     void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 
-    // --- State Getters ---
     WifiState getState() const;
     bool isHardwareEnabled() const;
     const std::vector<WifiNetworkInfo>& getScannedNetworks() const;
@@ -65,6 +72,7 @@ private:
     KnownWifiNetwork* findKnownNetwork(const char* ssid);
     void addOrUpdateKnownNetwork(const char* ssid, const char* password);
 
+    App* app_ = nullptr;
     WifiState state_;
     bool hardwareEnabled_;
     unsigned long connectionStartTime_;
@@ -76,4 +84,4 @@ private:
     String statusMessage_;
 };
 
-#endif // WIFI_MANAGER_H
+#endif

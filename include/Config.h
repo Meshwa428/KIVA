@@ -19,7 +19,10 @@ enum class MenuType
     JAMMING_TOOLS_GRID,
     WIFI_LIST,
     TEXT_INPUT,
-    WIFI_CONNECTION_STATUS
+    WIFI_CONNECTION_STATUS,
+    FIRMWARE_UPDATE_GRID,
+    FIRMWARE_LIST_SD,
+    OTA_STATUS
 };
 
 // Input Event System
@@ -36,7 +39,10 @@ enum class InputEvent
     BTN_LEFT_PRESS,
     BTN_RIGHT_PRESS,
     BTN_A_PRESS,
-    BTN_B_PRESS
+    BTN_B_PRESS,
+    BTN_AI_PRESS,
+    BTN_RIGHT_UP_PRESS,
+    BTN_RIGHT_DOWN_PRESS
 };
 
 // I2C & Hardware Pins
@@ -53,6 +59,9 @@ namespace Pins
     static constexpr uint8_t ENC_BTN = 0;
     static constexpr uint8_t ENC_A = 1;
     static constexpr uint8_t ENC_B = 2;
+    static constexpr uint8_t AI_BTN = 3;
+    static constexpr uint8_t RIGHT_UP = 4;
+    static constexpr uint8_t RIGHT_DOWN = 5;
     static constexpr uint8_t LASER_PIN_PCF0 = 6;
     static constexpr uint8_t MOTOR_PIN_PCF0 = 7;
 
@@ -68,6 +77,7 @@ namespace Pins
     static constexpr uint8_t ADC_PIN = 3;
 
     static constexpr uint8_t SD_CS_PIN = 21;
+    static constexpr uint8_t AMPLIFIER_PIN = 4;
 }
 
 // Battery Monitor Constants
@@ -78,6 +88,20 @@ namespace Battery
     static constexpr float VOLTAGE_DIVIDER_RATIO = 1.50f; // (R1+R2)/R2
     static constexpr int NUM_SAMPLES = 20;
     static constexpr unsigned long CHECK_INTERVAL_MS = 1000;
+}
+
+// Firmware & OTA Constants
+namespace Firmware
+{
+    static constexpr const char* OTA_HOSTNAME = "kiva-device";
+    static constexpr const char* FIRMWARE_DIR_PATH = "/firmware";
+    static constexpr const char* SYSTEM_INFO_DIR_PATH = "/system";
+    static constexpr const char* CURRENT_FIRMWARE_INFO_FILENAME = "/system/current_fw.json";
+    static constexpr const char* METADATA_EXTENSION = ".kfw";
+    static constexpr const char* OTA_AP_PASSWORD_FILE = "/system/ota_ap_passwd.txt";
+    static constexpr int MAX_FIRMWARES_ON_SD = 10;
+    static constexpr int MIN_AP_PASSWORD_LEN = 8;
+    static constexpr int MAX_AP_PASSWORD_LEN = 63;
 }
 
 // Debouncing & Auto-repeat

@@ -8,11 +8,15 @@
 #include "GridMenu.h"
 #include <vector>
 #include <map>
+#include <functional> // For std::function
 #include "WifiManager.h"
 #include "WifiListMenu.h"
 #include "TextInputMenu.h"
 #include "ConnectionStatusMenu.h"
 #include "PopUpMenu.h"
+#include "OtaManager.h"
+#include "FirmwareListMenu.h"
+#include "OtaStatusMenu.h"
 
 class App {
 public:
@@ -26,10 +30,14 @@ public:
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm);
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
+    OtaManager& getOtaManager() { return otaManager_; }
     TextInputMenu& getTextInputMenu() { return textInputMenu_; }
     IMenu* getMenu(MenuType type);
 
     MenuType getPreviousMenuType() const;
+
+    void setPostWifiAction(std::function<void(App*)> action);
+    void executePostWifiAction();
 
 private:
     void drawStatusBar();
@@ -46,11 +54,14 @@ private:
 
     HardwareManager hardware_;
     WifiManager wifiManager_;
+    OtaManager otaManager_;
     
     std::map<MenuType, IMenu*> menuRegistry_;
     IMenu* currentMenu_;
     
     std::vector<MenuType> navigationStack_;
+
+    std::function<void(App*)> postWifiAction_ = nullptr;
     
     // Concrete Menu Instances
     MainMenu mainMenu_;
@@ -59,10 +70,13 @@ private:
     CarouselMenu settingsMenu_;
     CarouselMenu utilitiesMenu_;
     GridMenu wifiToolsMenu_;
+    GridMenu firmwareUpdateGrid_;
     WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
     PopUpMenu popUpMenu_;
+    FirmwareListMenu firmwareListMenu_;
+    OtaStatusMenu otaStatusMenu_;
 };
 
 #endif

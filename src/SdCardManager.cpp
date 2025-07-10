@@ -49,7 +49,6 @@ namespace SdCardManager {
         if (!sdCardInitialized) return "";
         File file = SD.open(path, FILE_READ);
         if (!file || file.isDirectory()) {
-            // Serial.printf("[SD-LOG] Failed to open file for reading: %s\n", path);
             if (file) file.close();
             return "";
         }
@@ -80,4 +79,18 @@ namespace SdCardManager {
         if (!sdCardInitialized) return false;
         return SD.remove(path);
     }
+    
+    bool renameFile(const char* pathFrom, const char* pathTo) {
+        if (!sdCardInitialized) return false;
+        return SD.rename(pathFrom, pathTo);
+    }
+
+    // Implementation of the new function
+    File openFile(const char* path, const char* mode) {
+        if (!sdCardInitialized) {
+            return File(); // Return an invalid/closed File object
+        }
+        return SD.open(path, mode);
+    }
+
 }

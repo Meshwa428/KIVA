@@ -10,14 +10,12 @@ GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) 
     selectedIndex_(0),
     gridAnimatingIn_(false),
     marqueeActive_(false),
-    marqueeScrollLeft_(true) // ** NEW: Initialize here **
+    marqueeScrollLeft_(true)
 {
-    if (title == "WiFi Tools")
-        menuType_ = MenuType::WIFI_TOOLS_GRID;
-    else
-        menuType_ = MenuType::NONE;
+    if (title == "WiFi Tools") menuType_ = MenuType::WIFI_TOOLS_GRID;
+    else if (title == "Update") menuType_ = MenuType::FIRMWARE_UPDATE_GRID;
+    else menuType_ = MenuType::NONE;
 }
-
 void GridMenu::onEnter(App *app)
 {
     targetGridScrollOffset_Y_ = 0;
@@ -90,7 +88,37 @@ void GridMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
-            app->changeMenu(menuItems_[selectedIndex_].targetMenu);
+            {
+                // Special handling for the Firmware Update grid menu
+                if (menuType_ == MenuType::FIRMWARE_UPDATE_GRID) {
+                    const char* selectedLabel = menuItems_[selectedIndex_].label;
+                    OtaManager& ota = app->getOtaManager();
+
+                    if (strcmp(selectedLabel, "Web Update") == 0) {
+                        if (ota.startWebUpdate()) {
+                            app->changeMenu(MenuType::OTA_STATUS);
+                        } else {
+                            // If starting fails immediately, show an error.
+                            app->showPopUp("Error", ota.getStatusMessage().c_str(), nullptr);
+                        }
+                    } else if (strcmp(selectedLabel, "SD Card") == 0) {
+                        // The scan will now happen in FirmwareListMenu's onEnter.
+                        app->changeMenu(MenuType::FIRMWARE_LIST_SD);
+                    } else if (strcmp(selectedLabel, "Basic OTA") == 0) {
+                        if (ota.startBasicOta()) {
+                            // Succeeded immediately (already on WiFi)
+                            app->changeMenu(MenuType::OTA_STATUS);
+                        }
+                        // If it returns false, it's because WiFi is not connected,
+                        // and OtaManager itself has shown the pop-up. So, do nothing.
+                    } else if (strcmp(selectedLabel, "Back") == 0) {
+                         app->changeMenu(MenuType::BACK);
+                    }
+                } else {
+                    // Default behavior for all other grid menus
+                    app->changeMenu(menuItems_[selectedIndex_].targetMenu);
+                }
+            }
             break;
         case InputEvent::BTN_BACK_PRESS:
             app->changeMenu(MenuType::BACK);

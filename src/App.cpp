@@ -4,13 +4,15 @@
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
+#include <esp_task_wdt.h>
 
 App::App() :
     currentMenu_(nullptr),
     currentProgressBarFillPx_(0.0f),
+    mainMenu_(), // Uses default constructor
     toolsMenu_("Tools", {
-        {"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID}, // Corrected Icon
-        {"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID}, // Corrected Target
+        {"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
+        {"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     gamesMenu_("Games", {
@@ -20,6 +22,7 @@ App::App() :
     }),
     settingsMenu_("Settings", {
         {"WiFi", IconType::NET_WIFI, MenuType::WIFI_LIST},
+        {"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
         {"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
@@ -33,10 +36,18 @@ App::App() :
         {"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    firmwareUpdateGrid_("Update", {
+        {"Web Update", IconType::NET_WIFI, MenuType::NONE}, // Logic handled in GridMenu
+        {"SD Card", IconType::INFO, MenuType::FIRMWARE_LIST_SD}, // Can navigate directly
+        {"Basic OTA", IconType::TOOL_INJECTION, MenuType::NONE}, // Logic handled in GridMenu
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
     wifiListMenu_(),
     textInputMenu_(),
     connectionStatusMenu_(),
-    popUpMenu_()
+    popUpMenu_(),
+    firmwareListMenu_(),
+    otaStatusMenu_()
 {
     // Initialize the small display log buffer
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
@@ -114,7 +125,8 @@ void App::setup() {
     Serial.println("[APP-LOG] Boot sequence finished. Initializing menus.");
 
     SdCardManager::setup(); // Setup SD Card first
-    wifiManager_.setup();   // Then WifiManager which may depend on it
+    wifiManager_.setup(this);   // Then WifiManager which may depend on it. Pass App context.
+    otaManager_.setup(this, &wifiManager_);
     
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -127,6 +139,9 @@ void App::setup() {
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
     menuRegistry_[MenuType::POPUP] = &popUpMenu_;
+    menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
+    menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
+    menuRegistry_[MenuType::OTA_STATUS] = &otaStatusMenu_;
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -136,6 +151,9 @@ void App::setup() {
 void App::loop() {
     hardware_.update();
     wifiManager_.update();
+    otaManager_.loop();
+
+    // --- RESTART LOGIC REMOVED FROM HERE ---
 
     bool wifiIsRequired = false;
     if (currentMenu_) {
@@ -143,15 +161,19 @@ void App::loop() {
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
             currentType == MenuType::WIFI_CONNECTION_STATUS ||
-            (wifiManager_.getState() == WifiState::CONNECTED)) // <-- Also keep on if connected
+            currentType == MenuType::OTA_STATUS || // Keep WiFi on during OTA
+            (wifiManager_.getState() == WifiState::CONNECTED))
         {
             wifiIsRequired = true;
         }
     }
+    // Also required if an OTA process is active
+    if (otaManager_.getState() != OtaState::IDLE) {
+        wifiIsRequired = true;
+    }
 
-    // If WiFi is no longer required and is currently on, turn it off.
+    // Auto-disable WiFi
     if (!wifiIsRequired && wifiManager_.isHardwareEnabled()) {
-        Serial.println("[APP-LOGIC] WiFi not required. Disabling hardware...");
         wifiManager_.setHardwareState(false);
     }
 
@@ -166,9 +188,7 @@ void App::loop() {
 
     U8G2& mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();
-
-    // --- NEW DRAWING LOGIC FOR OVERLAY ---
-    // For a pop-up, we need to draw the menu underneath it first.
+    
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
         IMenu* underlyingMenu = getMenu(getPreviousMenuType());
         if (underlyingMenu) {
@@ -178,8 +198,7 @@ void App::loop() {
     } else if (currentMenu_) {
         drawStatusBar();
     }
-
-    // Draw the current menu's content on top.
+    
     if (currentMenu_) {
         currentMenu_->draw(this, mainDisplay);
     }
@@ -191,7 +210,6 @@ void App::loop() {
 void App::changeMenu(MenuType type, bool isForwardNav) {
     if (type == MenuType::NONE) return;
 
-    // --- MODIFIED: Store the type of the menu we are exiting ---
     MenuType exitingMenuType = MenuType::NONE;
     if (currentMenu_) {
         exitingMenuType = currentMenu_->getMenuType();
@@ -265,6 +283,20 @@ IMenu* App::getMenu(MenuType type) {
 void App::showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm) {
     popUpMenu_.configure(title, message, onConfirm);
     changeMenu(MenuType::POPUP);
+}
+
+// --- NEW/MODIFIED METHODS ---
+
+void App::setPostWifiAction(std::function<void(App*)> action) {
+    postWifiAction_ = action;
+}
+
+void App::executePostWifiAction() {
+    if (postWifiAction_) {
+        Serial.println("[APP-LOG] Executing post-wifi connection action.");
+        postWifiAction_(this);
+        postWifiAction_ = nullptr; // Clear it after execution
+    }
 }
 
 MenuType App::getPreviousMenuType() const {
