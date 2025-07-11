@@ -58,9 +58,14 @@ void PopUpMenu::handleInput(App* app, InputEvent event) {
                 if (onConfirm_) {
                     onConfirm_(app);
                 }
+                // ALWAYS navigate back after a confirm action.
+                // This closes the pop-up and reveals the underlying menu,
+                // which might have been changed by the onConfirm_ callback.
+                app->changeMenu(MenuType::BACK);
+            } else { // Cancel
+                // Cancel action also just navigates back.
+                app->changeMenu(MenuType::BACK);
             }
-            // Whether confirmed or cancelled, go back.
-            app->changeMenu(MenuType::BACK);
             break;
 
         case InputEvent::BTN_BACK_PRESS:

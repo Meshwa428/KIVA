@@ -382,7 +382,6 @@ void OtaManager::onUpload(AsyncWebServerRequest *request, String filename, size_
     }
 }
 
-// REFACTORED onUpdateEnd
 void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     if (uploadError_) {
         request->send(500, "text/plain", statusMessage_);
@@ -393,18 +392,61 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     statusMessage_ = "Verifying...";
     String tempPath = String(Firmware::FIRMWARE_DIR_PATH) + "/web_upload.bin";
     String md5 = FirmwareUtils::calculateFileMD5(SD, tempPath);
-    if (md5.isEmpty() || (currentFirmware_.isValid && md5.equalsIgnoreCase(currentFirmware_.checksum_md5))) {
-        SD.remove(tempPath);
-        statusMessage_ = md5.isEmpty() ? "MD5 Calc Failed" : "Already up-to-date";
+
+    if (md5.isEmpty()) {
+        SdCardManager::deleteFile(tempPath.c_str());
+        statusMessage_ = "MD5 Calc Failed";
         state_ = OtaState::ERROR;
         request->send(200, "text/plain", statusMessage_);
         return;
     }
     
-    uploadFile_ = SD.open(tempPath, FILE_READ);
+    if (currentFirmware_.isValid && md5.equalsIgnoreCase(currentFirmware_.checksum_md5)) {
+        SdCardManager::deleteFile(tempPath.c_str());
+        statusMessage_ = "Already up-to-date";
+        state_ = OtaState::ERROR;
+        request->send(200, "text/plain", statusMessage_);
+        return;
+    }
+
+    // --- NEW LOGIC: Save a permanent copy with a timestamp-based name ---
+    String pathToFlash = tempPath; // Default to flashing from the temp file
+    
+    // Generate a unique filename using millis()
+    unsigned long timestamp = millis();
+    String baseFilename = "fw_" + String(timestamp);
+    String permanentBinFilename = baseFilename + ".bin";
+    String permanentBinPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + permanentBinFilename;
+
+    // RENAME the temp file to its permanent name. This is faster than copying.
+    if (SdCardManager::renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
+        Serial.printf("[OTA-WEB] Saved new firmware as %s\n", permanentBinPath.c_str());
+        
+        // Create the corresponding metadata file (.kfw)
+        FirmwareInfo newFwInfo;
+        // The version name is now based on the timestamp for easy identification
+        snprintf(newFwInfo.version, FW_VERSION_MAX_LEN, "Web Upload %lu", timestamp);
+        snprintf(newFwInfo.build_date, FW_BUILD_DATE_MAX_LEN, "%s %s", __DATE__, __TIME__);
+        strcpy(newFwInfo.checksum_md5, md5.c_str());
+        strcpy(newFwInfo.binary_filename, permanentBinFilename.c_str());
+        strcpy(newFwInfo.description, "Uploaded via web interface");
+        newFwInfo.isValid = true;
+
+        String kfwPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + baseFilename + Firmware::METADATA_EXTENSION;
+        FirmwareUtils::saveMetadataFile(kfwPath, newFwInfo);
+        
+        // Update the path we will use for flashing
+        pathToFlash = permanentBinPath;
+    } else {
+        Serial.println("[OTA-WEB] ERROR: Failed to rename temp file. Will flash from temp path without saving.");
+    }
+    // --- END NEW LOGIC ---
+
+    // Now, continue with the original flashing logic, using the determined path
+    uploadFile_ = SD.open(pathToFlash, FILE_READ);
     if (!uploadFile_) {
         state_ = OtaState::ERROR;
-        statusMessage_ = "Re-open temp failed";
+        statusMessage_ = "Failed to open file for flashing";
         request->send(500, "text/plain", statusMessage_);
         return;
     }
@@ -418,14 +460,14 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
         return;
     }
 
-    // At this point, the browser request is "done". We send a success message
-    // to tell the JS to show "Processing", then we start our chunked flashing.
     request->send(200, "text/plain", "Success");
 
-    // Setup for chunked flashing
-    snprintf(pendingFwInfo_.version, FW_VERSION_MAX_LEN, "web-%s", md5.substring(0, 8).c_str());
+    // Populate the pendingFwInfo for saving to current_fw.json after a successful flash
+    snprintf(pendingFwInfo_.version, FW_VERSION_MAX_LEN, "Web Upload %lu", timestamp);
     snprintf(pendingFwInfo_.build_date, FW_BUILD_DATE_MAX_LEN, "%s %s", __DATE__, __TIME__);
     strcpy(pendingFwInfo_.checksum_md5, md5.c_str());
+    strcpy(pendingFwInfo_.binary_filename, permanentBinFilename.c_str());
+    strcpy(pendingFwInfo_.description, "Uploaded via web interface");
     
     progress_.totalBytes = updateSize;
     progress_.receivedBytes = 0;

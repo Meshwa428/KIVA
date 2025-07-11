@@ -27,18 +27,24 @@ private:
     void drawWifiSignal(U8G2& display, int x, int y_center, int8_t rssi);
 
     enum class ListItemType { NETWORK, SCAN, BACK };
+    
+    // --- MODIFIED: Self-contained struct ---
     struct DisplayItem {
         std::string label;
         ListItemType type;
-        int networkIndex; 
+        // Data for drawing, copied from source. No more lookups!
+        int8_t rssi;
+        bool isSecure;
+        // We still need the original index for the 'connect' action.
+        int originalNetworkIndex; 
     };
 
     std::vector<DisplayItem> displayItems_;
     int selectedIndex_;
     VerticalListAnimation animation_;
     bool scanOnEnter_ = true;
-    uint32_t lastKnownScanCount_; // <-- ADD THIS
-    bool isScanning_;             // <-- ADD THIS
+    uint32_t lastKnownScanCount_;
+    bool isScanning_;
 
     // Marquee State
     char marqueeText_[40];

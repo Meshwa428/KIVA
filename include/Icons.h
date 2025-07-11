@@ -21,6 +21,7 @@ enum class IconType
     GAMES,
     SETTINGS,
     INFO,
+    ERROR,
     GAME_SNAKE,
     GAME_TETRIS,
     GAME_PONG,
@@ -51,6 +52,7 @@ extern const unsigned char icon_tools_large_bits[];
 extern const unsigned char icon_games_large_bits[];
 extern const unsigned char icon_settings_large_bits[];
 extern const unsigned char icon_info_large_bits[];
+extern const unsigned char icon_error_large_bits[];
 extern const unsigned char icon_game_snake_large_bits[];
 extern const unsigned char icon_game_tetris_large_bits[];
 extern const unsigned char icon_game_pong_large_bits[];

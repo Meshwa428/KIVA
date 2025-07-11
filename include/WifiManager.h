@@ -24,7 +24,7 @@ enum class WifiState {
     CONNECTION_FAILED
 };
 
-// Mode for enabling hardware
+// NEW: Mode for enabling hardware
 enum class WifiMode {
     STA,
     AP
@@ -41,6 +41,7 @@ struct WifiNetworkInfo {
 struct KnownWifiNetwork {
     char ssid[33];
     char password[PASSWORD_MAX_LEN + 1];
+    int failureCount = 0;
 };
 
 class WifiManager {
@@ -49,14 +50,17 @@ public:
     void setup(App* app);
     void update();
 
+    // --- State Control ---
     void setHardwareState(bool enable, WifiMode mode = WifiMode::STA, const char* ap_ssid = nullptr, const char* ap_password = nullptr);
     void startScan();
+    bool tryConnectKnown(const char* ssid);
     void connectWithPassword(const char* password);
     void connectOpen(const char* ssid);
     void disconnect();
 
     void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 
+    // --- State Getters ---
     WifiState getState() const;
     bool isHardwareEnabled() const;
     const std::vector<WifiNetworkInfo>& getScannedNetworks() const;
@@ -80,8 +84,9 @@ private:
 
     std::vector<WifiNetworkInfo> scannedNetworks_;
     std::vector<KnownWifiNetwork> knownNetworks_;
+    bool networksLoaded_ = false; // <-- NEW FLAG
     char ssidToConnect_[33];
     String statusMessage_;
 };
 
-#endif
+#endif // WIFI_MANAGER_H

@@ -1,5 +1,6 @@
 #include "UI_Utils.h"
 #include <Arduino.h>
+#include <vector>
 
 // Buffer for truncateText. It's static, so it's private to this file.
 static char SBUF[32];
@@ -64,6 +65,9 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
             break;
         case IconType::INFO:
             xbm_data = icon_info_large_bits;
+            break;
+        case IconType::ERROR:
+            xbm_data = icon_error_large_bits;
             break;
         case IconType::GAME_SNAKE:
             xbm_data = icon_game_snake_large_bits;
@@ -156,42 +160,33 @@ void drawRndBox(U8G2 &display, int x, int y, int w, int h, int r, bool fill)
         display.drawRFrame(x, y, w, h, r);
 }
 
-// --- CORRECTED FUNCTION ---
 char *truncateText(const char *text, int maxWidth, U8G2 &display)
 {
-    // 1. Copy original text to the static buffer, respecting its size.
     strncpy(SBUF, text, sizeof(SBUF) - 1);
     SBUF[sizeof(SBUF) - 1] = '\0';
 
-    // 2. Check if the copied text already fits within the pixel width.
     if (display.getStrWidth(SBUF) <= maxWidth)
     {
         return SBUF;
     }
 
-    // 3. If not, start removing characters from the end until it fits with an ellipsis.
     int ellipsisWidth = display.getStrWidth("...");
     while (strlen(SBUF) > 0)
     {
-        // Remove the last character.
         SBUF[strlen(SBUF) - 1] = '\0';
-
-        // Check if the now-shortened string plus the ellipsis will fit.
         if (display.getStrWidth(SBUF) + ellipsisWidth <= maxWidth)
         {
-            strcat(SBUF, "..."); // Append the ellipsis.
+            strcat(SBUF, "...");
             return SBUF;
         }
     }
 
-    // 4. If we reach here, it means even the ellipsis itself might not fit.
     if (ellipsisWidth <= maxWidth)
     {
         strcpy(SBUF, "...");
         return SBUF;
     }
 
-    // 5. If nothing fits, return an empty string.
     SBUF[0] = '\0';
     return SBUF;
 }
@@ -206,25 +201,22 @@ void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScroll
 
     if (!marqueeActive && shouldBeActive)
     {
-        // Marquee needs to start
         strncpy(marqueeText, textToDisplay, 39);
         marqueeText[39] = '\0';
         marqueeTextLenPx = display.getStrWidth(marqueeText);
         marqueeOffset = 0;
         marqueeActive = true;
         marqueePaused = true;
-        marqueeScrollLeft = true; // Always start by scrolling left
+        marqueeScrollLeft = true;
         marqueePauseStartTime = millis();
         lastMarqueeTime = millis();
     }
     else if (marqueeActive && !shouldBeActive)
     {
-        // Marquee should stop
         marqueeActive = false;
     }
     else if (marqueeActive && shouldBeActive)
     {
-        // If the text changes while marquee is active
         if (strcmp(marqueeText, textToDisplay) != 0)
         {
             strncpy(marqueeText, textToDisplay, 39);
@@ -244,7 +236,7 @@ void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScroll
     if (marqueePaused)
     {
         if (curTime - marqueePauseStartTime > 1200)
-        { // Pause for 1.2 seconds
+        {
             marqueePaused = false;
             lastMarqueeTime = curTime;
         }
@@ -252,31 +244,30 @@ void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScroll
     }
 
     if (curTime - lastMarqueeTime > 70)
-    { // Update every 70ms
+    {
         if (marqueeScrollLeft)
         {
-            marqueeOffset--; // Scroll left
+            marqueeOffset--;
         }
         else
         {
-            marqueeOffset++; // Scroll right
+            marqueeOffset++;
         }
         lastMarqueeTime = curTime;
 
-        // Check for end conditions
         if (marqueeScrollLeft && marqueeOffset <= -(marqueeTextLenPx - availableWidth))
         {
-            marqueeOffset = -(marqueeTextLenPx - availableWidth); // Clamp position
+            marqueeOffset = -(marqueeTextLenPx - availableWidth);
             marqueePaused = true;
             marqueePauseStartTime = curTime;
-            marqueeScrollLeft = false; // Reverse direction
+            marqueeScrollLeft = false;
         }
         else if (!marqueeScrollLeft && marqueeOffset >= 0)
         {
-            marqueeOffset = 0; // Clamp position
+            marqueeOffset = 0;
             marqueePaused = true;
             marqueePauseStartTime = curTime;
-            marqueeScrollLeft = true; // Reverse direction
+            marqueeScrollLeft = true;
         }
     }
 }
@@ -289,5 +280,64 @@ void drawBatIcon(U8G2 &display, int x, int y, uint8_t percentage)
     if (fill_width > 0)
     {
         display.drawBox(x + 1, y + 1, fill_width, 3);
+    }
+}
+
+// --- NEW IMPLEMENTATION ---
+void drawWrappedText(U8G2 &display, const char* text, int x, int y, int w, int h, const std::vector<const uint8_t*>& fonts) {
+    if (!text || text[0] == '\0' || fonts.empty()) {
+        return;
+    }
+
+    const uint8_t* best_font = fonts.back(); // Default to smallest font
+
+    // 1. Find the best font size
+    for (const auto& font : fonts) {
+        display.setFont(font);
+        if (display.getStrWidth(text) <= w) {
+            best_font = font;
+            break; // Found a font that fits on one line
+        }
+    }
+    display.setFont(best_font);
+    int line_height = display.getAscent() - display.getDescent() + 2;
+    int max_lines = h / line_height;
+
+    // 2. Word wrap the text
+    std::vector<std::string> lines;
+    std::string current_line;
+    char text_copy[strlen(text) + 1];
+    strcpy(text_copy, text);
+
+    char* word = strtok(text_copy, " ");
+    while (word != nullptr) {
+        std::string word_str(word);
+        if (current_line.empty()) {
+            current_line = word_str;
+        } else {
+            std::string test_line = current_line + " " + word_str;
+            if (display.getStrWidth(test_line.c_str()) <= w) {
+                current_line = test_line;
+            } else {
+                lines.push_back(current_line);
+                current_line = word_str;
+            }
+        }
+        word = strtok(nullptr, " ");
+    }
+    if (!current_line.empty()) {
+        lines.push_back(current_line);
+    }
+
+    if (lines.empty()) return;
+
+    // 3. Draw the wrapped text, vertically centered
+    int total_text_height = lines.size() * line_height;
+    int start_y = y + (h - total_text_height) / 2 + display.getAscent();
+
+    for (size_t i = 0; i < lines.size() && i < max_lines; ++i) {
+        int line_width = display.getStrWidth(lines[i].c_str());
+        int line_x = x + (w - line_width) / 2;
+        display.drawStr(line_x, start_y + (i * line_height), lines[i].c_str());
     }
 }
