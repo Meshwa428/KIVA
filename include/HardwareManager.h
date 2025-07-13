@@ -4,12 +4,43 @@
 #include "Config.h"
 #include <Wire.h>
 #include <vector>
+#include <memory> // For std::unique_ptr
+#include <RF24.h>
+#include <SPI.h>
+
+// --- NEW ---
+// Enum to identify which system is requesting RF control
+enum class RfClient {
+    NONE,
+    NRF_JAMMER,
+    WIFI
+};
+
+static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
 
 class HardwareManager {
 public:
+    // --- NEW RAII LOCK CLASS (defined inside HardwareManager) ---
+    class RfLock {
+    public:
+        ~RfLock(); // Destructor will release the lock
+        bool isValid() const { return valid_; }
+        RF24* radio1 = nullptr;
+        RF24* radio2 = nullptr;
+
+    private:
+        friend class HardwareManager; // Allow HardwareManager to create this
+        RfLock(HardwareManager& manager, bool success);
+        HardwareManager& manager_;
+        bool valid_;
+    };
+
     HardwareManager();
     void setup();
     void update(); 
+
+    // --- NEW: RF Control Method ---
+    std::unique_ptr<RfLock> requestRfControl(RfClient client);
 
     // Display accessors
     U8G2& getMainDisplay();
@@ -24,17 +55,20 @@ public:
     bool isLaserOn() const;
     bool isVibrationOn() const;
 
+    void setPerformanceMode(bool highPerf);
+
     // Battery Status Methods
     float getBatteryVoltage() const;
     uint8_t getBatteryPercentage() const;
     bool isCharging() const;
 
 private:
+    void releaseRfControl(); // <-- NEW private helper
+
     // Input methods
     void processEncoder();
-    // OLD: void processButtons(uint8_t pcf0State, uint8_t pcf1State);
-    void processButton_PCF0(); // NEW
-    void processButtons_PCF1(); // NEW
+    void processButton_PCF0();
+    void processButtons_PCF1();
     void processButtonRepeats(); 
     InputEvent mapPcf1PinToEvent(int pin);
     
@@ -52,6 +86,11 @@ private:
     U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2_main_;
     U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2_small_;
     
+    // --- NEW: RF Hardware Objects and State ---
+    RF24 radio1_;
+    RF24 radio2_;
+    RfClient currentRfClient_;
+
     // Input state
     bool prevDbncHState0_[8];
     unsigned long lastDbncT0_[8];
@@ -69,6 +108,8 @@ private:
 
     // --- NEW: Input Grace Period ---
     unsigned long setupTime_;
+
+    bool highPerformanceMode_; 
     
     // Output State
     uint8_t pcf0_output_state_;
@@ -82,7 +123,7 @@ private:
     float currentSmoothedVoltage_;
     bool isCharging_;
     unsigned long lastBatteryCheckTime_;
-    float lastValidRawVoltage_; // Renamed for clarity
+    float lastValidRawVoltage_; 
 
     // Variables for Linear Regression
     static const int TREND_SAMPLES = 25;

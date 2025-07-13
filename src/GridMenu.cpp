@@ -12,12 +12,15 @@ GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) 
     marqueeActive_(false),
     marqueeScrollLeft_(true)
 {
+    // Infer MenuType from title
     if (title == "WiFi Tools") menuType_ = MenuType::WIFI_TOOLS_GRID;
     else if (title == "Update") menuType_ = MenuType::FIRMWARE_UPDATE_GRID;
+    else if (title == "Jammer") menuType_ = MenuType::JAMMING_TOOLS_GRID; // <-- ADD
     else menuType_ = MenuType::NONE;
 }
 void GridMenu::onEnter(App *app)
 {
+    selectedIndex_ = 0;
     targetGridScrollOffset_Y_ = 0;
     currentGridScrollOffset_Y_anim_ = 0;
     startGridAnimation();
@@ -89,32 +92,20 @@ void GridMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
-                // Special handling for the Firmware Update grid menu
-                if (menuType_ == MenuType::FIRMWARE_UPDATE_GRID) {
-                    const char* selectedLabel = menuItems_[selectedIndex_].label;
-                    OtaManager& ota = app->getOtaManager();
+                if (selectedIndex_ >= menuItems_.size()) break;
+                const auto& selected = menuItems_[selectedIndex_];
 
-                    if (strcmp(selectedLabel, "Web Update") == 0) {
-                        if (ota.startWebUpdate()) {
-                            app->changeMenu(MenuType::OTA_STATUS);
-                        } else {
-                            // If starting fails immediately, show an error.
-                            app->showPopUp("Error", ota.getStatusMessage().c_str(), nullptr);
-                        }
-                    } else if (strcmp(selectedLabel, "SD Card") == 0) {
-                        // The scan will now happen in FirmwareListMenu's onEnter.
-                        app->changeMenu(MenuType::FIRMWARE_LIST_SD);
-                    } else if (strcmp(selectedLabel, "Basic OTA") == 0) {
-                        ota.startBasicOta();
-                    } else if (strcmp(selectedLabel, "Back") == 0) {
-                         app->changeMenu(MenuType::BACK);
-                    }
+                // --- NEW GENERIC LOGIC ---
+                if (selected.action) {
+                    // If an action is defined, execute it.
+                    selected.action(app);
                 } else {
-                    // Default behavior for all other grid menus
-                    app->changeMenu(menuItems_[selectedIndex_].targetMenu);
+                    // Otherwise, navigate to the target menu.
+                    app->changeMenu(selected.targetMenu);
                 }
             }
             break;
+
         case InputEvent::BTN_BACK_PRESS:
             app->changeMenu(MenuType::BACK);
             break;
@@ -137,11 +128,17 @@ void GridMenu::scroll(int direction)
         selectedIndex_ = (selectedIndex_ % menuItems_.size() + menuItems_.size()) % menuItems_.size();
     }
     
-    if (abs(direction) > 1) {
-        if (selectedIndex_ >= (int)menuItems_.size()) {
-           selectedIndex_ = oldIndex;
+    if (abs(direction) > 1) { // For UP/DOWN
+        int new_col = oldIndex % columns_;
+        // Check if the new row has a valid item in this column. If not, stay put.
+        int targetIndex = (selectedIndex_ / columns_) * columns_ + new_col;
+        if(targetIndex < menuItems_.size()) {
+             selectedIndex_ = targetIndex;
+        } else {
+            selectedIndex_ = oldIndex;
         }
     }
+
 
     const int itemRowHeight = 18 + 4;
     const int gridVisibleAreaH = 64 - (STATUS_BAR_H + 1) - 4;

@@ -4,14 +4,15 @@
 #include <algorithm> // For std::max
 
 MainMenu::MainMenu() : selectedIndex_(0) {
-    menuItems_.push_back({"Tools",     IconType::TOOLS,    MenuType::TOOLS_CAROUSEL});
-    menuItems_.push_back({"Games",     IconType::GAMES,    MenuType::GAMES_CAROUSEL});
-    menuItems_.push_back({"Settings",  IconType::SETTINGS, MenuType::SETTINGS_CAROUSEL});
-    menuItems_.push_back({"Utilities", IconType::UTILITIES_CATEGORY, MenuType::UTILITIES_CAROUSEL});
-    menuItems_.push_back({"Info",      IconType::INFO,     MenuType::NONE});
+    menuItems_.push_back(MenuItem{"Tools",     IconType::TOOLS,    MenuType::TOOLS_CAROUSEL});
+    menuItems_.push_back(MenuItem{"Games",     IconType::GAMES,    MenuType::GAMES_CAROUSEL});
+    menuItems_.push_back(MenuItem{"Settings",  IconType::SETTINGS, MenuType::SETTINGS_CAROUSEL});
+    menuItems_.push_back(MenuItem{"Utilities", IconType::UTILITIES_CATEGORY, MenuType::UTILITIES_CAROUSEL});
+    menuItems_.push_back(MenuItem{"Info",      IconType::INFO,     MenuType::NONE});
 }
 
 void MainMenu::onEnter(App* app) {
+    selectedIndex_ = 0;
     animation_.init();
     animation_.startIntro(selectedIndex_, menuItems_.size());
 }
@@ -25,9 +26,6 @@ void MainMenu::onExit(App* app) {
 }
 
 void MainMenu::handleInput(App* app, InputEvent event) {
-    // Log that this specific menu is handling the input
-    Serial.printf("[MainMenu-LOG] handleInput received event: %d\n", static_cast<int>(event));
-
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_DOWN_PRESS:
@@ -39,7 +37,17 @@ void MainMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
-            app->changeMenu(menuItems_[selectedIndex_].targetMenu);
+            {
+                if (selectedIndex_ >= menuItems_.size()) break;
+                const auto& selected = menuItems_[selectedIndex_];
+
+                // Use the new generic logic for consistency
+                if (selected.action) {
+                    selected.action(app);
+                } else {
+                    app->changeMenu(selected.targetMenu);
+                }
+            }
             break;
         case InputEvent::BTN_BACK_PRESS:
             // No action

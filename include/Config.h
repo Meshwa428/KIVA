@@ -22,7 +22,9 @@ enum class MenuType
     WIFI_CONNECTION_STATUS,
     FIRMWARE_UPDATE_GRID,
     FIRMWARE_LIST_SD,
-    OTA_STATUS
+    OTA_STATUS,
+    CHANNEL_SELECTION,
+    JAMMING_ACTIVE
 };
 
 // Input Event System
@@ -79,6 +81,11 @@ namespace Pins
 
     static constexpr uint8_t SD_CS_PIN = 21;
     static constexpr uint8_t AMPLIFIER_PIN = 4;
+
+    static constexpr uint8_t NRF1_CE_PIN = 1;
+    static constexpr uint8_t NRF1_CSN_PIN = 2;
+    static constexpr uint8_t NRF2_CE_PIN = 43;
+    static constexpr uint8_t NRF2_CSN_PIN = 44;
 }
 
 // Battery Monitor Constants

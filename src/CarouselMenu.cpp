@@ -18,6 +18,7 @@ CarouselMenu::CarouselMenu(std::string title, std::vector<MenuItem> items) :
 }
 
 void CarouselMenu::onEnter(App* app) {
+    selectedIndex_ = 0;
     animation_.init();
     animation_.setTargets(selectedIndex_, menuItems_.size());
     marqueeScrollLeft_ = true; // Reset on enter
@@ -45,26 +46,18 @@ void CarouselMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
+                if (selectedIndex_ >= menuItems_.size()) break;
                 const MenuItem& selected = menuItems_[selectedIndex_];
 
-                // --- MODIFICATION: Set flag before navigating ---
-                if (selected.targetMenu == MenuType::WIFI_LIST) {
-                    WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
-                    if (wifiMenu) {
-                        wifiMenu->setScanOnEnter(true);
-                    }
-                }
-                
-                if (getMenuType() == MenuType::UTILITIES_CAROUSEL) {
-                    HardwareManager& hw = app->getHardwareManager();
-                    if (strcmp(selected.label, "Laser") == 0) {
-                        hw.setLaser(!hw.isLaserOn());
-                    } else if (strcmp(selected.label, "Vibration") == 0) {
-                        hw.setVibration(!hw.isVibrationOn());
-                    } else {
-                        app->changeMenu(selected.targetMenu);
-                    }
+                // --- NEW GENERIC LOGIC ---
+                if (selected.action) {
+                    // If an action is defined, execute it. This handles things
+                    // like toggling the laser/vibration without the menu needing
+                    // to know about the HardwareManager. The action may also
+                    // trigger a navigation change.
+                    selected.action(app);
                 } else {
+                    // Otherwise, just navigate to the target menu.
                     app->changeMenu(selected.targetMenu);
                 }
             }
@@ -114,6 +107,7 @@ void CarouselMenu::draw(App* app, U8G2& display) {
         char itemDisplayTextBuffer[20];
         const char* itemTextToDisplay = menuItems_[i].label;
 
+        // The action lambda handles toggling, but we still need to show the state.
         if (getMenuType() == MenuType::UTILITIES_CAROUSEL) {
             if (strcmp(itemTextToDisplay, "Laser") == 0) {
                 snprintf(itemDisplayTextBuffer, sizeof(itemDisplayTextBuffer), "Laser: %s", hw.isLaserOn() ? "ON" : "OFF");

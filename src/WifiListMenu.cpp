@@ -22,6 +22,7 @@ void WifiListMenu::setBackNavOverride(bool override) {
 
 void WifiListMenu::onEnter(App* app) {
     WifiManager& wifi = app->getWifiManager();
+    selectedIndex_ = 0;
 
     if (scanOnEnter_) {
         // This is for a full, slow re-scan.

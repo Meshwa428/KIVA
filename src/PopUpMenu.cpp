@@ -22,7 +22,10 @@ void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallb
 }
 
 void PopUpMenu::onEnter(App* app) {
-    selectedOption_ = 0; // Default to cancel/first option
+    // If there is no "Cancel" button, default the selection to "Confirm" (option 1).
+    // Otherwise, default to "Cancel" (option 0).
+    bool hasCancelButton = !cancelText_.empty();
+    selectedOption_ = hasCancelButton ? 0 : 1;
     overlayScale_ = 0.0f;
 }
 
@@ -47,12 +50,17 @@ void PopUpMenu::onExit(App* app) {
 }
 
 void PopUpMenu::handleInput(App* app, InputEvent event) {
+    bool hasCancelButton = !cancelText_.empty();
+
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::ENCODER_CCW:
         case InputEvent::BTN_LEFT_PRESS:
         case InputEvent::BTN_RIGHT_PRESS:
-            selectedOption_ = 1 - selectedOption_; // Toggle between 0 (Cancel) and 1 (Confirm)
+            // Only allow toggling if there are two buttons.
+            if (hasCancelButton) {
+                selectedOption_ = 1 - selectedOption_; // Toggle between 0 (Cancel) and 1 (Confirm)
+            }
             break;
 
         case InputEvent::BTN_ENCODER_PRESS:
@@ -73,7 +81,7 @@ void PopUpMenu::handleInput(App* app, InputEvent event) {
                     // If there's no callback, OK just acts like Cancel/Back.
                     app->changeMenu(MenuType::BACK);
                 }
-            } else { // Cancel button pressed
+            } else { // Cancel button pressed (only possible if hasCancelButton is true)
                 app->changeMenu(MenuType::BACK); // Dismiss the popup
             }
             break;
@@ -95,15 +103,19 @@ void PopUpMenu::draw(App* app, U8G2& display) {
     if (overlayScale_ <= 0.05f) return;
 
     int baseW = 110;
-    int baseH = 55;
+    int baseH = 52; // Reduced height to ensure it fits below status bar
 
     int w = (int)(baseW * overlayScale_);
     int h = (int)(baseH * overlayScale_);
     if (w < 1 || h < 1) return;
 
     int x = (display.getDisplayWidth() - w) / 2;
-    int y = (display.getDisplayHeight() - h) / 2;
-    y = std::max(y, (int)STATUS_BAR_H + 3);
+
+    // This calculation correctly centers the popup in the available space
+    // *below* the status bar, preventing it from being cut off.
+    int drawable_area_y_start = STATUS_BAR_H + 1; // Start 1px below the status bar line
+    int drawable_area_height = display.getDisplayHeight() - drawable_area_y_start;
+    int y = drawable_area_y_start + (drawable_area_height - h) / 2;
 
     display.setDrawColor(1);
     drawRndBox(display, x, y, w, h, 3, true);
@@ -122,38 +134,54 @@ void PopUpMenu::draw(App* app, U8G2& display) {
     std::vector<const uint8_t*> fonts = {u8g2_font_6x10_tf, u8g2_font_5x7_tf};
     drawWrappedText(display, message_.c_str(), x + padding, y + 16, w - 2 * padding, 22, fonts);
 
-    // Buttons
+    // --- BUTTON DRAWING LOGIC ---
     display.setFont(u8g2_font_6x10_tf);
-    int opt_y_base = y + h - padding - 2;
+    // --- MODIFIED: Adjusted opt_y_base to move buttons down by 2px ---
+    int opt_y_base = y + h - padding;
     int opt_h = 12;
     int opt_y = opt_y_base - opt_h;
 
-    int opt0_w = display.getStrWidth(cancelText_.c_str()) + 8;
-    int opt1_w = display.getStrWidth(confirmText_.c_str()) + 8;
-    int total_w = opt0_w + opt1_w + 10;
-    int start_x = x + (w - total_w) / 2;
+    bool hasCancelButton = !cancelText_.empty();
 
-    // Draw Cancel Button
-    if (selectedOption_ == 0) {
-        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, true);
-        display.setDrawColor(1);
-    } else {
-        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, false);
+    if (hasCancelButton) {
+        // --- Two-button logic (for "OK/Cancel" dialogs) ---
+        int opt0_w = display.getStrWidth(cancelText_.c_str()) + 8;
+        int opt1_w = display.getStrWidth(confirmText_.c_str()) + 8;
+        int total_w = opt0_w + opt1_w + 10;
+        int start_x = x + (w - total_w) / 2;
+
+        // Draw Cancel Button
+        if (selectedOption_ == 0) {
+            drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, true);
+            display.setDrawColor(1);
+        } else {
+            drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, false);
+            display.setDrawColor(0);
+        }
+        display.drawStr(start_x + 4, opt_y + 9, cancelText_.c_str());
+
+        // Draw Confirm Button
         display.setDrawColor(0);
-    }
-    display.drawStr(start_x + 4, opt_y + 9, cancelText_.c_str());
+        int opt1_x = start_x + opt0_w + 10;
+        if (selectedOption_ == 1) {
+            drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, true);
+            display.setDrawColor(1);
+        } else {
+            drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, false);
+            display.setDrawColor(0);
+        }
+        display.drawStr(opt1_x + 4, opt_y + 9, confirmText_.c_str());
 
-    // Draw Confirm Button
-    display.setDrawColor(0);
-    int opt1_x = start_x + opt0_w + 10;
-    if (selectedOption_ == 1) {
+    } else {
+        // --- One-button logic (for "OK" dialogs) ---
+        int opt1_w = display.getStrWidth(confirmText_.c_str()) + 8;
+        int opt1_x = x + (w - opt1_w) / 2; // Center the single button
+
+        // The only option is "confirm", so it's always selected.
         drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, true);
-        display.setDrawColor(1);
-    } else {
-        drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, false);
-        display.setDrawColor(0);
+        display.setDrawColor(1); // The text color is inverted (white on black bg)
+        display.drawStr(opt1_x + 4, opt_y + 9, confirmText_.c_str());
     }
-    display.drawStr(opt1_x + 4, opt_y + 9, confirmText_.c_str());
 
     display.setDrawColor(1);
 }

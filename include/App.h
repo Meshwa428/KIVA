@@ -17,6 +17,9 @@
 #include "OtaManager.h"
 #include "FirmwareListMenu.h"
 #include "OtaStatusMenu.h"
+#include "Jammer.h"
+#include "ChannelSelectionMenu.h" // <-- ADD
+#include "JammingActiveMenu.h"    // <-- ADD
 
 class App {
 public:
@@ -32,6 +35,7 @@ public:
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
     OtaManager& getOtaManager() { return otaManager_; }
+    Jammer& getJammer() { return jammer_; }
     TextInputMenu& getTextInputMenu() { return textInputMenu_; }
     IMenu* getMenu(MenuType type);
 
@@ -68,12 +72,16 @@ private:
     CarouselMenu utilitiesMenu_;
     GridMenu wifiToolsMenu_;
     GridMenu firmwareUpdateGrid_;
+    GridMenu jammingToolsMenu_;
     WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
     PopUpMenu popUpMenu_;
     FirmwareListMenu firmwareListMenu_;
     OtaStatusMenu otaStatusMenu_;
+    Jammer jammer_;
+    ChannelSelectionMenu channelSelectionMenu_;
+    JammingActiveMenu jammingActiveMenu_;
 };
 
 #endif

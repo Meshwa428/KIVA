@@ -10,6 +10,7 @@ FirmwareListMenu::FirmwareListMenu() :
 {}
 
 void FirmwareListMenu::onEnter(App* app) {
+    selectedIndex_ = 0;
     OtaManager& ota = app->getOtaManager();
     ota.scanSdForFirmware(); // Re-scan the SD card for firmware every time this menu is entered.
     

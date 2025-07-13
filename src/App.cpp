@@ -1,6 +1,7 @@
 #include "App.h"
 #include "Icons.h" 
 #include "UI_Utils.h"
+#include "Jammer.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
@@ -11,43 +12,116 @@ App::App() :
     currentProgressBarFillPx_(0.0f),
     mainMenu_(), // Uses default constructor
     toolsMenu_("Tools", {
-        {"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
-        {"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
+        MenuItem{"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     gamesMenu_("Games", {
-        {"Snake", IconType::GAME_SNAKE, MenuType::NONE},
-        {"Tetris", IconType::GAME_TETRIS, MenuType::NONE},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::NONE},
+        MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::NONE},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     settingsMenu_("Settings", {
-        {"WiFi", IconType::NET_WIFI, MenuType::WIFI_LIST},
-        {"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
-        {"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE,
+            [](App* app) {
+                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
+                if (wifiMenu) {
+                    wifiMenu->setScanOnEnter(true);
+                }
+                app->changeMenu(MenuType::WIFI_LIST);
+            }
+        },
+        MenuItem{"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
+        MenuItem{"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     utilitiesMenu_("Utilities", {
-        {"Vibration", IconType::UI_VIBRATION, MenuType::NONE},
-        {"Laser", IconType::UI_LASER, MenuType::NONE},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"Vibration", IconType::UI_VIBRATION, MenuType::NONE,
+            [](App* app) {
+                HardwareManager& hw = app->getHardwareManager();
+                hw.setVibration(!hw.isVibrationOn());
+            }
+        },
+        MenuItem{"Laser", IconType::UI_LASER, MenuType::NONE,
+            [](App* app) {
+                HardwareManager& hw = app->getHardwareManager();
+                hw.setLaser(!hw.isLaserOn());
+            }
+        },
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiToolsMenu_("WiFi Tools", {
-        {"Beacon Spam", IconType::TOOL_INJECTION, MenuType::NONE},
-        {"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"Beacon Spam", IconType::TOOL_INJECTION, MenuType::NONE},
+        MenuItem{"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
-        {"Web Update", IconType::NET_WIFI, MenuType::NONE}, // Logic handled in GridMenu
-        {"SD Card", IconType::INFO, MenuType::FIRMWARE_LIST_SD}, // Can navigate directly
-        {"Basic OTA", IconType::TOOL_INJECTION, MenuType::NONE}, // Logic handled in GridMenu
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
+        MenuItem{"Web Update", IconType::NET_WIFI, MenuType::NONE,
+            [](App* app) {
+                if (app->getOtaManager().startWebUpdate()) {
+                    app->changeMenu(MenuType::OTA_STATUS);
+                } else {
+                    app->showPopUp("Error", "Failed to start Web AP.", nullptr, "OK", "", true);
+                }
+            }
+        },
+        MenuItem{"SD Card", IconType::INFO, MenuType::FIRMWARE_LIST_SD}, 
+        MenuItem{"Basic OTA", IconType::TOOL_INJECTION, MenuType::NONE,
+            [](App* app) {
+                app->getOtaManager().startBasicOta();
+            }
+        },
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+    jammingToolsMenu_("Jammer", {
+        MenuItem{"BLE", IconType::NET_BLUETOOTH, MenuType::NONE,
+            [](App* app) {
+                JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if(jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::BLE);
+                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
+            [](App* app) {
+                JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if(jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
+                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
+            [](App* app) {
+                JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if(jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
+                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"Wide Spectrum", IconType::TOOL_JAMMING, MenuType::NONE,
+            [](App* app) {
+                JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if(jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
+                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     wifiListMenu_(),
     textInputMenu_(),
     connectionStatusMenu_(),
     popUpMenu_(),
     firmwareListMenu_(),
-    otaStatusMenu_()
+    otaStatusMenu_(),
+    channelSelectionMenu_(),
+    jammingActiveMenu_(),
+    jammer_()
 {
     // Initialize the small display log buffer
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
@@ -127,6 +201,7 @@ void App::setup() {
     SdCardManager::setup(); // Setup SD Card first
     wifiManager_.setup(this);   // Then WifiManager which may depend on it. Pass App context.
     otaManager_.setup(this, &wifiManager_);
+    jammer_.setup(this);
     
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -134,14 +209,22 @@ void App::setup() {
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
     menuRegistry_[MenuType::SETTINGS_CAROUSEL] = &settingsMenu_;
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
+
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
-    menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
-    menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
-    menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
-    menuRegistry_[MenuType::POPUP] = &popUpMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
-    menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
+    menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
+
+    menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
+    menuRegistry_[MenuType::POPUP] = &popUpMenu_;
+
     menuRegistry_[MenuType::OTA_STATUS] = &otaStatusMenu_;
+    menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
+    
+    menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
+    menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
+
+    menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
+    menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -152,6 +235,7 @@ void App::loop() {
     hardware_.update();
     wifiManager_.update();
     otaManager_.loop();
+    jammer_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;

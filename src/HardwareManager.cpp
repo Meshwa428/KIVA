@@ -1,14 +1,21 @@
 #include "HardwareManager.h"
 #include <Arduino.h>
-#include <numeric> // Required for std::accumulate
+#include <numeric>
+#include <WiFi.h>
 
-HardwareManager::HardwareManager() : u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
+// --- Constructor ---
+HardwareManager::HardwareManager() : 
+                                     u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
                                      u8g2_small_(U8G2_R0, U8X8_PIN_NONE),
+                                     // --- CORRECTED: Use the constructor with SPI speed ---
+                                     radio1_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, SPI_SPEED_NRF), 
+                                     radio2_(Pins::NRF2_CE_PIN, Pins::NRF2_CSN_PIN, SPI_SPEED_NRF), 
+                                     currentRfClient_(RfClient::NONE),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
                                      isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.5f),
-                                     trendBufferIndex_(0), trendBufferFilled_(false)
+                                     trendBufferIndex_(0), trendBufferFilled_(false), highPerformanceMode_(false)
 {
     // Initialize input button states
     for (int i = 0; i < 8; ++i)
@@ -59,23 +66,121 @@ void HardwareManager::setup()
     setupTime_ = millis();
 }
 
+HardwareManager::RfLock::RfLock(HardwareManager& manager, bool success) 
+    : manager_(manager), valid_(success) {}
+
+HardwareManager::RfLock::~RfLock() {
+    if (valid_) {
+        manager_.releaseRfControl();
+    }
+}
+
+void HardwareManager::releaseRfControl() {
+    Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
+    if (currentRfClient_ == RfClient::NRF_JAMMER) {
+        if (radio1_.isChipConnected()) radio1_.powerDown();
+        if (radio2_.isChipConnected()) radio2_.powerDown();
+    } else if (currentRfClient_ == RfClient::WIFI) {
+        WiFi.mode(WIFI_OFF);
+    }
+    currentRfClient_ = RfClient::NONE;
+}
+
+std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfClient client) {
+    if (client == currentRfClient_) {
+        return std::unique_ptr<RfLock>(new RfLock(*this, true));
+    }
+
+    if (currentRfClient_ != RfClient::NONE) {
+        Serial.printf("[HW-RF] DENIED request from client %d. Lock held by %d\n", (int)client, (int)currentRfClient_);
+        return std::unique_ptr<RfLock>(new RfLock(*this, false)); 
+    }
+
+    Serial.printf("[HW-RF] GRANTED request for client %d\n", (int)client);
+
+    if (client == RfClient::NRF_JAMMER) {
+        WiFi.mode(WIFI_OFF);
+        delay(100);
+        
+        // The library now handles the SPI settings during begin()
+        bool r1_ok = radio1_.begin() && radio1_.isChipConnected();
+        bool r2_ok = radio2_.begin() && radio2_.isChipConnected();
+
+        if (r1_ok || r2_ok) {
+            currentRfClient_ = RfClient::NRF_JAMMER;
+            auto lock = std::unique_ptr<RfLock>(new RfLock(*this, true));
+            if (r1_ok) {
+                radio1_.powerUp();
+                radio1_.setAutoAck(false);
+                radio1_.stopListening();
+                radio1_.setRetries(0, 0);
+                radio1_.setPayloadSize(5);
+                radio1_.setAddressWidth(3);
+                radio1_.setPALevel(RF24_PA_MAX, true);
+                radio1_.setDataRate(RF24_2MBPS);
+                radio1_.setCRCLength(RF24_CRC_DISABLED);
+                lock->radio1 = &radio1_;
+            }
+            if (r2_ok) {
+                radio2_.powerUp();
+                radio2_.setAutoAck(false);
+                radio2_.stopListening();
+                radio2_.setRetries(0, 0);
+                radio2_.setPayloadSize(5);
+                radio2_.setAddressWidth(3);
+                radio2_.setPALevel(RF24_PA_MAX, true);
+                radio2_.setDataRate(RF24_2MBPS);
+                radio2_.setCRCLength(RF24_CRC_DISABLED);
+                lock->radio2 = &radio2_;
+            }
+            return lock;
+        } else {
+             return std::unique_ptr<RfLock>(new RfLock(*this, false));
+        }
+
+    } else if (client == RfClient::WIFI) {
+        if (radio1_.isChipConnected()) radio1_.powerDown();
+        if (radio2_.isChipConnected()) radio2_.powerDown();
+        WiFi.mode(WIFI_STA); 
+        currentRfClient_ = RfClient::WIFI;
+        return std::unique_ptr<RfLock>(new RfLock(*this, true));
+    }
+
+    return std::unique_ptr<RfLock>(new RfLock(*this, false));
+}
+
 void HardwareManager::update()
 {
-    if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS)
-    {
+    // --- Define intervals based on performance mode ---
+    static unsigned long lastInputPollTime = 0;
+    const unsigned long currentPollInterval = highPerformanceMode_ 
+                                            ? 200 // Slow poll interval for jamming
+                                            : 8;  // Fast poll interval for normal UI
+
+    if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
         updateBattery();
     }
 
-    processEncoder();
-    processButton_PCF0();
-    processButtons_PCF1();
-
-    processButtonRepeats();
+    if (millis() - lastInputPollTime >= currentPollInterval) {
+        processEncoder();
+        processButton_PCF0();
+        processButtons_PCF1();
+        processButtonRepeats();
+        lastInputPollTime = millis();
+    }
 }
 
-void HardwareManager::updateBattery() {
+// --- NEW METHOD IMPLEMENTATION ---
+void HardwareManager::setPerformanceMode(bool highPerf) {
+    highPerformanceMode_ = highPerf;
+    Serial.printf("[HW-LOG] Performance mode set to: %s\n", highPerf ? "HIGH (Jamming)" : "NORMAL (UI)");
+}
+
+void HardwareManager::updateBattery()
+{
     unsigned long currentTime = millis();
-    if (currentTime - lastBatteryCheckTime_ < Battery::CHECK_INTERVAL_MS) {
+    if (currentTime - lastBatteryCheckTime_ < Battery::CHECK_INTERVAL_MS)
+    {
         return;
     }
     lastBatteryCheckTime_ = currentTime;
@@ -84,15 +189,22 @@ void HardwareManager::updateBattery() {
     float rawVoltage = readRawBatteryVoltage();
 
     // 2. Perform weighted moving average smoothing for a stable display value
-    if (!batteryInitialized_) {
-        for (int i = 0; i < Battery::NUM_SAMPLES; i++) { batteryReadings_[i] = rawVoltage; }
+    if (!batteryInitialized_)
+    {
+        for (int i = 0; i < Battery::NUM_SAMPLES; i++)
+        {
+            batteryReadings_[i] = rawVoltage;
+        }
         batteryInitialized_ = true;
         currentSmoothedVoltage_ = rawVoltage;
-    } else {
+    }
+    else
+    {
         batteryReadings_[batteryIndex_] = rawVoltage;
         batteryIndex_ = (batteryIndex_ + 1) % Battery::NUM_SAMPLES;
         float weightedSum = 0, totalWeight = 0;
-        for (int i = 0; i < Battery::NUM_SAMPLES; i++) {
+        for (int i = 0; i < Battery::NUM_SAMPLES; i++)
+        {
             float weight = 1.0f + (float)i / Battery::NUM_SAMPLES;
             int idx = (batteryIndex_ - 1 - i + Battery::NUM_SAMPLES) % Battery::NUM_SAMPLES;
             weightedSum += batteryReadings_[idx] * weight;
@@ -104,53 +216,70 @@ void HardwareManager::updateBattery() {
     // 3. Update the trend buffer with the NEWLY SMOOTHED voltage
     voltageTrendBuffer_[trendBufferIndex_] = currentSmoothedVoltage_;
     trendBufferIndex_ = (trendBufferIndex_ + 1) % TREND_SAMPLES;
-    if (!trendBufferFilled_ && trendBufferIndex_ == 0) {
+    if (!trendBufferFilled_ && trendBufferIndex_ == 0)
+    {
         trendBufferFilled_ = true;
     }
 
     // 4. --- NEW HYBRID CHARGING DETECTION LOGIC ---
     const float FULLY_CHARGED_THRESHOLD = 4.25f; // A voltage at which charging current typically drops to near zero.
-    
-    if (trendBufferFilled_) {
+
+    if (trendBufferFilled_)
+    {
         // We have enough data for trend analysis.
-        
+
         // Calculate the slope of the voltage trend.
         float sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
-        for (int i = 0; i < TREND_SAMPLES; ++i) {
+        for (int i = 0; i < TREND_SAMPLES; ++i)
+        {
             float y = voltageTrendBuffer_[i];
             float x = (float)i;
-            sum_x += x; sum_y += y; sum_xy += x * y; sum_x2 += x * x;
+            sum_x += x;
+            sum_y += y;
+            sum_xy += x * y;
+            sum_x2 += x * x;
         }
-        
+
         float denominator = (TREND_SAMPLES * sum_x2) - (sum_x * sum_x);
         float slope = 0.0f;
-        if (abs(denominator) > 0.001f) {
+        if (abs(denominator) > 0.001f)
+        {
             slope = ((TREND_SAMPLES * sum_xy) - (sum_x * sum_y)) / denominator;
         }
 
-        const float chargingSlopeThreshold = 0.0015f;  // A rise of 1.5mV/sec indicates charging
+        const float chargingSlopeThreshold = 0.0015f;    // A rise of 1.5mV/sec indicates charging
         const float dischargingSlopeThreshold = -0.001f; // A drop of 1mV/sec indicates discharging
 
         // Now, apply the hybrid logic
-        if (currentSmoothedVoltage_ >= FULLY_CHARGED_THRESHOLD) {
+        if (currentSmoothedVoltage_ >= FULLY_CHARGED_THRESHOLD)
+        {
             // If voltage is at or above the 'full' threshold, the charging indicator should
             // only be on if the voltage is STILL actively rising. Otherwise, it's full and idle.
-            if (slope > chargingSlopeThreshold) {
+            if (slope > chargingSlopeThreshold)
+            {
                 isCharging_ = true; // Still in the final constant-voltage charging phase
-            } else {
+            }
+            else
+            {
                 isCharging_ = false; // Battery is full and stable, charger has stopped.
             }
-        } else {
+        }
+        else
+        {
             // If we are below the 'full' threshold, we rely purely on the slope.
-            if (slope > chargingSlopeThreshold) {
+            if (slope > chargingSlopeThreshold)
+            {
                 isCharging_ = true; // Actively charging
-            } else if (slope < dischargingSlopeThreshold) {
+            }
+            else if (slope < dischargingSlopeThreshold)
+            {
                 isCharging_ = false; // Actively discharging
             }
             // If in the dead-zone here, state is maintained. This is correct for an idle, partially-charged battery.
         }
-
-    } else {
+    }
+    else
+    {
         // Fallback before we have enough data for regression: use a simple voltage threshold.
         isCharging_ = (currentSmoothedVoltage_ > FULLY_CHARGED_THRESHOLD);
     }
