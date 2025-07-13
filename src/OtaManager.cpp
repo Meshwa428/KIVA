@@ -28,7 +28,6 @@ void OtaManager::loop() {
     if (state_ == OtaState::BASIC_ACTIVE) {
         ArduinoOTA.handle();
     }
-    // NEW: Handle chunked flashing
     if (state_ == OtaState::FLASHING) {
         loopFlashing();
     }
@@ -40,15 +39,10 @@ void OtaManager::loopFlashing() {
         state_ = OtaState::ERROR;
         return;
     }
-
-    // Define a buffer for chunking
     const size_t chunkSize = 4096;
     uint8_t buffer[chunkSize];
-
-    // Read a chunk from the file
     size_t bytesRead = uploadFile_.read(buffer, chunkSize);
     if (bytesRead > 0) {
-        // Write the chunk to the Update library
         if (Update.write(buffer, bytesRead) != bytesRead) {
             statusMessage_ = "Flash write failed";
             state_ = OtaState::ERROR;
@@ -58,8 +52,6 @@ void OtaManager::loopFlashing() {
         }
         progress_.receivedBytes += bytesRead;
     }
-
-    // Check if we're done
     if (progress_.receivedBytes == progress_.totalBytes) {
         uploadFile_.close();
         if (!Update.end()) {
@@ -67,8 +59,6 @@ void OtaManager::loopFlashing() {
             state_ = OtaState::ERROR;
             return;
         }
-        
-        // Success!
         state_ = OtaState::SUCCESS;
         saveCurrentFirmware(pendingFwInfo_);
         enterTerminalState();
@@ -83,8 +73,8 @@ const std::vector<FirmwareInfo>& OtaManager::getAvailableFirmwares() const { ret
 
 void OtaManager::stop() {
     if (state_ == OtaState::IDLE) return;
-    
     Serial.println("[OTA-LOG] Stopping active OTA process.");
+
     if (state_ == OtaState::WEB_ACTIVE) {
         webServer_.end();
     }
@@ -111,7 +101,6 @@ void OtaManager::resetState() {
 
 void OtaManager::enterTerminalState() {
     if (!app_) return;
-
     U8G2& display = app_->getHardwareManager().getMainDisplay();
     IMenu* otaMenu = app_->getMenu(MenuType::OTA_STATUS);
     if (!otaMenu) return;
@@ -121,7 +110,7 @@ void OtaManager::enterTerminalState() {
     app_->drawStatusBar();
     otaMenu->draw(app_, display);
     display.sendBuffer();
-    delay(2500); // Increased delay for better visibility
+    delay(2500);
 
     statusMessage_ = "Rebooting...";
     display.clearBuffer();
@@ -133,7 +122,6 @@ void OtaManager::enterTerminalState() {
     ESP.restart();
 }
 
-// ... (load/save/scan firmware are unchanged)
 void OtaManager::loadCurrentFirmware() {
     if (FirmwareUtils::parseMetadataFile(Firmware::CURRENT_FIRMWARE_INFO_FILENAME, currentFirmware_)) {
         Serial.printf("[OTA-LOG] Loaded current firmware: %s\n", currentFirmware_.version);
@@ -179,10 +167,8 @@ void OtaManager::scanSdForFirmware() {
         file = root.openNextFile();
     }
     root.close();
-    Serial.printf("[OTA-LOG] Found %d valid firmwares on SD card.\n", availableSdFirmwares_.size());
 }
 
-// Basic OTA can remain as-is since onProgress is non-blocking for it.
 void OtaManager::setupArduinoOta() {
     ArduinoOTA.setHostname(Firmware::OTA_HOSTNAME);
 
@@ -221,42 +207,49 @@ void OtaManager::setupArduinoOta() {
     });
 }
 
-bool OtaManager::startBasicOta() {
-    if (state_ != OtaState::IDLE) return false;
+void OtaManager::startBasicOta() { // NEW: Return type is void
+    if (state_ != OtaState::IDLE) return;
     
     if (wifiManager_->getState() != WifiState::CONNECTED) {
-        statusMessage_ = "WiFi Not Connected";
-        progress_.totalBytes = 0;
-        progress_.receivedBytes = 1; 
-
-        app_->setPostWifiAction([](App* app_ptr) {
-            if (app_ptr->getOtaManager().startBasicOta()) {
-                app_ptr->returnToMenu(MenuType::FIRMWARE_UPDATE_GRID);
-                app_ptr->changeMenu(MenuType::OTA_STATUS);
-            }
-        });
-
-        app_->showPopUp("WiFi Required", "Connect to use Basic OTA?", [this](App* app_cb) {
-            WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app_cb->getMenu(MenuType::WIFI_LIST));
-            if (wifiMenu) {
-                wifiMenu->setScanOnEnter(true);
-            }
-            app_cb->changeMenu(MenuType::WIFI_LIST);
-        });
         
-        return false;
+        app_->showPopUp("WiFi Required", "Connect to use Basic OTA?", 
+            // onConfirm:
+            [this](App* app_cb) {
+                // Get the WifiListMenu instance
+                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app_cb->getMenu(MenuType::WIFI_LIST));
+                if (wifiMenu) {
+                    // Set the flag to override the back button
+                    wifiMenu->setBackNavOverride(true);
+                    wifiMenu->setScanOnEnter(true);
+                }
+                // Navigate to the menu
+                app_cb->changeMenu(MenuType::WIFI_LIST);
+            }, 
+            "OK", "Cancel", false);
+        
+        return; // Just return
     }
-    
+
+    // This part executes if WiFi is ALREADY connected.
     resetState();
     state_ = OtaState::BASIC_ACTIVE;
-    statusMessage_ = "Waiting for IDE";
+
+    String password = SdCardManager::readFile(Firmware::OTA_AP_PASSWORD_FILE);
+    password.trim();
+    if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {
+        statusMessage_ = "P: " + password;
+    } else {
+        statusMessage_ = "P: (none)";
+    }
+    
     displayIpAddress_ = WiFi.localIP().toString();
     ArduinoOTA.begin();
     Serial.println("[OTA-LOG] Basic OTA (IDE) started.");
-    return true;
+    
+    // NEW: Directly navigate to the status menu
+    app_->changeMenu(MenuType::OTA_STATUS);
 }
 
-// REFACTORED SD UPDATE
 void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
     if (state_ != OtaState::IDLE) return;
     resetState();
@@ -270,7 +263,7 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
     }
 
     String binPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + fwInfo.binary_filename;
-    uploadFile_ = SD.open(binPath, FILE_READ); // Open the file
+    uploadFile_ = SD.open(binPath, FILE_READ);
     if (!uploadFile_) {
         statusMessage_ = "Firmware file error";
         state_ = OtaState::ERROR;
@@ -292,7 +285,6 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
         return;
     }
 
-    // Setup for chunked flashing
     pendingFwInfo_ = fwInfo;
     progress_.totalBytes = updateSize;
     progress_.receivedBytes = 0;
@@ -300,7 +292,6 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
     state_ = OtaState::FLASHING;
 }
 
-// ... (startWebUpdate and setupWebServer are unchanged)
 bool OtaManager::startWebUpdate() {
     if (state_ != OtaState::IDLE) return false;
     resetState();
@@ -350,7 +341,6 @@ void OtaManager::setupWebServer() {
     );
 }
 
-// onUpload is now ONLY for saving the file to SD, not flashing.
 void OtaManager::onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     if (index == 0) {
         Serial.printf("[OTA-WEB] Upload Start: %s\n", filename.c_str());
@@ -409,22 +399,17 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
         return;
     }
 
-    // --- NEW LOGIC: Save a permanent copy with a timestamp-based name ---
-    String pathToFlash = tempPath; // Default to flashing from the temp file
+    String pathToFlash = tempPath;
     
-    // Generate a unique filename using millis()
     unsigned long timestamp = millis();
     String baseFilename = "fw_" + String(timestamp);
     String permanentBinFilename = baseFilename + ".bin";
     String permanentBinPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + permanentBinFilename;
 
-    // RENAME the temp file to its permanent name. This is faster than copying.
     if (SdCardManager::renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
         Serial.printf("[OTA-WEB] Saved new firmware as %s\n", permanentBinPath.c_str());
         
-        // Create the corresponding metadata file (.kfw)
         FirmwareInfo newFwInfo;
-        // The version name is now based on the timestamp for easy identification
         snprintf(newFwInfo.version, FW_VERSION_MAX_LEN, "Web Upload %lu", timestamp);
         snprintf(newFwInfo.build_date, FW_BUILD_DATE_MAX_LEN, "%s %s", __DATE__, __TIME__);
         strcpy(newFwInfo.checksum_md5, md5.c_str());
@@ -435,14 +420,11 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
         String kfwPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + baseFilename + Firmware::METADATA_EXTENSION;
         FirmwareUtils::saveMetadataFile(kfwPath, newFwInfo);
         
-        // Update the path we will use for flashing
         pathToFlash = permanentBinPath;
     } else {
         Serial.println("[OTA-WEB] ERROR: Failed to rename temp file. Will flash from temp path without saving.");
     }
-    // --- END NEW LOGIC ---
 
-    // Now, continue with the original flashing logic, using the determined path
     uploadFile_ = SD.open(pathToFlash, FILE_READ);
     if (!uploadFile_) {
         state_ = OtaState::ERROR;
@@ -462,7 +444,6 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
 
     request->send(200, "text/plain", "Success");
 
-    // Populate the pendingFwInfo for saving to current_fw.json after a successful flash
     snprintf(pendingFwInfo_.version, FW_VERSION_MAX_LEN, "Web Upload %lu", timestamp);
     snprintf(pendingFwInfo_.build_date, FW_BUILD_DATE_MAX_LEN, "%s %s", __DATE__, __TIME__);
     strcpy(pendingFwInfo_.checksum_md5, md5.c_str());

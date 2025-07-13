@@ -20,6 +20,7 @@ public:
     MenuType getMenuType() const override { return MenuType::WIFI_LIST; }
     
     void setScanOnEnter(bool scan);
+    void setBackNavOverride(bool override); // <-- NEW
 
 private:
     void scroll(int direction);
@@ -28,14 +29,11 @@ private:
 
     enum class ListItemType { NETWORK, SCAN, BACK };
     
-    // --- MODIFIED: Self-contained struct ---
     struct DisplayItem {
         std::string label;
         ListItemType type;
-        // Data for drawing, copied from source. No more lookups!
         int8_t rssi;
         bool isSecure;
-        // We still need the original index for the 'connect' action.
         int originalNetworkIndex; 
     };
 
@@ -45,6 +43,7 @@ private:
     bool scanOnEnter_ = true;
     uint32_t lastKnownScanCount_;
     bool isScanning_;
+    bool backNavOverride_ = false; // <-- NEW FLAG
 
     // Marquee State
     char marqueeText_[40];

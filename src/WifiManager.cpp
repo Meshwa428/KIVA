@@ -14,7 +14,7 @@ WifiManager::WifiManager() :
     app_(nullptr),
     state_(WifiState::OFF),
     hardwareEnabled_(false),
-    networksLoaded_(false), // Initialize flag
+    networksLoaded_(false),
     connectionStartTime_(0),
     scanCompletionCount_(0)
 {
@@ -25,16 +25,29 @@ WifiManager::WifiManager() :
 void WifiManager::setup(App* app) {
     app_ = app;
     WiFi.onEvent(WiFiEventCallback);
+    WiFi.setAutoReconnect(false);
     WiFi.mode(WIFI_OFF);
     statusMessage_ = "WiFi Off";
 }
 
 void WifiManager::update() {
     if (state_ == WifiState::CONNECTING && (millis() - connectionStartTime_) > WIFI_CONNECTION_TIMEOUT_MS) {
-        Serial.println("[WIFI-LOG] Connection timed out.");
-        state_ = WifiState::CONNECTION_FAILED;
+        Serial.println("[WIFI-LOG] Connection definitively timed out.");
+        state_ = WifiState::CONNECTION_FAILED; // Set the final state here.
+
+        // Increment the failure counter here, as this is the true failure point.
+        KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
+        if (known) {
+            known->failureCount++;
+            Serial.printf("[WIFI-LOG] Connection to '%s' failed on timeout. Count is now %d.\n", known->ssid, known->failureCount);
+            saveKnownNetworks();
+        }
+
+        // Set the final status message.
         statusMessage_ = "Timeout";
-        disconnect(); // Call disconnect to clean up
+
+        // We must explicitly stop the connection attempt now.
+        WiFi.disconnect();
     }
 }
 
@@ -55,9 +68,7 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
                 hardwareEnabled_ = true;
                 state_ = WifiState::IDLE;
                 statusMessage_ = "Idle";
-                Serial.println("[WIFI-LOG] WiFi STA mode enabled.");
             } else {
-                 Serial.println("[WIFI-LOG] ERROR: WiFi.mode(WIFI_STA) failed!");
                  hardwareEnabled_ = false; state_ = WifiState::OFF; statusMessage_ = "Enable Fail";
             }
         } else if (mode == WifiMode::AP) {
@@ -69,17 +80,13 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
                     hardwareEnabled_ = true;
                     state_ = WifiState::IDLE;
                     statusMessage_ = "AP Active";
-                    Serial.printf("[WIFI-LOG] AP Mode Enabled. SSID: %s, IP: %s\n", ap_ssid, WiFi.softAPIP().toString().c_str());
                     if (MDNS.begin(Firmware::OTA_HOSTNAME)) {
                         MDNS.addService("http", "tcp", 80);
-                        Serial.println("[WIFI-LOG] MDNS responder started.");
                     }
                 } else {
-                     Serial.println("[WIFI-LOG] ERROR: WiFi.softAP() failed!");
                      hardwareEnabled_ = false; state_ = WifiState::OFF; statusMessage_ = "AP Fail";
                 }
             } else {
-                 Serial.println("[WIFI-LOG] ERROR: WiFi.mode(WIFI_AP) failed!");
                  hardwareEnabled_ = false; state_ = WifiState::OFF; statusMessage_ = "Enable Fail";
             }
         }
@@ -94,18 +101,16 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
             state_ = WifiState::OFF;
             statusMessage_ = "WiFi Off";
             scannedNetworks_.clear();
-            
             knownNetworks_.clear();
             networksLoaded_ = false;
-            Serial.println("[WIFI-LOG] Cleared known networks from RAM.");
         }
     }
 }
 
-
 void WifiManager::startScan() {
     if (!hardwareEnabled_ || WiFi.getMode() != WIFI_STA) {
-        return; 
+        setHardwareState(true, WifiMode::STA);
+        delay(100);
     }
     if (state_ == WifiState::SCANNING) return;
 
@@ -116,6 +121,7 @@ void WifiManager::startScan() {
     WiFi.scanNetworks(true);
 }
 
+
 bool WifiManager::tryConnectKnown(const char* ssid) {
     if (!networksLoaded_) {
         loadKnownNetworks();
@@ -124,13 +130,10 @@ bool WifiManager::tryConnectKnown(const char* ssid) {
     KnownWifiNetwork* known = findKnownNetwork(ssid);
     const int MAX_FAILURES = 3;
 
+    // --- FIX: Check failure count BEFORE attempting to connect ---
     if (known && known->failureCount < MAX_FAILURES) {
-        Serial.printf("[WIFI-LOG] Found known network '%s' with %d failures. Trying to auto-connect.\n", ssid, known->failureCount);
-        setSsidToConnect(ssid);
-        state_ = WifiState::CONNECTING;
-        statusMessage_ = "Connecting...";
-        connectionStartTime_ = millis();
-        WiFi.begin(ssid, known->password);
+        Serial.printf("[WIFI-LOG] Found known network '%s' (Failures: %d). Trying to auto-connect.\n", ssid, known->failureCount);
+        connectWithPassword(known->password);
         return true;
     }
     
@@ -144,6 +147,7 @@ bool WifiManager::tryConnectKnown(const char* ssid) {
 
 void WifiManager::connectOpen(const char* ssid) {
     if (!hardwareEnabled_ || WiFi.getMode() != WIFI_STA) setHardwareState(true, WifiMode::STA);
+    WiFi.disconnect(); // Disconnect from any previous network first.
     setSsidToConnect(ssid);
     state_ = WifiState::CONNECTING;
     statusMessage_ = "Connecting...";
@@ -153,6 +157,7 @@ void WifiManager::connectOpen(const char* ssid) {
 
 void WifiManager::connectWithPassword(const char* password) {
     if (!hardwareEnabled_ || WiFi.getMode() != WIFI_STA) setHardwareState(true, WifiMode::STA);
+    WiFi.disconnect(); // Disconnect from any previous network first.
     addOrUpdateKnownNetwork(ssidToConnect_, password);
     state_ = WifiState::CONNECTING;
     statusMessage_ = "Connecting...";
@@ -161,18 +166,13 @@ void WifiManager::connectWithPassword(const char* password) {
 }
 
 void WifiManager::disconnect() {
-    // This is now a full state reset function.
-    if (state_ == WifiState::IDLE || state_ == WifiState::OFF) return;
-    
-    Serial.println("[WIFI-LOG] Disconnecting and resetting state.");
+    if (state_ != WifiState::CONNECTED) return;
+    WiFi.disconnect(true); // true to wipe station config
     state_ = WifiState::IDLE;
     statusMessage_ = "Disconnected";
     connectionStartTime_ = 0;
-    ssidToConnect_[0] = '\0';
-    WiFi.disconnect(true);
 }
 
-// --- Getters ---
 WifiState WifiManager::getState() const { return state_; }
 bool WifiManager::isHardwareEnabled() const { return hardwareEnabled_; }
 const std::vector<WifiNetworkInfo>& WifiManager::getScannedNetworks() const { return scannedNetworks_; }
@@ -195,115 +195,75 @@ uint32_t WifiManager::getScanCompletionCount() const {
 }
 
 void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
-    Serial.printf("[WIFI-EVENT] Event: %d\n", event);
     switch (event) {
-        case ARDUINO_EVENT_WIFI_SCAN_DONE:
-        {
+        case ARDUINO_EVENT_WIFI_SCAN_DONE: {
             scanCompletionCount_++;
             int n = WiFi.scanComplete();
             if (n < 0) {
-                if (state_ != WifiState::CONNECTED) {
+                if (state_ == WifiState::SCANNING) {
                     state_ = WifiState::SCAN_FAILED;
                     statusMessage_ = "Scan Failed";
                 }
-                return;
-            }
-            
-            scannedNetworks_.clear(); 
-            for (int i = 0; i < n; ++i) {
-                WifiNetworkInfo net;
-                strncpy(net.ssid, WiFi.SSID(i).c_str(), sizeof(net.ssid)-1);
-                net.ssid[sizeof(net.ssid)-1] = '\0';
-                net.rssi = WiFi.RSSI(i);
-                net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-                scannedNetworks_.push_back(net);
-            }
-            
-            std::sort(scannedNetworks_.begin(), scannedNetworks_.end(), [](const WifiNetworkInfo& a, const WifiNetworkInfo& b) {
-                return a.rssi > b.rssi;
-            });
-
-            if (state_ != WifiState::CONNECTED) {
-                state_ = WifiState::IDLE;
-                statusMessage_ = String(scannedNetworks_.size()) + " networks";
+            } else {
+                scannedNetworks_.clear(); 
+                for (int i = 0; i < n; ++i) {
+                    WifiNetworkInfo net;
+                    strncpy(net.ssid, WiFi.SSID(i).c_str(), sizeof(net.ssid)-1);
+                    net.ssid[sizeof(net.ssid)-1] = '\0';
+                    net.rssi = WiFi.RSSI(i);
+                    net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+                    scannedNetworks_.push_back(net);
+                }
+                std::sort(scannedNetworks_.begin(), scannedNetworks_.end(), [](const WifiNetworkInfo& a, const WifiNetworkInfo& b) { return a.rssi > b.rssi; });
+                if (state_ == WifiState::SCANNING) {
+                    state_ = WifiState::IDLE;
+                    statusMessage_ = String(scannedNetworks_.size()) + " networks";
+                }
             }
             break;
         }
 
-        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        { 
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP: { 
             state_ = WifiState::CONNECTED;
-            statusMessage_ = "Connected: " + WiFi.SSID();
+            statusMessage_ = "Connected";
             
             KnownWifiNetwork* known = findKnownNetwork(WiFi.SSID().c_str());
             if(known && known->failureCount > 0) {
+                Serial.printf("[WIFI-LOG] Connection to '%s' successful. Resetting failure count.\n", known->ssid);
                 known->failureCount = 0;
                 saveKnownNetworks();
-            }
-            
-            if (app_) {
-                app_->executePostWifiAction();
             }
             break;
         } 
 
-        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        {
+        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t disconnected_info = info.wifi_sta_disconnected;
-            
-            char event_ssid[33] = {0};
-            uint8_t len_to_copy = disconnected_info.ssid_len < sizeof(event_ssid) - 1 ? disconnected_info.ssid_len : sizeof(event_ssid) - 1;
-            memcpy(event_ssid, disconnected_info.ssid, len_to_copy);
-
-            Serial.printf("[WIFI-EVENT] STA_DISCONNECTED from SSID: '%s', reason: %d\n", event_ssid, disconnected_info.reason);
-
-            // --- CRITICAL FIX: Only treat as a failure if we were trying to connect to THIS specific SSID ---
-            if (state_ == WifiState::CONNECTING && strcmp(ssidToConnect_, event_ssid) == 0) {
-                Serial.printf("[WIFI-LOG] Disconnect matches current attempt for '%s'. Marking as failed.\n", ssidToConnect_);
-                
-                state_ = WifiState::CONNECTION_FAILED;
-                
+            if (state_ == WifiState::CONNECTING) { // Only act if we were trying to connect
+                // --- NEW LOGIC ---
+                // The connection process is still ongoing. The timeout in WifiManager::update()
+                // is now the SOLE arbiter of a definitive connection failure. An intermediate
+                // disconnect event is not a definitive failure. We do NOT change state here.
+                Serial.printf("[WIFI-LOG] Intermediate disconnect during connection. Reason: %d. Waiting for timeout or success.\n", disconnected_info.reason);
                 switch(disconnected_info.reason) {
                     case WIFI_REASON_AUTH_FAIL:
                     case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
                     case WIFI_REASON_AUTH_EXPIRE:
-                        statusMessage_ = "Auth Error";
-                        break;
-                    case WIFI_REASON_NO_AP_FOUND:
-                        statusMessage_ = "AP Not Found";
-                        break;
+                        statusMessage_ = "Wrong Password..."; break;
                     default:
-                        statusMessage_ = "Connect Failed";
-                        break;
+                        statusMessage_ = "Connecting..."; break;
                 }
-
-                KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
-                if (known) {
-                    known->failureCount++;
-                    Serial.printf("[WIFI-LOG] Failure count for '%s' is now %d.\n", ssidToConnect_, known->failureCount);
-                    saveKnownNetworks();
-                }
-            } else if (state_ != WifiState::CONNECTING) {
-                // This was a disconnect from a previously active session, not a failed connection attempt.
+                // CRUCIALLY, we do NOT change state_ or increment the failure counter here.
+                
+            } else if (state_ == WifiState::CONNECTED) { // Handle disconnect from an active session
                 state_ = WifiState::IDLE;
                 statusMessage_ = "Disconnected";
-                Serial.println("[WIFI-LOG] Previous session disconnected. State is now IDLE.");
-            } else {
-                // This is a latent disconnect event from a previous attempt that arrived late.
-                // We are already trying to connect to a new network, so we ignore this old event.
-                Serial.printf("[WIFI-LOG] Ignoring latent disconnect event for '%s' while connecting to '%s'.\n", event_ssid, ssidToConnect_);
             }
-            
-            connectionStartTime_ = 0;
             break;
         }
-            
-        default:
-            break;
+        default: break;
     }
 }
 
-// --- MODIFIED load/save functions ---
 void WifiManager::loadKnownNetworks() {
     if (networksLoaded_) return;
     knownNetworks_.clear();
@@ -316,7 +276,6 @@ void WifiManager::loadKnownNetworks() {
         if (passEnd == -1) break;
         int failEnd = content.indexOf('\n', passEnd + 1);
         if (failEnd == -1) failEnd = content.length();
-        
         KnownWifiNetwork net;
         strncpy(net.ssid, content.substring(currentIndex, ssidEnd).c_str(), sizeof(net.ssid)-1);
         net.ssid[sizeof(net.ssid)-1] = '\0';
@@ -324,44 +283,32 @@ void WifiManager::loadKnownNetworks() {
         net.password[sizeof(net.password)-1] = '\0';
         net.failureCount = content.substring(passEnd + 1, failEnd).toInt();
         knownNetworks_.push_back(net);
-        
         currentIndex = failEnd + 1;
     }
     networksLoaded_ = true;
-    Serial.printf("[WIFI-LOG] LAZY LOAD: Loaded %d known networks from SD into RAM.\n", knownNetworks_.size());
 }
 
 void WifiManager::saveKnownNetworks() {
     if (!networksLoaded_) return;
     String content = "";
     for (const auto& net : knownNetworks_) {
-        content += net.ssid;
-        content += ";";
-        content += net.password;
-        content += ";";
-        content += String(net.failureCount);
-        content += "\n";
+        content += net.ssid; content += ";";
+        content += net.password; content += ";";
+        content += String(net.failureCount); content += "\n";
     }
     SdCardManager::writeFile(KNOWN_WIFI_FILE, content.c_str());
-    Serial.printf("[WIFI-LOG] Saved %d known networks.\n", knownNetworks_.size());
 }
 
 KnownWifiNetwork* WifiManager::findKnownNetwork(const char* ssid) {
-    if (!networksLoaded_) {
-        loadKnownNetworks();
-    }
+    if (!networksLoaded_) { loadKnownNetworks(); }
     for (auto& net : knownNetworks_) {
-        if (strcmp(net.ssid, ssid) == 0) {
-            return &net;
-        }
+        if (strcmp(net.ssid, ssid) == 0) { return &net; }
     }
     return nullptr;
 }
 
 void WifiManager::addOrUpdateKnownNetwork(const char* ssid, const char* password) {
-    if (!networksLoaded_) {
-        loadKnownNetworks();
-    }
+    if (!networksLoaded_) { loadKnownNetworks(); }
     KnownWifiNetwork* existing = findKnownNetwork(ssid);
     if (existing) {
         if (strcmp(existing->password, password) != 0 || existing->failureCount > 0) {
@@ -384,8 +331,6 @@ void WifiManager::addOrUpdateKnownNetwork(const char* ssid, const char* password
     }
 }
 
-
-// --- Static C-style callback function ---
 void WiFiEventCallback(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (wifiManagerInstance) {
         wifiManagerInstance->onWifiEvent(event, info);

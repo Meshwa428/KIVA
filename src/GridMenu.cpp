@@ -105,12 +105,7 @@ void GridMenu::handleInput(App* app, InputEvent event) {
                         // The scan will now happen in FirmwareListMenu's onEnter.
                         app->changeMenu(MenuType::FIRMWARE_LIST_SD);
                     } else if (strcmp(selectedLabel, "Basic OTA") == 0) {
-                        if (ota.startBasicOta()) {
-                            // Succeeded immediately (already on WiFi)
-                            app->changeMenu(MenuType::OTA_STATUS);
-                        }
-                        // If it returns false, it's because WiFi is not connected,
-                        // and OtaManager itself has shown the pop-up. So, do nothing.
+                        ota.startBasicOta();
                     } else if (strcmp(selectedLabel, "Back") == 0) {
                          app->changeMenu(MenuType::BACK);
                     }

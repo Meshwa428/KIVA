@@ -34,7 +34,7 @@ void OtaStatusMenu::handleInput(App* app, InputEvent event) {
     // 1. An error has occurred.
     // 2. The process is idle (shouldn't happen, but safe).
     // 3. Web OTA is active but the upload hasn't started yet.
-    if (state == OtaState::ERROR || state == OtaState::IDLE || (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0)) {
+    if (state == OtaState::ERROR || state == OtaState::IDLE || (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0) || state == OtaState::BASIC_ACTIVE) {
         app->changeMenu(MenuType::BACK);
     }
 }
@@ -49,7 +49,6 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
     const OtaProgress& progress = ota.getProgress();
     String statusMsg = ota.getStatusMessage();
 
-    // --- Phase 1: Set Title ---
     if (state == OtaState::WEB_ACTIVE) strcpy(titleBuffer_, "Web Update");
     else if (state == OtaState::BASIC_ACTIVE) strcpy(titleBuffer_, "Basic OTA");
     else if (state == OtaState::SD_UPDATING) strcpy(titleBuffer_, "SD Update");
@@ -57,10 +56,8 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
     else if (state == OtaState::ERROR) strcpy(titleBuffer_, "Update Failed");
     else strcpy(titleBuffer_, "Firmware Update");
 
-    // --- Phase 2: Draw Content Based on State ---
     int y = STATUS_BAR_H + 18;
 
-    // --- SPECIAL CASE: Web OTA Initial Screen ---
     if (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0) {
         display.setFont(u8g2_font_6x12_tf);
         
@@ -75,8 +72,21 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
         display.setFont(u8g2_font_5x7_tf);
         const char* instruction = "Connect & browse to IP";
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, y, instruction);
+    
+    } else if (state == OtaState::BASIC_ACTIVE) {
+        const char* activeText = "OTA Active";
+        display.setFont(u8g2_font_7x13B_tr); // A nice bold font
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(activeText)) / 2, y, activeText);
+        y += 16;
 
-    } else { // --- DEFAULT CASE: All other states and Web OTA in progress ---
+        display.setFont(u8g2_font_6x12_tf);
+        String ipLine = "IP: " + ota.getDisplayIpAddress();
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(ipLine.c_str())) / 2, y, ipLine.c_str());
+        y += 14;
+
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusMsg.c_str())) / 2, y, statusMsg.c_str());
+
+    } else {
         
         display.setFont(u8g2_font_6x10_tf);
         if (!statusMsg.isEmpty()) {
@@ -85,7 +95,6 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
         }
         y += 16;
 
-        // --- THE UNCURSED PROGRESS BAR ---
         int barX = 14, barW = 100, barH = 9;
         int barY = y;
         display.drawRFrame(barX, barY, barW, barH, 2);
@@ -95,14 +104,14 @@ void OtaStatusMenu::draw(App* app, U8G2& display) {
             display.setFont(u8g2_font_7x13B_tr);
             display.drawStr((display.getDisplayWidth() - display.getStrWidth(errorText)) / 2, y-4, errorText);
         } else if (state == OtaState::SUCCESS) {
-            display.drawBox(barX + 2, barY + 2, barW - 4, barH - 4); // Full bar on success
+            display.drawBox(barX + 2, barY + 2, barW - 4, barH - 4);
         }
         else if (progress.totalBytes > 0) {
             int innerBarWidth = barW - 4;
             int fillW = ( (float)progress.receivedBytes / (float)progress.totalBytes ) * innerBarWidth;
             
             if (fillW > 0) {
-                 if (fillW > innerBarWidth) fillW = innerBarWidth; // Clamp
+                 if (fillW > innerBarWidth) fillW = innerBarWidth;
                  display.drawBox(barX + 2, barY + 2, fillW, barH - 4);
             }
         }

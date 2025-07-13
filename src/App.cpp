@@ -257,6 +257,12 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
         }
 
         if (isForwardNav) {
+            if (exitingMenuType == MenuType::POPUP) {
+                if (!navigationStack_.empty() && navigationStack_.back() == MenuType::POPUP) {
+                    navigationStack_.pop_back();
+                }
+            }
+            
             if (navigationStack_.empty() || navigationStack_.back() != type) {
                  navigationStack_.push_back(type);
             }
@@ -282,23 +288,10 @@ IMenu* App::getMenu(MenuType type) {
     return (it != menuRegistry_.end()) ? it->second : nullptr;
 }
 
-void App::showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm) {
-    popUpMenu_.configure(title, message, onConfirm);
+void App::showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
+                    const std::string& confirmText, const std::string& cancelText, bool executeOnConfirmBeforeExit) {
+    popUpMenu_.configure(title, message, onConfirm, confirmText, cancelText, executeOnConfirmBeforeExit);
     changeMenu(MenuType::POPUP);
-}
-
-// --- NEW/MODIFIED METHODS ---
-
-void App::setPostWifiAction(std::function<void(App*)> action) {
-    postWifiAction_ = action;
-}
-
-void App::executePostWifiAction() {
-    if (postWifiAction_) {
-        Serial.println("[APP-LOG] Executing post-wifi connection action.");
-        postWifiAction_(this);
-        postWifiAction_ = nullptr; // Clear it after execution
-    }
 }
 
 MenuType App::getPreviousMenuType() const {

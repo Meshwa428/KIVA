@@ -35,9 +35,6 @@ HardwareManager::HardwareManager() : u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
 
 void HardwareManager::setup()
 {
-    // Note: Wire.begin() and display.begin() are now called from App::setup()
-    // to allow the boot screen to show up before this method is called.
-    
     // Correctly initialize PCF0 outputs (laser/vibration motor off)
     pcf0_output_state_ = 0xFF;
     pcf0_output_state_ &= ~((1 << Pins::LASER_PIN_PCF0) | (1 << Pins::MOTOR_PIN_PCF0));
@@ -70,10 +67,9 @@ void HardwareManager::update()
     }
 
     processEncoder();
-    processButton_PCF0();  // A new, dedicated function for PCF0 buttons
-    processButtons_PCF1(); // A new, dedicated function for PCF1 buttons
+    processButton_PCF0();
+    processButtons_PCF1();
 
-    // Finally, handle repeats which don't depend on the MUX
     processButtonRepeats();
 }
 

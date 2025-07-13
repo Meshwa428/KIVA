@@ -1,26 +1,28 @@
-#include "PopUpMenu.h" // <-- Renamed include
+#include "PopUpMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
 #include <Arduino.h>
 #include <algorithm> // for std::max, std::min
 
-// --- Renamed class and constructor ---
 PopUpMenu::PopUpMenu() :
+    onConfirm_(nullptr),
+    executeOnConfirmBeforeExit_(false),
     selectedOption_(0),
     overlayScale_(0.0f)
 {
 }
 
-void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallback onConfirm, std::string confirmText, std::string cancelText) {
+void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallback onConfirm, std::string confirmText, std::string cancelText, bool executeOnConfirmBeforeExit) {
     title_ = title;
     message_ = message;
     onConfirm_ = onConfirm;
     confirmText_ = confirmText;
     cancelText_ = cancelText;
+    executeOnConfirmBeforeExit_ = executeOnConfirmBeforeExit;
 }
 
 void PopUpMenu::onEnter(App* app) {
-    selectedOption_ = 0; // Default to cancel
+    selectedOption_ = 0; // Default to cancel/first option
     overlayScale_ = 0.0f;
 }
 
@@ -29,7 +31,7 @@ void PopUpMenu::onUpdate(App* app) {
     float targetScale = 1.0f;
     float diff = targetScale - overlayScale_;
     if (abs(diff) > 0.01f) {
-        overlayScale_ += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f; // A bit faster than grid
+        overlayScale_ += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f;
     } else {
         overlayScale_ = targetScale;
     }
@@ -41,6 +43,7 @@ void PopUpMenu::onExit(App* app) {
     message_ = "";
     onConfirm_ = nullptr;
     overlayScale_ = 0.0f;
+    executeOnConfirmBeforeExit_ = false;
 }
 
 void PopUpMenu::handleInput(App* app, InputEvent event) {
@@ -49,27 +52,33 @@ void PopUpMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::ENCODER_CCW:
         case InputEvent::BTN_LEFT_PRESS:
         case InputEvent::BTN_RIGHT_PRESS:
-            selectedOption_ = 1 - selectedOption_; // Toggle between 0 and 1
+            selectedOption_ = 1 - selectedOption_; // Toggle between 0 (Cancel) and 1 (Confirm)
             break;
 
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
-            if (selectedOption_ == 1) { // Confirm
+            if (selectedOption_ == 1) { // Confirm button pressed
                 if (onConfirm_) {
-                    onConfirm_(app);
+                    // Execute the callback first.
+                    onConfirm_(app); 
+
+                    // If the callback is NOT responsible for navigating away,
+                    // then the popup must dismiss itself. This is for simple confirm dialogs.
+                    if (executeOnConfirmBeforeExit_) {
+                        app->changeMenu(MenuType::BACK);
+                    }
+                    // If executeOnConfirmBeforeExit_ is false, we assume the callback
+                    // handled navigation, so the pop-up does nothing more, preventing a double-navigation issue.
+                } else {
+                    // If there's no callback, OK just acts like Cancel/Back.
+                    app->changeMenu(MenuType::BACK);
                 }
-                // ALWAYS navigate back after a confirm action.
-                // This closes the pop-up and reveals the underlying menu,
-                // which might have been changed by the onConfirm_ callback.
-                app->changeMenu(MenuType::BACK);
-            } else { // Cancel
-                // Cancel action also just navigates back.
-                app->changeMenu(MenuType::BACK);
+            } else { // Cancel button pressed
+                app->changeMenu(MenuType::BACK); // Dismiss the popup
             }
             break;
 
         case InputEvent::BTN_BACK_PRESS:
-            // Back button always cancels.
             app->changeMenu(MenuType::BACK);
             break;
 
@@ -79,13 +88,10 @@ void PopUpMenu::handleInput(App* app, InputEvent event) {
 }
 
 const char* PopUpMenu::getTitle() const {
-    // The pop-up menu doesn't have a static title for the status bar.
-    // The title is drawn inside the overlay itself.
-    return "Confirm";
+    return title_.c_str();
 }
 
 void PopUpMenu::draw(App* app, U8G2& display) {
-    // --- Draw the pop-up overlay on top of the existing buffer ---
     if (overlayScale_ <= 0.05f) return;
 
     int baseW = 110;
@@ -99,27 +105,25 @@ void PopUpMenu::draw(App* app, U8G2& display) {
     int y = (display.getDisplayHeight() - h) / 2;
     y = std::max(y, (int)STATUS_BAR_H + 3);
 
-    // Draw the box
     display.setDrawColor(1);
     drawRndBox(display, x, y, w, h, 3, true);
     display.setDrawColor(0);
     display.drawRFrame(x, y, w, h, 3);
 
-    // Only draw contents when fully scaled
     if (overlayScale_ < 0.95f) return;
 
-    display.setDrawColor(0); // Text inside is inverse color
+    display.setDrawColor(0);
     int padding = 4;
 
-    // Title
     display.setFont(u8g2_font_6x10_tf);
     display.drawStr(x + (w - display.getStrWidth(title_.c_str())) / 2, y + padding + display.getAscent(), title_.c_str());
 
-    // Message
-    char* truncatedMsg = truncateText(message_.c_str(), w - 2 * padding, display);
-    display.drawStr(x + (w - display.getStrWidth(truncatedMsg)) / 2, y + 28, truncatedMsg);
+    // Use wrapped text for the message
+    std::vector<const uint8_t*> fonts = {u8g2_font_6x10_tf, u8g2_font_5x7_tf};
+    drawWrappedText(display, message_.c_str(), x + padding, y + 16, w - 2 * padding, 22, fonts);
 
-    // Options
+    // Buttons
+    display.setFont(u8g2_font_6x10_tf);
     int opt_y_base = y + h - padding - 2;
     int opt_h = 12;
     int opt_y = opt_y_base - opt_h;
@@ -129,27 +133,27 @@ void PopUpMenu::draw(App* app, U8G2& display) {
     int total_w = opt0_w + opt1_w + 10;
     int start_x = x + (w - total_w) / 2;
 
-    // Cancel Option (0)
+    // Draw Cancel Button
     if (selectedOption_ == 0) {
-        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, true); // Filled box
-        display.setDrawColor(1); // Inverted text
+        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, true);
+        display.setDrawColor(1);
     } else {
-        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, false); // Frame only
-        display.setDrawColor(0); // Normal text
+        drawRndBox(display, start_x, opt_y, opt0_w, opt_h, 2, false);
+        display.setDrawColor(0);
     }
     display.drawStr(start_x + 4, opt_y + 9, cancelText_.c_str());
 
-    // Confirm Option (1)
-    display.setDrawColor(0); // Reset color
+    // Draw Confirm Button
+    display.setDrawColor(0);
     int opt1_x = start_x + opt0_w + 10;
     if (selectedOption_ == 1) {
-        drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, true); // Filled
-        display.setDrawColor(1); // Inverted text
+        drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, true);
+        display.setDrawColor(1);
     } else {
-        drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, false); // Frame
-        display.setDrawColor(0); // Normal text
+        drawRndBox(display, opt1_x, opt_y, opt1_w, opt_h, 2, false);
+        display.setDrawColor(0);
     }
     display.drawStr(opt1_x + 4, opt_y + 9, confirmText_.c_str());
 
-    display.setDrawColor(1); // Reset draw color for next frame
+    display.setDrawColor(1);
 }

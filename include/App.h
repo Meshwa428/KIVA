@@ -27,7 +27,8 @@ public:
     void changeMenu(MenuType type, bool isForwardNav = true);
     void returnToMenu(MenuType type);
     
-    void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm);
+    void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
+                   const std::string& confirmText = "OK", const std::string& cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
     HardwareManager& getHardwareManager() { return hardware_; }
     WifiManager& getWifiManager() { return wifiManager_; }
     OtaManager& getOtaManager() { return otaManager_; }
@@ -35,12 +36,8 @@ public:
     IMenu* getMenu(MenuType type);
 
     MenuType getPreviousMenuType() const;
-
-    // --- NEW: For post-wifi connection actions ---
-    void setPostWifiAction(std::function<void(App*)> action);
-    void executePostWifiAction();
     
-    void drawStatusBar(); // <-- MOVED TO PUBLIC
+    void drawStatusBar();
 
 private:
     void drawSecondaryDisplay();
@@ -62,9 +59,6 @@ private:
     IMenu* currentMenu_;
     
     std::vector<MenuType> navigationStack_;
-    
-    // --- NEW ---
-    std::function<void(App*)> postWifiAction_ = nullptr;
 
     // Concrete Menu Instances
     MainMenu mainMenu_;

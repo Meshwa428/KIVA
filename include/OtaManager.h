@@ -35,7 +35,7 @@ public:
 
     // --- State Control ---
     bool startWebUpdate();
-    bool startBasicOta();
+    void startBasicOta();
     void startSdUpdate(const FirmwareInfo& fwInfo);
     void stop();
     void scanSdForFirmware();
