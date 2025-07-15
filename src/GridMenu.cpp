@@ -10,21 +10,25 @@ GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) 
     selectedIndex_(0),
     gridAnimatingIn_(false),
     marqueeActive_(false),
-    marqueeScrollLeft_(true)
+    marqueeScrollLeft_(true) // Already initialized correctly, but good to confirm
 {
     // Infer MenuType from title
     if (title == "WiFi Tools") menuType_ = MenuType::WIFI_TOOLS_GRID;
     else if (title == "Update") menuType_ = MenuType::FIRMWARE_UPDATE_GRID;
-    else if (title == "Jammer") menuType_ = MenuType::JAMMING_TOOLS_GRID; // <-- ADD
+    else if (title == "Jammer") menuType_ = MenuType::JAMMING_TOOLS_GRID;
     else menuType_ = MenuType::NONE;
 }
+
 void GridMenu::onEnter(App *app)
 {
     selectedIndex_ = 0;
     targetGridScrollOffset_Y_ = 0;
     currentGridScrollOffset_Y_anim_ = 0;
     startGridAnimation();
-    marqueeScrollLeft_ = true; // Reset on enter
+    
+    // --- FIX: Reset marquee state on enter ---
+    marqueeActive_ = false;
+    marqueeScrollLeft_ = true;
 }
 
 void GridMenu::onUpdate(App *app)
@@ -95,12 +99,9 @@ void GridMenu::handleInput(App* app, InputEvent event) {
                 if (selectedIndex_ >= menuItems_.size()) break;
                 const auto& selected = menuItems_[selectedIndex_];
 
-                // --- NEW GENERIC LOGIC ---
                 if (selected.action) {
-                    // If an action is defined, execute it.
                     selected.action(app);
                 } else {
-                    // Otherwise, navigate to the target menu.
                     app->changeMenu(selected.targetMenu);
                 }
             }
@@ -119,26 +120,29 @@ void GridMenu::scroll(int direction)
     if (menuItems_.empty()) return;
 
     int oldIndex = selectedIndex_;
-    selectedIndex_ += direction;
+    int targetIndex = selectedIndex_ + direction;
 
-    if (selectedIndex_ >= (int)menuItems_.size()) {
-        selectedIndex_ = selectedIndex_ % menuItems_.size();
-    }
-    if (selectedIndex_ < 0) {
-        selectedIndex_ = (selectedIndex_ % menuItems_.size() + menuItems_.size()) % menuItems_.size();
+    // Handle left/right wrapping on the same row
+    if (abs(direction) == 1) {
+        int currentRow = selectedIndex_ / columns_;
+        int startOfRow = currentRow * columns_;
+        int endOfRow = startOfRow + columns_ - 1;
+        
+        // Find the actual last item in the row, which might be less than endOfRow
+        int lastItemInRow = startOfRow;
+        for(int i = startOfRow; i < menuItems_.size() && i <= endOfRow; ++i) {
+            lastItemInRow = i;
+        }
+
+        if (targetIndex < startOfRow) targetIndex = lastItemInRow;
+        if (targetIndex > lastItemInRow) targetIndex = startOfRow;
     }
     
-    if (abs(direction) > 1) { // For UP/DOWN
-        int new_col = oldIndex % columns_;
-        // Check if the new row has a valid item in this column. If not, stay put.
-        int targetIndex = (selectedIndex_ / columns_) * columns_ + new_col;
-        if(targetIndex < menuItems_.size()) {
-             selectedIndex_ = targetIndex;
-        } else {
-            selectedIndex_ = oldIndex;
-        }
-    }
-
+    // Clamp vertical movement
+    if (targetIndex < 0) targetIndex = oldIndex;
+    if (targetIndex >= (int)menuItems_.size()) targetIndex = oldIndex;
+    
+    selectedIndex_ = targetIndex;
 
     const int itemRowHeight = 18 + 4;
     const int gridVisibleAreaH = 64 - (STATUS_BAR_H + 1) - 4;
@@ -152,8 +156,10 @@ void GridMenu::scroll(int direction)
     } else if (currentSelectionRow >= topVisibleRow + visibleRows) {
         targetGridScrollOffset_Y_ = (currentSelectionRow - visibleRows + 1) * itemRowHeight;
     }
+    
+    // --- FIX: Reset marquee state on every scroll ---
     marqueeActive_ = false;
-    marqueeScrollLeft_ = true; // Reset on scroll
+    marqueeScrollLeft_ = true;
 }
 
 void GridMenu::startGridAnimation()
@@ -180,9 +186,12 @@ void GridMenu::draw(App* app, U8G2& display) {
     const int itemBaseW = (128 - (columns_ + 1) * 4) / columns_;
     const int itemBaseH = 18;
     const int gridStartY = STATUS_BAR_H + 1 + 4;
+    
+    // --- STEP 1: Set the main clipping area for the entire grid ---
+    const int clip_y_start = STATUS_BAR_H + 1;
+    display.setClipWindow(0, clip_y_start, 127, 63);
 
     display.setFont(u8g2_font_5x7_tf);
-    display.setClipWindow(0, STATUS_BAR_H + 1, 127, 63);
 
     for (size_t i = 0; i < menuItems_.size(); ++i) {
         int row = i / columns_;
@@ -197,7 +206,7 @@ void GridMenu::draw(App* app, U8G2& display) {
         int box_y_noscroll = gridStartY + row * (itemBaseH + 4) + (itemBaseH - itemH) / 2;
         int box_y = box_y_noscroll - (int)currentGridScrollOffset_Y_anim_;
         
-        if (box_y + itemH <= STATUS_BAR_H + 1 || box_y >= 64) continue;
+        if (box_y + itemH <= clip_y_start || box_y >= 64) continue;
         
         bool isSelected = (i == selectedIndex_);
         if (isSelected) {
@@ -210,25 +219,52 @@ void GridMenu::draw(App* app, U8G2& display) {
         }
         
         if (scale > 0.7f) {
-            int innerW = itemW - 4;
-            
-            // ** MODIFIED: Pass all marquee state variables **
-            updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
-                          marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                          marqueeText_, marqueeTextLenPx_, menuItems_[i].label, innerW, display);
-            
-            display.setClipWindow(box_x+1, box_y+1, box_x+itemW-1, box_y+itemH-1);
+            const int text_padding = 2;
+            int innerW = itemW - (2 * text_padding);
             int text_y = box_y + (itemH - (display.getAscent() - display.getDescent())) / 2 + display.getAscent();
-            if (isSelected && marqueeActive_) {
-                display.drawStr(box_x + 2 + (int)marqueeOffset_, text_y, marqueeText_);
+
+            // --- THE CRITICAL FIX ---
+            // We calculate the desired clip window for the text, then clamp its
+            // vertical coordinates to the main visible area. This prevents the
+            // clip window itself from being defined outside the visible screen.
+            int text_clip_x1 = box_x + text_padding;
+            int text_clip_y1 = box_y + 1;
+            int text_clip_x2 = box_x + itemW - text_padding;
+            int text_clip_y2 = box_y + itemH - 1;
+
+            // Clamp the vertical clipping coordinates
+            if (text_clip_y1 < clip_y_start) text_clip_y1 = clip_y_start;
+            if (text_clip_y2 > 63) text_clip_y2 = 63;
+
+            // Only set the clip window if it's a valid area
+            if (text_clip_y1 < text_clip_y2) {
+                 display.setClipWindow(text_clip_x1, text_clip_y1, text_clip_x2, text_clip_y2);
+            }
+            // --- END OF CRITICAL FIX ---
+
+
+            if (isSelected) {
+                updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
+                              marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
+                              marqueeText_, marqueeTextLenPx_, menuItems_[i].label, innerW, display);
+                
+                if (marqueeActive_) {
+                    display.drawStr(box_x + text_padding + (int)marqueeOffset_, text_y, marqueeText_);
+                } else {
+                    int textW = display.getStrWidth(menuItems_[i].label);
+                    display.drawStr(box_x + (itemW - textW) / 2, text_y, menuItems_[i].label);
+                }
             } else {
                 char* truncated = truncateText(menuItems_[i].label, innerW, display);
                 int textW = display.getStrWidth(truncated);
                 display.drawStr(box_x + (itemW - textW) / 2, text_y, truncated);
             }
-            display.setClipWindow(0, STATUS_BAR_H + 1, 127, 63);
+
+            // Reset the clip window back to the main grid area for the next item.
+            display.setClipWindow(0, clip_y_start, 127, 63);
         }
     }
-    display.setDrawColor(1);
+
     display.setMaxClipWindow();
+    display.setDrawColor(1);
 }

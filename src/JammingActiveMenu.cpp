@@ -56,13 +56,21 @@ void JammingActiveMenu::handleInput(App* app, InputEvent event) {
 }
 
 void JammingActiveMenu::draw(App* app, U8G2& display) {
-    // No status bar needed here.
-    const char* modeText = app->getJammer().getModeString();
+    // --- SIMPLIFIED DRAWING LOGIC ---
+    auto& jammer = app->getJammer();
+     if (!jammer.isActive()) {
+        const char* startingMsg = "Starting Jammer...";
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(startingMsg))/2, 38, startingMsg);
+        return;
+    }
+
+    const char* modeText = jammer.getModeString();
     
     display.setFont(u8g2_font_7x13B_tr);
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeText))/2, 28, modeText);
 
     display.setFont(u8g2_font_6x10_tf);
-    const char* instruction = "Hold BACK to Stop";
+    const char* instruction = "Press BACK to Stop";
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction))/2, 52, instruction);
 }

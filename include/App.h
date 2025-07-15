@@ -10,18 +10,23 @@
 #include <map>
 #include <functional> // For std::function
 #include "WifiManager.h"
-#include "WifiListMenu.h"
 #include "TextInputMenu.h"
 #include "ConnectionStatusMenu.h"
 #include "PopUpMenu.h"
 #include "OtaManager.h"
-#include "FirmwareListMenu.h"
 #include "OtaStatusMenu.h"
 #include "Jammer.h"
-#include "ChannelSelectionMenu.h" // <-- ADD
-#include "JammingActiveMenu.h"    // <-- ADD
+#include "ChannelSelectionMenu.h"
+#include "JammingActiveMenu.h"
+#include "ListMenu.h"
+#include "WifiListDataSource.h"
+#include "FirmwareListDataSource.h"
+#include "BeaconSpammer.h"
+#include "BeaconFileListDataSource.h"
+#include "BeaconSpamActiveMenu.h"
 
-class App {
+class App
+{
 public:
     App();
     void setup();
@@ -29,26 +34,28 @@ public:
 
     void changeMenu(MenuType type, bool isForwardNav = true);
     void returnToMenu(MenuType type);
-    
+
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
-                   const std::string& confirmText = "OK", const std::string& cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
-    HardwareManager& getHardwareManager() { return hardware_; }
-    WifiManager& getWifiManager() { return wifiManager_; }
-    OtaManager& getOtaManager() { return otaManager_; }
-    Jammer& getJammer() { return jammer_; }
-    TextInputMenu& getTextInputMenu() { return textInputMenu_; }
-    IMenu* getMenu(MenuType type);
+                   const std::string &confirmText = "OK", const std::string &cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
+    HardwareManager &getHardwareManager() { return hardware_; }
+    WifiManager &getWifiManager() { return wifiManager_; }
+    OtaManager &getOtaManager() { return otaManager_; }
+    Jammer &getJammer() { return jammer_; }
+    BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
+    TextInputMenu &getTextInputMenu() { return textInputMenu_; }
+    IMenu *getMenu(MenuType type);
+    WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
 
     MenuType getPreviousMenuType() const;
-    
+
     void drawStatusBar();
 
 private:
     void drawSecondaryDisplay();
-    
+
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
-    void logToSmallDisplay(const char* message, const char* status = nullptr);
-    
+    void logToSmallDisplay(const char *message, const char *status = nullptr);
+
     float currentProgressBarFillPx_;
 
     static const int MAX_LOG_LINES_SMALL_DISPLAY = 4;
@@ -58,30 +65,45 @@ private:
     HardwareManager hardware_;
     WifiManager wifiManager_;
     OtaManager otaManager_;
-    
-    std::map<MenuType, IMenu*> menuRegistry_;
-    IMenu* currentMenu_;
-    
+    Jammer jammer_;
+    BeaconSpammer beaconSpammer_;
+
+    std::map<MenuType, IMenu *> menuRegistry_;
+    IMenu *currentMenu_;
+
     std::vector<MenuType> navigationStack_;
 
     // Concrete Menu Instances
     MainMenu mainMenu_;
+
     CarouselMenu toolsMenu_;
     CarouselMenu gamesMenu_;
     CarouselMenu settingsMenu_;
     CarouselMenu utilitiesMenu_;
+
     GridMenu wifiToolsMenu_;
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
-    WifiListMenu wifiListMenu_;
+    GridMenu beaconModeMenu_;
+
+    // WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
     PopUpMenu popUpMenu_;
-    FirmwareListMenu firmwareListMenu_;
+
+    // FirmwareListMenu firmwareListMenu_;
     OtaStatusMenu otaStatusMenu_;
-    Jammer jammer_;
     ChannelSelectionMenu channelSelectionMenu_;
     JammingActiveMenu jammingActiveMenu_;
+
+    // --- NEW GENERIC LIST MENU SYSTEM ---
+    WifiListDataSource wifiListDataSource_;
+    FirmwareListDataSource firmwareListDataSource_;
+    BeaconFileListDataSource beaconFileListDataSource_;
+    ListMenu wifiListMenu_;
+    ListMenu firmwareListMenu_;
+    ListMenu beaconFileListMenu_;
+    BeaconSpamActiveMenu beaconSpamActiveMenu_;
 };
 
 #endif

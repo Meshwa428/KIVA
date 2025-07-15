@@ -1,9 +1,83 @@
 #include "SdCardManager.h"
-#include "Config.h" // For Pins::SD_CS_PIN
+#include "Config.h"
 
 namespace SdCardManager {
     static bool sdCardInitialized = false;
 
+    // --- NEW: LineReader Implementation ---
+    LineReader::LineReader() : file_() {}
+
+    LineReader::LineReader(File file) : file_(file) {}
+
+    LineReader::~LineReader() {
+        if (file_) {
+            file_.close();
+        }
+    }
+
+    // Move constructor
+    LineReader::LineReader(LineReader&& other) noexcept : file_(other.file_) {
+        other.file_ = File(); // Invalidate other's file handle
+    }
+
+    // Move assignment
+    LineReader& LineReader::operator=(LineReader&& other) noexcept {
+        if (this != &other) {
+            if (file_) {
+                file_.close();
+            }
+            file_ = other.file_;
+            other.file_ = File();
+        }
+        return *this;
+    }
+
+    bool LineReader::isOpen() const {
+        return (bool)file_;
+    }
+
+    void LineReader::close() {
+        if (file_) {
+            file_.close();
+        }
+    }
+
+    String LineReader::readLine() {
+        if (!file_) return "";
+
+        // Loop to find the next non-empty line
+        while (true) {
+            if (!file_.available()) {
+                file_.seek(0); // Loop back to the start if end is reached
+                // If the file is still not available (e.g., it's empty), break to avoid infinite loop
+                if (!file_.available()) return ""; 
+            }
+
+            String line = file_.readStringUntil('\n');
+            line.trim(); // This handles both leading/trailing whitespace and the \r
+            
+            // If we found a non-empty line, return it. Otherwise, the loop continues.
+            if (!line.isEmpty()) {
+                return line;
+            }
+        }
+    }
+
+    // --- NEW: Factory Function Implementation ---
+    LineReader openLineReader(const char* path) {
+        if (!sdCardInitialized) {
+            return LineReader(); // Return a closed/invalid reader
+        }
+        File f = SD.open(path, FILE_READ);
+        if (!f || f.isDirectory()) {
+            if (f) f.close();
+            return LineReader(); // Return a closed/invalid reader
+        }
+        // Construct a LineReader from the valid File object
+        return LineReader(f);
+    }
+    
+    // --- Existing function implementations ---
     bool setup() {
         if (!SD.begin(Pins::SD_CS_PIN)) {
             Serial.println("[SD-LOG] Mount Failed");

@@ -78,10 +78,8 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_BACK_PRESS:
             {
-                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
-                if (wifiMenu) {
-                    wifiMenu->setScanOnEnter(false);
-                }
+                // --- MODIFIED ---
+                app->getWifiListDataSource().setScanOnEnter(false);
                 app->changeMenu(MenuType::BACK);
             }
             break;

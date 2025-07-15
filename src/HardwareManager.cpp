@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <numeric>
 #include <WiFi.h>
+#include <esp_wifi.h>
 
 // --- Constructor ---
 HardwareManager::HardwareManager() : 
@@ -80,7 +81,12 @@ void HardwareManager::releaseRfControl() {
     if (currentRfClient_ == RfClient::NRF_JAMMER) {
         if (radio1_.isChipConnected()) radio1_.powerDown();
         if (radio2_.isChipConnected()) radio2_.powerDown();
+
     } else if (currentRfClient_ == RfClient::WIFI) {
+        WiFi.mode(WIFI_OFF);
+
+    } else if (currentRfClient_ == RfClient::WIFI_PROMISCUOUS) {
+        esp_wifi_set_promiscuous(false);
         WiFi.mode(WIFI_OFF);
     }
     currentRfClient_ = RfClient::NONE;
@@ -144,6 +150,22 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         WiFi.mode(WIFI_STA); 
         currentRfClient_ = RfClient::WIFI;
         return std::unique_ptr<RfLock>(new RfLock(*this, true));
+
+    } else if (client == RfClient::WIFI_PROMISCUOUS) {
+        if (radio1_.isChipConnected()) radio1_.powerDown();
+        if (radio2_.isChipConnected()) radio2_.powerDown();
+        WiFi.softAPdisconnect(true);
+        WiFi.disconnect(true, true);
+        delay(100);
+        
+        // --- FIX: Use WIFI_STA as the base for promiscuous mode ---
+        if (WiFi.mode(WIFI_STA)) {
+            esp_wifi_set_promiscuous(true);
+            currentRfClient_ = RfClient::WIFI_PROMISCUOUS;
+            return std::unique_ptr<RfLock>(new RfLock(*this, true));
+        } else {
+            return std::unique_ptr<RfLock>(new RfLock(*this, false));
+        }
     }
 
     return std::unique_ptr<RfLock>(new RfLock(*this, false));

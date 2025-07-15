@@ -10,7 +10,7 @@
 App::App() :
     currentMenu_(nullptr),
     currentProgressBarFillPx_(0.0f),
-    mainMenu_(), // Uses default constructor
+    mainMenu_(),
     toolsMenu_("Tools", {
         MenuItem{"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
         MenuItem{"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
@@ -24,10 +24,8 @@ App::App() :
     settingsMenu_("Settings", {
         MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE,
             [](App* app) {
-                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
-                if (wifiMenu) {
-                    wifiMenu->setScanOnEnter(true);
-                }
+                // --- MODIFIED: Use the data source now ---
+                app->getWifiListDataSource().setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }
         },
@@ -51,7 +49,7 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiToolsMenu_("WiFi Tools", {
-        MenuItem{"Beacon Spam", IconType::TOOL_INJECTION, MenuType::NONE},
+        MenuItem{"Beacon Spam", IconType::TOOL_INJECTION, MenuType::BEACON_MODE_SELECTION},
         MenuItem{"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
@@ -113,17 +111,37 @@ App::App() :
         MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    wifiListMenu_(),
+    beaconModeMenu_("Beacon Spam", {
+        MenuItem{"Random SSIDs", IconType::UI_REFRESH, MenuType::NONE,
+            [](App* app) {
+                BeaconSpamActiveMenu* activeMenu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
+                if (activeMenu) {
+                    activeMenu->setAttackParameters(BeaconSsidMode::RANDOM);
+                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"From SD Card", IconType::INFO, MenuType::BEACON_FILE_LIST},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+    // --- MODIFIED: Remove old menu constructors ---
     textInputMenu_(),
     connectionStatusMenu_(),
     popUpMenu_(),
-    firmwareListMenu_(),
     otaStatusMenu_(),
     channelSelectionMenu_(),
     jammingActiveMenu_(),
-    jammer_()
+    jammer_(),
+    beaconSpammer_(),
+    // --- ADDED: Initialize new list menu system ---
+    wifiListDataSource_(),
+    firmwareListDataSource_(),
+    beaconFileListDataSource_(),
+    wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
+    firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
+    beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
+    beaconSpamActiveMenu_()
 {
-    // Initialize the small display log buffer
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
         smallDisplayLogBuffer_[i][0] = '\0';
     }
@@ -202,6 +220,7 @@ void App::setup() {
     wifiManager_.setup(this);   // Then WifiManager which may depend on it. Pass App context.
     otaManager_.setup(this, &wifiManager_);
     jammer_.setup(this);
+    beaconSpammer_.setup(this);
     
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -213,6 +232,7 @@ void App::setup() {
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
+    menuRegistry_[MenuType::BEACON_MODE_SELECTION] = &beaconModeMenu_;
 
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::POPUP] = &popUpMenu_;
@@ -222,9 +242,12 @@ void App::setup() {
     
     menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
     menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
+    menuRegistry_[MenuType::BEACON_FILE_LIST] = &beaconFileListMenu_;
 
     menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
+    menuRegistry_[MenuType::BEACON_SPAM_ACTIVE] = &beaconSpamActiveMenu_;
+
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -236,6 +259,7 @@ void App::loop() {
     wifiManager_.update();
     otaManager_.loop();
     jammer_.loop();
+    beaconSpammer_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;

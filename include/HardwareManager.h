@@ -13,7 +13,8 @@
 enum class RfClient {
     NONE,
     NRF_JAMMER,
-    WIFI
+    WIFI,
+    WIFI_PROMISCUOUS
 };
 
 static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz

@@ -27,19 +27,12 @@ void ConnectionStatusMenu::onUpdate(App* app) {
 }
 
 void ConnectionStatusMenu::onExit(App* app) {
-    // Get the WifiListMenu instance
-    WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app->getMenu(MenuType::WIFI_LIST));
-    if (wifiMenu) {
-        WifiManager& wifi = app->getWifiManager();
-        if (wifi.getState() == WifiState::CONNECTED) {
-            // --- CRITICAL FIX ---
-            // If we successfully connected, we do NOT want to do a slow re-scan.
-            // We just want to rebuild the list from the current data.
-            wifiMenu->setScanOnEnter(false);
-        } else {
-            // If the connection failed, it's good practice to re-scan to get fresh data.
-            wifiMenu->setScanOnEnter(true);
-        }
+    WifiListDataSource& wifiDataSource = app->getWifiListDataSource();
+    WifiManager& wifi = app->getWifiManager();
+    if (wifi.getState() == WifiState::CONNECTED) {
+        wifiDataSource.setScanOnEnter(false);
+    } else {
+        wifiDataSource.setScanOnEnter(true);
     }
 }
 

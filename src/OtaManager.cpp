@@ -211,23 +211,16 @@ void OtaManager::startBasicOta() { // NEW: Return type is void
     if (state_ != OtaState::IDLE) return;
     
     if (wifiManager_->getState() != WifiState::CONNECTED) {
-        
         app_->showPopUp("WiFi Required", "Connect to use Basic OTA?", 
-            // onConfirm:
             [this](App* app_cb) {
-                // Get the WifiListMenu instance
-                WifiListMenu* wifiMenu = static_cast<WifiListMenu*>(app_cb->getMenu(MenuType::WIFI_LIST));
-                if (wifiMenu) {
-                    // Set the flag to override the back button
-                    wifiMenu->setBackNavOverride(true);
-                    wifiMenu->setScanOnEnter(true);
-                }
-                // Navigate to the menu
+                // --- MODIFIED ---
+                WifiListDataSource& wifiDataSource = app_cb->getWifiListDataSource();
+                wifiDataSource.setBackNavOverride(true);
+                wifiDataSource.setScanOnEnter(true);
                 app_cb->changeMenu(MenuType::WIFI_LIST);
             }, 
             "OK", "Cancel", false);
-        
-        return; // Just return
+        return;
     }
 
     // This part executes if WiFi is ALREADY connected.
