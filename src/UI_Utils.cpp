@@ -123,6 +123,12 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::UTILITIES_CATEGORY:
             xbm_data = icon_utilities_category_large_bits;
             break;
+        case IconType::SD_CARD:
+            xbm_data = icon_sd_card_large_bits;
+            break;
+        case IconType::BEACON:
+            xbm_data = icon_beacon_large_bits;
+            break;
         default:
             xbm_data = nullptr;
             break;

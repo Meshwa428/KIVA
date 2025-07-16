@@ -48,11 +48,19 @@ bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, Beaco
     
     if (currentMode_ == BeaconSsidMode::FILE_BASED) {
         ssidReader_ = SdCardManager::openLineReader(ssidFilePath.c_str());
-        if (!ssidReader_.isOpen()) {
-            Serial.printf("[BEACON] SSID file is invalid or empty: %s\n", ssidFilePath.c_str());
-            rfLock_.reset();
-            return false;
+        // --- VALIDATION LOGIC ---
+        // Try to read one line. If it's empty, our new readLine() implementation
+        // has determined the file has no valid content.
+        if (!ssidReader_.isOpen() || ssidReader_.readLine().isEmpty()) {
+            Serial.printf("[BEACON] SSID file is invalid or contains no valid SSIDs: %s\n", ssidFilePath.c_str());
+            if (ssidReader_.isOpen()) ssidReader_.close(); // Clean up the reader.
+            rfLock_.reset(); // Release the hardware lock since we are failing.
+            return false;    // Signal the failure to the caller menu.
         }
+        // The check was successful, but readLine() advanced the file pointer.
+        // We must close and reopen the reader to ensure the attack starts from the first line.
+        ssidReader_.close();
+        ssidReader_ = SdCardManager::openLineReader(ssidFilePath.c_str());
     }
 
     ssidCounter_ = 0;
@@ -174,6 +182,17 @@ void BeaconSpammer::sendBeaconPacket(const FakeAP& ap) {
     ds_param_set_tag[2] = currentChannel_;
 
     esp_wifi_80211_tx(WIFI_IF_STA, packet, total_len, false);
+}
+
+bool BeaconSpammer::isSsidFileValid(const std::string& ssidFilePath) {
+    // Use our robust line reader to perform the check.
+    auto reader = SdCardManager::openLineReader(ssidFilePath.c_str());
+    if (!reader.isOpen()) {
+        return false;
+    }
+    // readLine() now correctly returns an empty string if the file is empty or only has whitespace.
+    // The reader's destructor will close the file automatically when it goes out of scope.
+    return !reader.readLine().isEmpty();
 }
 
 

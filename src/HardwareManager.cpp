@@ -175,9 +175,10 @@ void HardwareManager::update()
 {
     // --- Define intervals based on performance mode ---
     static unsigned long lastInputPollTime = 0;
+    // --- FIX: Increase polling frequency in performance mode to not miss button presses ---
     const unsigned long currentPollInterval = highPerformanceMode_ 
-                                            ? 200 // Slow poll interval for jamming
-                                            : 8;  // Fast poll interval for normal UI
+                                            ? 500  // More responsive polling for active tasks (20Hz)
+                                            : 16;  // Fast poll interval for normal UI (125Hz)
 
     if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
         updateBattery();

@@ -43,23 +43,36 @@ namespace SdCardManager {
     }
 
     String LineReader::readLine() {
-        if (!file_) return "";
-
-        // Loop to find the next non-empty line
+        if (!file_ || file_.size() == 0) {
+            return "";
+        }
+    
+        // This loop handles the "forever" part, but with a safety exit.
         while (true) {
-            if (!file_.available()) {
-                file_.seek(0); // Loop back to the start if end is reached
-                // If the file is still not available (e.g., it's empty), break to avoid infinite loop
-                if (!file_.available()) return ""; 
-            }
-
-            String line = file_.readStringUntil('\n');
-            line.trim(); // This handles both leading/trailing whitespace and the \r
+            // Remember where we started the search in the file.
+            uint32_t search_start_pos = file_.position();
             
-            // If we found a non-empty line, return it. Otherwise, the loop continues.
-            if (!line.isEmpty()) {
-                return line;
+            // Search for a non-empty line from the current position to the end.
+            while (file_.available()) {
+                String line = file_.readStringUntil('\n');
+                line.trim();
+                if (!line.isEmpty()) {
+                    return line; // Found a valid line, return it.
+                }
             }
+    
+            // If we get here, we've hit the end of the file. Rewind to the beginning.
+            file_.seek(0);
+    
+            // SAFETY BREAK: If our search started at the very beginning (pos 0)
+            // and we read the entire file without finding a single valid line,
+            // it means the file is composed entirely of whitespace. We must
+            // return an empty string to signal this and prevent an infinite loop.
+            if (search_start_pos == 0) {
+                return "";
+            }
+            
+            // If we started mid-file, we now continue the loop, searching from the top.
         }
     }
 

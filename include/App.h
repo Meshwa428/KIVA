@@ -15,6 +15,7 @@
 #include "PopUpMenu.h"
 #include "OtaManager.h"
 #include "OtaStatusMenu.h"
+#include "SplitSelectionMenu.h"
 #include "Jammer.h"
 #include "ChannelSelectionMenu.h"
 #include "JammingActiveMenu.h"
@@ -84,7 +85,8 @@ private:
     GridMenu wifiToolsMenu_;
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
-    GridMenu beaconModeMenu_;
+    
+    SplitSelectionMenu beaconModeMenu_;
 
     // WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;

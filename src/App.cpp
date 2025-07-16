@@ -111,8 +111,8 @@ App::App() :
         MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    beaconModeMenu_("Beacon Spam", {
-        MenuItem{"Random SSIDs", IconType::UI_REFRESH, MenuType::NONE,
+    beaconModeMenu_("Beacon Spam", MenuType::BEACON_MODE_SELECTION, {
+        MenuItem{"Random", IconType::BEACON, MenuType::NONE,
             [](App* app) {
                 BeaconSpamActiveMenu* activeMenu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (activeMenu) {
@@ -121,9 +121,9 @@ App::App() :
                 }
             }
         },
-        MenuItem{"From SD Card", IconType::INFO, MenuType::BEACON_FILE_LIST},
+        MenuItem{"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
-    }, 2),
+    }),
     // --- MODIFIED: Remove old menu constructors ---
     textInputMenu_(),
     connectionStatusMenu_(),
@@ -295,6 +295,21 @@ void App::loop() {
     if (currentMenu_) {
         currentMenu_->onUpdate(this);
     }
+
+    // --- FIX: PERFORMANCE MODE RENDERING THROTTLE ---
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive();
+    static unsigned long lastRenderTime = 0;
+    // Update screen only once per second in performance mode.
+    // This frees up massive amounts of CPU time for the attack loops.
+    if (perfMode && (millis() - lastRenderTime < 1000)) 
+    {
+        // In performance mode, we skip drawing to save CPU time,
+        // but feed the watchdog timer to prevent reboots.
+        esp_task_wdt_reset();
+        return;
+    }
+    lastRenderTime = millis();
+    // --- END FIX ---
 
     U8G2& mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();
@@ -518,7 +533,7 @@ void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long tot
     currentProgressBarFillPx_ = progressBarDrawableWidth * eased_t;
 
     display.clearBuffer();
-    drawCustomIcon(display, 0, -2, IconType::BOOT_LOGO);
+    drawCustomIcon(display, 0, -4, IconType::BOOT_LOGO);
 
     int progressBarY = IconSize::BOOT_LOGO_HEIGHT - 12;
     int progressBarHeight = 7;

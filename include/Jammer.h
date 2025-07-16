@@ -59,6 +59,9 @@ public:
 private:
     // Helper function to initialize and configure an NRF24 module.
     bool configureRadio(RF24& radio, const char* radioName);
+    
+    // --- NEW: Private helper for noise injection ---
+    void jamWithNoise(int channel1, int channel2);
 
     App* app_; // pointer to the main application context
 

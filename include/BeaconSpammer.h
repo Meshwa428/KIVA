@@ -27,6 +27,8 @@ public:
     uint32_t getSsidCounter() const;
     int getCurrentChannel() const;
 
+    static bool isSsidFileValid(const std::string& ssidFilePath);
+
 private:
     struct FakeAP {
         std::string ssid;

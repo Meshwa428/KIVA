@@ -42,6 +42,8 @@ enum class IconType
     UTILITIES_CATEGORY,
     BOOT_LOGO,
     NET_WIFI_LOCK,
+    SD_CARD,
+    BEACON,
     NUM_ICON_TYPES
 };
 
@@ -71,6 +73,8 @@ extern const unsigned char icon_ui_vibration_large_bits[];
 extern const unsigned char icon_ui_laser_large_bits[];
 extern const unsigned char icon_ui_flashlight_large_bits[];
 extern const unsigned char icon_utilities_category_large_bits[];
+extern const unsigned char icon_sd_card_large_bits[];
+extern const unsigned char icon_beacon_large_bits[];
 
 // Small Icons
 extern const unsigned char icon_ui_charging_bolt_small_bits[];

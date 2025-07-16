@@ -1,16 +1,19 @@
 #include "Jammer.h"
-#include "App.h" // For access to WifiManager
-// #include <SPI.h> // For SPI communication with NRF24
+#include "App.h"
 
 // --- Pre-defined channel lists ---
-// These are the NRF24L01 channels (0-125) that correspond to the target frequencies.
 const int Jammer::ble_adv_nrf_channels_[] = {2, 26, 80};
 const int Jammer::bt_classic_nrf_channels_[] = {
     2,  5,  8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41,
     44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 80
 };
-const int Jammer::wifi_narrow_nrf_channels_[] = {
-    12, 17, 22, 27, 32, 37, 42, 47, 52, 57, 62, 67, 72
+// This list now represents the TARGET WI-FI CHANNELS to sweep.
+const int Jammer::wifi_narrow_nrf_channels_[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+
+// Garbage payload for Noise Injection
+static const uint8_t garbage_payload_[] = { 
+    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55,
+    0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55
 };
 
 
@@ -33,50 +36,40 @@ bool Jammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode 
         return false;
     }
 
-    // Check if the lock we received is valid
     if (!rfLock || !rfLock->isValid()) {
         Serial.println("[JAMMER-LOG] CRITICAL: Failed to acquire RF hardware lock. Aborting.");
         return false;
     }
     
-    // The lock is valid, take ownership of it.
     rfLock_ = std::move(rfLock);
-
     Serial.printf("[JAMMER-LOG] Attempting to start JammingMode %d\n", (int)mode);
     
-    // Set initial state
     isActive_ = true;
     currentMode_ = mode;
     currentConfig_ = config;
     channelHopIndex_ = 0;
     
-    int initialChannel = 1; // Default starting channel
+    byte dummy_addr[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
+    if (rfLock_->radio1) rfLock_->radio1->openWritingPipe(dummy_addr);
+    if (rfLock_->radio2) rfLock_->radio2->openWritingPipe(dummy_addr);
+    
+    int initialChannel = 1;
+
     switch (mode) {
         case JammingMode::BLE:
-            initialChannel = ble_adv_nrf_channels_[0];
-            break;
         case JammingMode::BT_CLASSIC:
-            initialChannel = bt_classic_nrf_channels_[0];
+            initialChannel = (mode == JammingMode::BLE) ? ble_adv_nrf_channels_[0] : bt_classic_nrf_channels_[0];
+            if (rfLock_->radio1) rfLock_->radio1->startConstCarrier(RF24_PA_MAX, initialChannel);
+            if (rfLock_->radio2) rfLock_->radio2->startConstCarrier(RF24_PA_MAX, initialChannel);
             break;
         case JammingMode::WIFI_NARROWBAND:
-            initialChannel = wifi_narrow_nrf_channels_[0];
-            break;
         case JammingMode::WIDE_SPECTRUM:
-            initialChannel = 0;
-            break;
         case JammingMode::CHANNEL_FLOOD_CUSTOM:
-            if (!config.customChannels.empty()) {
-                initialChannel = config.customChannels[0];
-            }
             break;
         default: break;
     }
 
-    // Start constant carrier wave on the initial channel
-    if (rfLock_->radio1) rfLock_->radio1->startConstCarrier(RF24_PA_MAX, initialChannel);
-    if (rfLock_->radio2) rfLock_->radio2->startConstCarrier(RF24_PA_MAX, initialChannel);
-
-    Serial.printf("[JAMMER-LOG] Jammer started. Initial channel: %d\n", initialChannel);
+    Serial.printf("[JAMMER-LOG] Jammer started. Mode: %s\n", getModeString());
     return true;
 }
 
@@ -86,8 +79,9 @@ void Jammer::stop() {
     }
     Serial.println("[JAMMER-LOG] Stopping active jamming...");
     
-    // This is the RAII magic. When rfLock_ is reset, its destructor is called,
-    // which tells HardwareManager to power down the NRFs and release the lock.
+    if (rfLock_ && rfLock_->radio1) rfLock_->radio1->stopListening();
+    if (rfLock_ && rfLock_->radio2) rfLock_->radio2->stopListening();
+
     rfLock_.reset();
     
     isActive_ = false;
@@ -99,56 +93,75 @@ void Jammer::loop() {
     if (!isActive_ || !rfLock_) {
         return;
     }
-    
-    int nextChannel1 = -1;
-    int nextChannel2 = -1;
 
     switch (currentMode_) {
         case JammingMode::BLE: {
             int numChannels = sizeof(ble_adv_nrf_channels_) / sizeof(int);
             channelHopIndex_ = (channelHopIndex_ + 1) % numChannels;
-            nextChannel1 = ble_adv_nrf_channels_[channelHopIndex_];
-            nextChannel2 = nextChannel1; // Both radios on the same channel
+            int nextChannel = ble_adv_nrf_channels_[channelHopIndex_];
+            if (rfLock_->radio1) rfLock_->radio1->startConstCarrier(RF24_PA_MAX, nextChannel);
+            if (rfLock_->radio2) rfLock_->radio2->startConstCarrier(RF24_PA_MAX, nextChannel);
             break;
         }
         case JammingMode::BT_CLASSIC: {
             int numChannels = sizeof(bt_classic_nrf_channels_) / sizeof(int);
             channelHopIndex_ = (channelHopIndex_ + 1) % numChannels;
-            nextChannel1 = bt_classic_nrf_channels_[channelHopIndex_];
-            nextChannel2 = nextChannel1;
+            int nextChannel = bt_classic_nrf_channels_[channelHopIndex_];
+            if (rfLock_->radio1) rfLock_->radio1->startConstCarrier(RF24_PA_MAX, nextChannel);
+            if (rfLock_->radio2) rfLock_->radio2->startConstCarrier(RF24_PA_MAX, nextChannel);
             break;
         }
-        case JammingMode::WIFI_NARROWBAND: {
-            int numChannels = sizeof(wifi_narrow_nrf_channels_) / sizeof(int);
-            channelHopIndex_ = (channelHopIndex_ + 1) % numChannels;
-            nextChannel1 = wifi_narrow_nrf_channels_[channelHopIndex_];
-            nextChannel2 = nextChannel1;
+        case JammingMode::WIFI_NARROWBAND:
+        case JammingMode::CHANNEL_FLOOD_CUSTOM: {
+            int target_wifi_channel;
+            int num_wifi_channels;
+
+            if (currentMode_ == JammingMode::WIFI_NARROWBAND) {
+                num_wifi_channels = sizeof(wifi_narrow_nrf_channels_) / sizeof(int);
+                if (num_wifi_channels == 0) return;
+                target_wifi_channel = wifi_narrow_nrf_channels_[channelHopIndex_];
+            } else { // CHANNEL_FLOOD_CUSTOM
+                num_wifi_channels = currentConfig_.customChannels.size();
+                if (num_wifi_channels == 0) return;
+                target_wifi_channel = currentConfig_.customChannels[channelHopIndex_];
+            }
+            
+            // --- BARRAGE JAMMING / SWEEP LOGIC ---
+            // Calculate the NRF channel range to sweep for the target Wi-Fi channel.
+            int start_nrf_channel = (target_wifi_channel * 5) + 1;
+            int end_nrf_channel = start_nrf_channel + 22; // Sweep across 22 MHz
+
+            for (int i = start_nrf_channel; i < end_nrf_channel; ++i) {
+                if (i > 125) continue; // Stay within valid NRF channel range
+                jamWithNoise(i, i); // Jam this 1MHz slice with both radios
+            }
+            
+            // Move to the next target Wi-Fi channel for the next loop() iteration
+            channelHopIndex_ = (channelHopIndex_ + 1) % num_wifi_channels;
             break;
         }
         case JammingMode::WIDE_SPECTRUM: {
-            // Each radio jumps to a different random channel for max coverage
-            nextChannel1 = random(0, 126);
-            nextChannel2 = random(0, 126);
-            break;
-        }
-        case JammingMode::CHANNEL_FLOOD_CUSTOM: {
-            if (!currentConfig_.customChannels.empty()) {
-                int numChannels = currentConfig_.customChannels.size();
-                channelHopIndex_ = (channelHopIndex_ + 1) % numChannels;
-                nextChannel1 = currentConfig_.customChannels[channelHopIndex_];
-                nextChannel2 = nextChannel1;
-            }
+            int nextChannel1 = random(0, 126);
+            int nextChannel2 = random(0, 126);
+            jamWithNoise(nextChannel1, nextChannel2);
             break;
         }
         default:
-            return; // Should not happen
+            return;
+    }
+}
+
+void Jammer::jamWithNoise(int channel1, int channel2) {
+    if (rfLock_->radio1 && channel1 != -1) {
+        rfLock_->radio1->setChannel(channel1);
+        rfLock_->radio1->write(&garbage_payload_, sizeof(garbage_payload_));
     }
 
-    if (nextChannel1 != -1 && rfLock_->radio1) {
-        rfLock_->radio1->startConstCarrier(RF24_PA_MAX, nextChannel1);
-    }
-    if (nextChannel2 != -1 && rfLock_->radio2) {
-        rfLock_->radio2->startConstCarrier(RF24_PA_MAX, nextChannel2);
+    delayMicroseconds(50); // Crucial delay for SPI bus stability
+
+    if (rfLock_->radio2 && channel2 != -1) {
+        rfLock_->radio2->setChannel(channel2);
+        rfLock_->radio2->write(&garbage_payload_, sizeof(garbage_payload_));
     }
 }
 
@@ -167,9 +180,9 @@ const char* Jammer::getModeString() const {
     switch(currentMode_) {
         case JammingMode::BLE: return "BLE Jam";
         case JammingMode::BT_CLASSIC: return "BT Classic Jam";
-        case JammingMode::WIFI_NARROWBAND: return "WiFi Narrowband";
-        case JammingMode::WIDE_SPECTRUM: return "Wide Spectrum";
-        case JammingMode::CHANNEL_FLOOD_CUSTOM: return "Custom Flood";
+        case JammingMode::WIFI_NARROWBAND: return "WiFi Barrage";
+        case JammingMode::WIDE_SPECTRUM: return "Wide Spectrum Barrage";
+        case JammingMode::CHANNEL_FLOOD_CUSTOM: return "Custom Barrage";
         default: return "Idle";
     }
 }
