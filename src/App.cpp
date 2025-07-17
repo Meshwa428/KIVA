@@ -50,7 +50,7 @@ App::App() :
     }),
     wifiToolsMenu_("WiFi Tools", {
         MenuItem{"Beacon Spam", IconType::TOOL_INJECTION, MenuType::BEACON_MODE_SELECTION},
-        MenuItem{"Deauth", IconType::TOOL_JAMMING, MenuType::NONE},
+        MenuItem{"Deauth", IconType::TOOL_JAMMING, MenuType::DEAUTH_TOOLS_GRID},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
@@ -111,6 +111,31 @@ App::App() :
         MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    deauthToolsMenu_("Deauth Attack", {
+        MenuItem{"RogueAP (Once)", IconType::NET_WIFI_LOCK, MenuType::NONE,
+            [](App* app) {
+                app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
+                app->getWifiListDataSource().setScanOnEnter(true);
+                app->changeMenu(MenuType::WIFI_LIST);
+            }},
+        MenuItem{"Bcast (Once)", IconType::NET_WIFI, MenuType::NONE,
+            [](App* app) {
+                app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
+                app->getWifiListDataSource().setScanOnEnter(true);
+                app->changeMenu(MenuType::WIFI_LIST);
+            }},
+        MenuItem{"RogueAP (All)", IconType::NET_WIFI_LOCK, MenuType::NONE,
+            [](App* app) {
+                app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::ALL_APS);
+                app->changeMenu(MenuType::DEAUTH_ACTIVE);
+            }},
+        MenuItem{"Bcast (All)", IconType::NET_WIFI, MenuType::NONE,
+            [](App* app) {
+                app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::ALL_APS);
+                app->changeMenu(MenuType::DEAUTH_ACTIVE);
+            }},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
     beaconModeMenu_("Beacon Spam", MenuType::BEACON_MODE_SELECTION, {
         MenuItem{"Random", IconType::BEACON, MenuType::NONE,
             [](App* app) {
@@ -140,7 +165,8 @@ App::App() :
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
     firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
     beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
-    beaconSpamActiveMenu_()
+    beaconSpamActiveMenu_(),
+    deauthActiveMenu_()
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i) {
         smallDisplayLogBuffer_[i][0] = '\0';
@@ -221,6 +247,7 @@ void App::setup() {
     otaManager_.setup(this, &wifiManager_);
     jammer_.setup(this);
     beaconSpammer_.setup(this);
+    deauther_.setup(this);
     
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -232,6 +259,7 @@ void App::setup() {
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
+    menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
     menuRegistry_[MenuType::BEACON_MODE_SELECTION] = &beaconModeMenu_;
 
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
@@ -245,8 +273,10 @@ void App::setup() {
     menuRegistry_[MenuType::BEACON_FILE_LIST] = &beaconFileListMenu_;
 
     menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
+
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
     menuRegistry_[MenuType::BEACON_SPAM_ACTIVE] = &beaconSpamActiveMenu_;
+    menuRegistry_[MenuType::DEAUTH_ACTIVE] = &deauthActiveMenu_;
 
     
     navigationStack_.clear();
@@ -260,6 +290,7 @@ void App::loop() {
     otaManager_.loop();
     jammer_.loop();
     beaconSpammer_.loop();
+    deauther_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;
@@ -278,7 +309,9 @@ void App::loop() {
         }
     }
     // Also keep WiFi on if we are connected for other reasons (e.g. background task)
-    if (wifiManager_.getState() == WifiState::CONNECTED) {
+    if (wifiManager_.getState() == WifiState::CONNECTED ||
+        beaconSpammer_.isActive() ||
+        deauther_.isActive()) {
         wifiIsRequired = true;
     }
 
@@ -297,7 +330,7 @@ void App::loop() {
     }
 
     // --- FIX: PERFORMANCE MODE RENDERING THROTTLE ---
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive();
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive();
     static unsigned long lastRenderTime = 0;
     // Update screen only once per second in performance mode.
     // This frees up massive amounts of CPU time for the attack loops.

@@ -3,6 +3,7 @@
 #include "UI_Utils.h"
 #include "ListMenu.h"
 #include "TextInputMenu.h"
+#include "Deauther.h"
 
 WifiListDataSource::WifiListDataSource() {}
 
@@ -104,6 +105,18 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
             app->changeMenu(MenuType::BACK);
             break;
         case ListItemType::NETWORK: {
+            // --- NEW LOGIC: CHECK IF WE ARE SELECTING A DEAUTH TARGET ---
+            auto& deauther = app->getDeauther();
+            if (deauther.isAttackPending()) {
+                const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
+                if (deauther.start(netInfo)) {
+                    app->changeMenu(MenuType::DEAUTH_ACTIVE);
+                } else {
+                    app->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                }
+                return; // Exit here, do not proceed to connection logic
+            }
+            
             if (selectedItem.label.rfind("* ", 0) == 0) {
                 app->showPopUp("Disconnect?", selectedItem.label.substr(2), [this, app, menu](App* app_cb) {
                     app_cb->getWifiManager().disconnect();

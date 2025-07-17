@@ -8,7 +8,6 @@
 HardwareManager::HardwareManager() : 
                                      u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
                                      u8g2_small_(U8G2_R0, U8X8_PIN_NONE),
-                                     // --- CORRECTED: Use the constructor with SPI speed ---
                                      radio1_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, SPI_SPEED_NRF), 
                                      radio2_(Pins::NRF2_CE_PIN, Pins::NRF2_CSN_PIN, SPI_SPEED_NRF), 
                                      currentRfClient_(RfClient::NONE),
@@ -88,6 +87,11 @@ void HardwareManager::releaseRfControl() {
     } else if (currentRfClient_ == RfClient::WIFI_PROMISCUOUS) {
         esp_wifi_set_promiscuous(false);
         WiFi.mode(WIFI_OFF);
+    
+    } else if (currentRfClient_ == RfClient::ROGUE_AP) { // <-- ADD THIS
+        WiFi.softAPdisconnect(true);
+        WiFi.enableAP(false);
+        WiFi.mode(WIFI_OFF);
     }
     currentRfClient_ = RfClient::NONE;
 }
@@ -108,7 +112,6 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         WiFi.mode(WIFI_OFF);
         delay(100);
         
-        // The library now handles the SPI settings during begin()
         bool r1_ok = radio1_.begin() && radio1_.isChipConnected();
         bool r2_ok = radio2_.begin() && radio2_.isChipConnected();
 
@@ -158,10 +161,22 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         WiFi.disconnect(true, true);
         delay(100);
         
-        // --- FIX: Use WIFI_STA as the base for promiscuous mode ---
         if (WiFi.mode(WIFI_STA)) {
             esp_wifi_set_promiscuous(true);
             currentRfClient_ = RfClient::WIFI_PROMISCUOUS;
+            return std::unique_ptr<RfLock>(new RfLock(*this, true));
+        } else {
+            return std::unique_ptr<RfLock>(new RfLock(*this, false));
+        }
+    
+    } else if (client == RfClient::ROGUE_AP) { // <-- ADD THIS BLOCK
+        if (radio1_.isChipConnected()) radio1_.powerDown();
+        if (radio2_.isChipConnected()) radio2_.powerDown();
+        WiFi.disconnect(true, true);
+        delay(100);
+
+        if (WiFi.mode(WIFI_AP_STA)) {
+            currentRfClient_ = RfClient::ROGUE_AP;
             return std::unique_ptr<RfLock>(new RfLock(*this, true));
         } else {
             return std::unique_ptr<RfLock>(new RfLock(*this, false));
@@ -175,10 +190,9 @@ void HardwareManager::update()
 {
     // --- Define intervals based on performance mode ---
     static unsigned long lastInputPollTime = 0;
-    // --- FIX: Increase polling frequency in performance mode to not miss button presses ---
     const unsigned long currentPollInterval = highPerformanceMode_ 
-                                            ? 500  // More responsive polling for active tasks (20Hz)
-                                            : 16;  // Fast poll interval for normal UI (125Hz)
+                                            ? 500
+                                            : 16;
 
     if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
         updateBattery();
@@ -193,10 +207,9 @@ void HardwareManager::update()
     }
 }
 
-// --- NEW METHOD IMPLEMENTATION ---
 void HardwareManager::setPerformanceMode(bool highPerf) {
     highPerformanceMode_ = highPerf;
-    Serial.printf("[HW-LOG] Performance mode set to: %s\n", highPerf ? "HIGH (Jamming)" : "NORMAL (UI)");
+    Serial.printf("[HW-LOG] Performance mode set to: %s\n", highPerf ? "HIGH" : "NORMAL (UI)");
 }
 
 void HardwareManager::updateBattery()
@@ -415,10 +428,6 @@ InputEvent HardwareManager::getNextInputEvent()
     }
     InputEvent event = inputQueue_.front();
     inputQueue_.erase(inputQueue_.begin());
-
-    // // LOG THE EVENT AS IT'S BEING PULLED FROM THE QUEUE
-    // Serial.printf("[HW-LOG] Dequeuing event: %d\n", static_cast<int>(event));
-
     return event;
 }
 
@@ -470,9 +479,6 @@ void HardwareManager::processEncoder()
     {
         return;
     }
-
-    // Serial.printf("[ENC-LOG] State change: %d -> %d\n", lastEncState_, currentState);
-
     bool validCW = (currentState == cwTable[lastEncState_]);
     bool validCCW = (currentState == ccwTable[lastEncState_]);
 
@@ -483,39 +489,31 @@ void HardwareManager::processEncoder()
         if (encConsecutiveValid_ < 0)
             encConsecutiveValid_ = 0;
         encConsecutiveValid_++;
-        // Serial.printf("[ENC-LOG] Valid CW step. Count: %d\n", encConsecutiveValid_);
     }
     else if (validCCW)
     {
         if (encConsecutiveValid_ > 0)
             encConsecutiveValid_ = 0;
         encConsecutiveValid_--;
-        // Serial.printf("[ENC-LOG] Valid CCW step. Count: %d\n", encConsecutiveValid_);
     }
     else
     {
         encConsecutiveValid_ = 0;
-        // Serial.println("[ENC-LOG] Invalid step. Counter reset.");
         return;
     }
-
-    // *** THE FIX: Only queue events if the grace period is over ***
     if (millis() - setupTime_ < 300)
     {
-        // We've updated the state, but we don't queue an event yet.
         return;
     }
 
     if (encConsecutiveValid_ >= requiredConsecutive)
     {
         inputQueue_.push_back(InputEvent::ENCODER_CW);
-        // Serial.println("[ENC-LOG] ---> CW Event Queued! <---");
         encConsecutiveValid_ = 0;
     }
     else if (encConsecutiveValid_ <= -requiredConsecutive)
     {
         inputQueue_.push_back(InputEvent::ENCODER_CCW);
-        // Serial.println("[ENC-LOG] ---> CCW Event Queued! <---");
         encConsecutiveValid_ = 0;
     }
 }
@@ -525,7 +523,6 @@ void HardwareManager::processButton_PCF0()
     selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
     uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
 
-    // Only handles the Encoder Button on PCF0
     unsigned long currentTime = millis();
     static bool lastRawHState0[8] = {true, true, true, true, true, true, true, true};
 
@@ -557,7 +554,6 @@ void HardwareManager::processButtons_PCF1()
     selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
     uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
 
-    // Handles all the Navigation Buttons on PCF1
     unsigned long currentTime = millis();
     static bool lastRawHState1[8] = {true, true, true, true, true, true, true, true};
 
@@ -598,7 +594,6 @@ void HardwareManager::processButtons_PCF1()
     }
 }
 
-// NEW function to handle auto-repeat
 void HardwareManager::processButtonRepeats()
 {
     unsigned long currentTime = millis();
@@ -619,7 +614,6 @@ void HardwareManager::processButtonRepeats()
     }
 }
 
-// NEW helper to map a pin to an event
 InputEvent HardwareManager::mapPcf1PinToEvent(int pin)
 {
     switch (pin)

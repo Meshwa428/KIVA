@@ -8,13 +8,13 @@
 #include <RF24.h>
 #include <SPI.h>
 
-// --- NEW ---
 // Enum to identify which system is requesting RF control
 enum class RfClient {
     NONE,
     NRF_JAMMER,
     WIFI,
-    WIFI_PROMISCUOUS
+    WIFI_PROMISCUOUS,
+    ROGUE_AP
 };
 
 static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz

@@ -33,6 +33,8 @@ enum class WifiMode {
 // Simplified info for UI display
 struct WifiNetworkInfo {
     char ssid[33];
+    uint8_t bssid[6];
+    int32_t channel;
     int8_t rssi;
     bool isSecure;
 };
@@ -84,7 +86,7 @@ private:
 
     std::vector<WifiNetworkInfo> scannedNetworks_;
     std::vector<KnownWifiNetwork> knownNetworks_;
-    bool networksLoaded_ = false; // <-- NEW FLAG
+    bool networksLoaded_ = false;
     char ssidToConnect_[33];
     String statusMessage_;
 };

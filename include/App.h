@@ -25,6 +25,8 @@
 #include "BeaconSpammer.h"
 #include "BeaconFileListDataSource.h"
 #include "BeaconSpamActiveMenu.h"
+#include "Deauther.h"
+#include "DeauthActiveMenu.h"
 
 class App
 {
@@ -43,6 +45,7 @@ public:
     OtaManager &getOtaManager() { return otaManager_; }
     Jammer &getJammer() { return jammer_; }
     BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
+    Deauther &getDeauther() { return deauther_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -68,6 +71,7 @@ private:
     OtaManager otaManager_;
     Jammer jammer_;
     BeaconSpammer beaconSpammer_;
+    Deauther deauther_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -85,6 +89,7 @@ private:
     GridMenu wifiToolsMenu_;
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
+    GridMenu deauthToolsMenu_;
     
     SplitSelectionMenu beaconModeMenu_;
 
@@ -96,7 +101,10 @@ private:
     // FirmwareListMenu firmwareListMenu_;
     OtaStatusMenu otaStatusMenu_;
     ChannelSelectionMenu channelSelectionMenu_;
+    
     JammingActiveMenu jammingActiveMenu_;
+    BeaconSpamActiveMenu beaconSpamActiveMenu_;
+    DeauthActiveMenu deauthActiveMenu_;
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;
@@ -105,7 +113,9 @@ private:
     ListMenu wifiListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;
-    BeaconSpamActiveMenu beaconSpamActiveMenu_;
+
+    
+
 };
 
 #endif

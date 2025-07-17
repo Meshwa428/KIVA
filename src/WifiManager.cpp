@@ -210,6 +210,8 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
                     WifiNetworkInfo net;
                     strncpy(net.ssid, WiFi.SSID(i).c_str(), sizeof(net.ssid)-1);
                     net.ssid[sizeof(net.ssid)-1] = '\0';
+                    memcpy(net.bssid, WiFi.BSSID(i), 6);
+                    net.channel = WiFi.channel(i); // <-- POPULATE THE CHANNEL
                     net.rssi = WiFi.RSSI(i);
                     net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
                     scannedNetworks_.push_back(net);
