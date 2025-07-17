@@ -9,15 +9,12 @@ void DeauthActiveMenu::onEnter(App* app) {
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
-        // This case is for attacks that don't require selecting a specific AP from the list.
         if (config.target == DeauthTarget::ALL_APS) {
-            if (!deauther.startAllAPs()) {
-                app->showPopUp("Error", "No networks found to attack.", nullptr, "OK", "", true);
-                app->changeMenu(MenuType::BACK);
-            }
+            // The startAllAPs now correctly initiates a scan.
+            // The Deauther::loop will handle the rest.
+            deauther.startAllAPs();
         }
-        // For SPECIFIC_AP, the start() is called by WifiListDataSource *before* this menu is entered.
-        // So, we don't need to do anything here for that case.
+        // For SPECIFIC_AP, start() is called by WifiListDataSource.
     }
 }
 
@@ -26,30 +23,38 @@ void DeauthActiveMenu::onExit(App* app) {
 }
 
 void DeauthActiveMenu::onUpdate(App* app) {
-    // The main App::loop() handles throttling, and Deauther::loop() handles the attack logic.
+    // Deauther::loop is called from App::loop
 }
 
 void DeauthActiveMenu::handleInput(App* app, InputEvent event) {
-    // --- THIS IS THE FIX ---
-    // Instead of just going "back" one step to the list, we return to the menu
-    // where the attack type was originally selected.
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->returnToMenu(MenuType::DEAUTH_TOOLS_GRID); // onExit will be called automatically, stopping the attack.
+        app->returnToMenu(MenuType::DEAUTH_TOOLS_GRID);
     }
 }
 
 void DeauthActiveMenu::draw(App* app, U8G2& display) {
     auto& deauther = app->getDeauther();
+
+    // --- NEW DRAWING LOGIC ---
     if (!deauther.isActive()) {
-        const char* msg = "Starting...";
+        // This case handles the frame before onEnter completes.
+        const char* msg = "Initializing...";
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
         return;
     }
 
-    // Now we get the *active* config, not the pending one.
     const auto& config = deauther.getPendingConfig();
-    
+
+    // If attacking all APs and the target list is still empty, it means we are scanning.
+    if (config.target == DeauthTarget::ALL_APS && deauther.getCurrentTargetSsid().empty()) {
+        const char* msg = "Scanning...";
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
+        return;
+    }
+
+    // --- Original drawing logic for when attack is running ---
     std::string title = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP Attack" : "Broadcast Deauth";
     
     display.setFont(u8g2_font_7x13B_tr);

