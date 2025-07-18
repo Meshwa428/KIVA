@@ -151,6 +151,9 @@ void ChannelSelectionMenu::startJamming(App* app) {
         app->showPopUp("Error", "No channels were selected.", nullptr, "OK", "", true);
         return;
     }
+    
+    // --- REVERTED FOR FAST SWEEP ---
+    config.technique = JammingTechnique::NOISE_INJECTION;
 
     // 1. Get the destination menu instance.
     JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));

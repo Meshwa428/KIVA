@@ -129,8 +129,14 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::BEACON:
             xbm_data = icon_beacon_large_bits;
             break;
+        case IconType::SKULL:
+            xbm_data = icon_skull_large_bits;
+            break;
+        case IconType::NONE:
+            xbm_data = icon_none_large_bits;
+            break;
         default:
-            xbm_data = nullptr;
+            xbm_data = icon_none_large_bits;
             break;
         }
     }
@@ -139,13 +145,13 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
     {
         display.drawXBM(x, y, w, h, xbm_data);
     }
-    else
-    {
-        int placeholder_w = (size == IconRenderSize::SMALL) ? IconSize::SMALL_WIDTH : IconSize::LARGE_WIDTH;
-        int placeholder_h = (size == IconRenderSize::SMALL) ? IconSize::SMALL_HEIGHT : IconSize::LARGE_HEIGHT;
-        display.drawFrame(x, y, placeholder_w, placeholder_h);
-        display.drawLine(x, y, x + placeholder_w - 1, y + placeholder_h - 1);
-    }
+    // else
+    // {
+    //     int placeholder_w = (size == IconRenderSize::SMALL) ? IconSize::SMALL_WIDTH : IconSize::LARGE_WIDTH;
+    //     int placeholder_h = (size == IconRenderSize::SMALL) ? IconSize::SMALL_HEIGHT : IconSize::LARGE_HEIGHT;
+    //     display.drawFrame(x, y, placeholder_w, placeholder_h);
+    //     display.drawLine(x, y, x + placeholder_w - 1, y + placeholder_h - 1);
+    // }
 }
 
 void drawRndBox(U8G2 &display, int x, int y, int w, int h, int r, bool fill)

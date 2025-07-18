@@ -43,7 +43,7 @@ private:
     bool marqueeActive_;
     bool marqueePaused_;
     unsigned long marqueePauseStartTime_;
-    bool marqueeScrollLeft_; // ** NEW **
+    bool marqueeScrollLeft_;
 };
 
 #endif // GRID_MENU_H

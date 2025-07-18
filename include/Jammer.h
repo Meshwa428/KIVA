@@ -8,22 +8,29 @@
 
 #define SPI_SPEED_NRF 16000000 // SPI speed for NRF modules
 
-// Forward declaration to avoid circular dependencies
+// Forward declaration
 class App;
 
-// Defines the different jamming strategies the class can execute.
+// Defines the different jamming strategies
 enum class JammingMode {
     IDLE,
-    BLE,                // Bluetooth Low Energy advertising channels
-    BT_CLASSIC,         // Bluetooth Classic frequency hopping channels
-    WIFI_NARROWBAND,    // 2.4 GHz WiFi channels (1-14)
-    WIDE_SPECTRUM,      // Rapidly sweeps all 125 NRF channels
-    CHANNEL_FLOOD_CUSTOM// Jams a user-provided list of channels
+    BLE,
+    BT_CLASSIC,
+    WIFI_NARROWBAND,
+    WIDE_SPECTRUM,
+    CHANNEL_FLOOD_CUSTOM
 };
 
-// A structure to pass configuration data, primarily for custom modes.
+// Defines the underlying RF transmission technique
+enum class JammingTechnique {
+    NOISE_INJECTION, // Sending garbage packets
+    CONSTANT_CARRIER // Broadcasting an unmodulated carrier wave
+};
+
+// A structure to pass configuration data
 struct JammerConfig {
     std::vector<int> customChannels;
+    JammingTechnique technique = JammingTechnique::NOISE_INJECTION;
 };
 
 class Jammer {
@@ -31,40 +38,19 @@ public:
     Jammer();
     void setup(App* app);
 
-    /**
-     * @brief Starts a jamming operation. This is the main entry point.
-     * This function will request a full hardware takeover of RF functionalities.
-     * @param mode The jamming strategy to use.
-     * @param config Configuration for the selected mode (e.g., custom channels).
-     * @return true if jamming was successfully started, false otherwise.
-     */
     bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode mode, JammerConfig config = {});
-    
-    /**
-     * @brief Stops any active jamming operation and releases RF hardware.
-     */
     void stop();
-
-    /**
-     * @brief The main update loop for the jammer, called repeatedly.
-     * Performs the channel hopping and RF transmission for the active mode.
-     */
     void loop();
 
-    // --- State Getters ---
     bool isActive() const;
     JammingMode getCurrentMode() const;
     const char* getModeString() const;
 
 private:
-    // Helper function to initialize and configure an NRF24 module.
-    bool configureRadio(RF24& radio, const char* radioName);
-    
-    // --- NEW: Private helper for noise injection ---
     void jamWithNoise(int channel1, int channel2);
+    void jamWithConstantCarrier(int channel1, int channel2);
 
-    App* app_; // pointer to the main application context
-
+    App* app_;
     std::unique_ptr<HardwareManager::RfLock> rfLock_;
 
     // Jamming State
@@ -74,6 +60,11 @@ private:
 
     // Channel-hopping logic state
     int channelHopIndex_;
+    unsigned long lastHopTime_;
+
+    // --- STATE FOR STEP-BY-STEP SWEEPING ---
+    int sweepIndex_; 
+    int targetWifiChannel_;
 
     // Pre-defined channel lists for different modes
     static const int ble_adv_nrf_channels_[];

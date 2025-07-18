@@ -2,6 +2,7 @@
 #include "App.h"
 #include "UI_Utils.h"
 #include <Arduino.h>
+#include <algorithm> // For std::min
 
 GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) : 
     title_(title),
@@ -10,12 +11,13 @@ GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) 
     selectedIndex_(0),
     gridAnimatingIn_(false),
     marqueeActive_(false),
-    marqueeScrollLeft_(true) // Already initialized correctly, but good to confirm
+    marqueeScrollLeft_(true)
 {
     // Infer MenuType from title
     if (title == "WiFi Tools") menuType_ = MenuType::WIFI_TOOLS_GRID;
     else if (title == "Update") menuType_ = MenuType::FIRMWARE_UPDATE_GRID;
     else if (title == "Jammer") menuType_ = MenuType::JAMMING_TOOLS_GRID;
+    else if (title == "Deauth Attack") menuType_ = MenuType::DEAUTH_TOOLS_GRID;
     else menuType_ = MenuType::NONE;
 }
 
@@ -26,7 +28,6 @@ void GridMenu::onEnter(App *app)
     currentGridScrollOffset_Y_anim_ = 0;
     startGridAnimation();
     
-    // --- FIX: Reset marquee state on enter ---
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
 }
@@ -80,18 +81,18 @@ void GridMenu::onExit(App *app)
 void GridMenu::handleInput(App* app, InputEvent event) {
     switch(event) {
         case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_RIGHT_PRESS:
-            scroll(1);
+        case InputEvent::BTN_DOWN_PRESS:
+            scroll(columns_); // Move down one row
             break;
         case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_LEFT_PRESS:
-            scroll(-1);
-            break;
         case InputEvent::BTN_UP_PRESS:
-            scroll(-columns_);
+            scroll(-columns_); // Move up one row
             break;
-        case InputEvent::BTN_DOWN_PRESS:
-            scroll(columns_);
+        case InputEvent::BTN_RIGHT_PRESS:
+            scroll(1); // Move to next column
+            break;
+        case InputEvent::BTN_LEFT_PRESS:
+            scroll(-1); // Move to previous column
             break;
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
@@ -120,31 +121,42 @@ void GridMenu::scroll(int direction)
     if (menuItems_.empty()) return;
 
     int oldIndex = selectedIndex_;
-    int targetIndex = selectedIndex_ + direction;
+    int newIndex = oldIndex;
+    int numItems = menuItems_.size();
 
-    // Handle left/right wrapping on the same row
-    if (abs(direction) == 1) {
-        int currentRow = selectedIndex_ / columns_;
-        int startOfRow = currentRow * columns_;
-        int endOfRow = startOfRow + columns_ - 1;
-        
-        // Find the actual last item in the row, which might be less than endOfRow
-        int lastItemInRow = startOfRow;
-        for(int i = startOfRow; i < menuItems_.size() && i <= endOfRow; ++i) {
-            lastItemInRow = i;
+    if (abs(direction) == 1) { // --- HORIZONTAL / LINEAR NAVIGATION (Snake) ---
+        newIndex = (oldIndex + direction + numItems) % numItems;
+    } else { // --- VERTICAL NAVIGATION (Column Wrap) ---
+        int currentCol = oldIndex % columns_;
+        int currentRow = oldIndex / columns_;
+
+        if (direction > 0) { // NAV_DOWN
+            newIndex = oldIndex + columns_;
+            if (newIndex >= numItems) { // If we're past the end
+                // Wrap to the top of the next column
+                int nextCol = (currentCol + 1) % columns_;
+                newIndex = nextCol;
+                // If the next column is also out of bounds (for a very short last row), wrap to start
+                if(newIndex >= numItems) newIndex = 0;
+            }
+        } else { // NAV_UP
+            newIndex = oldIndex - columns_;
+            if (newIndex < 0) { // If we're before the start
+                // Wrap to the bottom of the previous column
+                int prevCol = (currentCol - 1 + columns_) % columns_;
+                // Find the last item in that column
+                newIndex = prevCol;
+                while (newIndex + columns_ < numItems) {
+                    newIndex += columns_;
+                }
+            }
         }
-
-        if (targetIndex < startOfRow) targetIndex = lastItemInRow;
-        if (targetIndex > lastItemInRow) targetIndex = startOfRow;
     }
-    
-    // Clamp vertical movement
-    if (targetIndex < 0) targetIndex = oldIndex;
-    if (targetIndex >= (int)menuItems_.size()) targetIndex = oldIndex;
-    
-    selectedIndex_ = targetIndex;
 
-    const int itemRowHeight = 18 + 4;
+    selectedIndex_ = newIndex;
+
+    // --- Scrolling animation logic ---
+    const int itemRowHeight = 28 + 4; // Updated for taller items with icons
     const int gridVisibleAreaH = 64 - (STATUS_BAR_H + 1) - 4;
     const int visibleRows = gridVisibleAreaH / itemRowHeight;
 
@@ -157,7 +169,6 @@ void GridMenu::scroll(int direction)
         targetGridScrollOffset_Y_ = (currentSelectionRow - visibleRows + 1) * itemRowHeight;
     }
     
-    // --- FIX: Reset marquee state on every scroll ---
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
 }
@@ -184,10 +195,9 @@ void GridMenu::startGridAnimation()
 
 void GridMenu::draw(App* app, U8G2& display) {
     const int itemBaseW = (128 - (columns_ + 1) * 4) / columns_;
-    const int itemBaseH = 18;
+    const int itemBaseH = 28; // Increased height for icon + text
     const int gridStartY = STATUS_BAR_H + 1 + 4;
     
-    // --- STEP 1: Set the main clipping area for the entire grid ---
     const int clip_y_start = STATUS_BAR_H + 1;
     display.setClipWindow(0, clip_y_start, 127, 63);
 
@@ -219,29 +229,27 @@ void GridMenu::draw(App* app, U8G2& display) {
         }
         
         if (scale > 0.7f) {
+            // --- NEW: Icon Drawing Logic ---
+            int icon_y = box_y + 2;
+            int icon_x = box_x + (itemW - IconSize::LARGE_WIDTH) / 2;
+            drawCustomIcon(display, icon_x, icon_y, menuItems_[i].icon);
+
+            // --- Text Drawing Logic (Adjusted for position) ---
             const int text_padding = 2;
             int innerW = itemW - (2 * text_padding);
-            int text_y = box_y + (itemH - (display.getAscent() - display.getDescent())) / 2 + display.getAscent();
+            int text_y = box_y + itemH - 3; // Position text at the bottom of the box
 
-            // --- THE CRITICAL FIX ---
-            // We calculate the desired clip window for the text, then clamp its
-            // vertical coordinates to the main visible area. This prevents the
-            // clip window itself from being defined outside the visible screen.
             int text_clip_x1 = box_x + text_padding;
-            int text_clip_y1 = box_y + 1;
+            int text_clip_y1 = box_y + IconSize::LARGE_HEIGHT + 2; // Clip below icon
             int text_clip_x2 = box_x + itemW - text_padding;
             int text_clip_y2 = box_y + itemH - 1;
 
-            // Clamp the vertical clipping coordinates
             if (text_clip_y1 < clip_y_start) text_clip_y1 = clip_y_start;
             if (text_clip_y2 > 63) text_clip_y2 = 63;
 
-            // Only set the clip window if it's a valid area
             if (text_clip_y1 < text_clip_y2) {
                  display.setClipWindow(text_clip_x1, text_clip_y1, text_clip_x2, text_clip_y2);
             }
-            // --- END OF CRITICAL FIX ---
-
 
             if (isSelected) {
                 updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
@@ -260,7 +268,6 @@ void GridMenu::draw(App* app, U8G2& display) {
                 display.drawStr(box_x + (itemW - textW) / 2, text_y, truncated);
             }
 
-            // Reset the clip window back to the main grid area for the next item.
             display.setClipWindow(0, clip_y_start, 127, 63);
         }
     }

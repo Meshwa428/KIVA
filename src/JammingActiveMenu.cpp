@@ -19,7 +19,7 @@ void JammingActiveMenu::onEnter(App* app) {
         // 1. Request the RF hardware lock from the single source of truth.
         auto rfLock = app->getHardwareManager().requestRfControl(RfClient::NRF_JAMMER);
 
-        // 2. Pass the lock (or its failure) to the jammer to start.
+        // 2. Pass the lock (or its failure) to the jammer to start with the full config.
         if (app->getJammer().start(std::move(rfLock), modeToStart_, startConfig_)) {
             // Success, the menu will just display the active state.
         } else {
@@ -44,7 +44,7 @@ void JammingActiveMenu::onExit(App* app) {
     
     // Reset state for the next time we enter.
     modeToStart_ = JammingMode::IDLE;
-    startConfig_.customChannels.clear();
+    startConfig_ = JammerConfig(); // Reset to default config
 }
 
 void JammingActiveMenu::handleInput(App* app, InputEvent event) {

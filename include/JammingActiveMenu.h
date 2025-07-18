@@ -15,7 +15,7 @@ public:
     void handleInput(App* app, InputEvent event) override;
 
     void setJammingModeToStart(JammingMode mode);
-    void setJammingConfig(const JammerConfig& config);
+    void setJammingConfig(const JammerConfig& config); // Now takes the full config struct
 
     const char* getTitle() const override { return "Jammer Active"; }
     MenuType getMenuType() const override { return MenuType::JAMMING_ACTIVE; }

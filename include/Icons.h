@@ -44,12 +44,15 @@ enum class IconType
     NET_WIFI_LOCK,
     SD_CARD,
     BEACON,
+    SKULL,
+    NONE,
     NUM_ICON_TYPES
 };
 
 extern const unsigned char icon_boot_logo_bits[];
 
 // Extern Declarations for XBM Icon Data
+extern const unsigned char icon_none_large_bits[];
 extern const unsigned char icon_tools_large_bits[];
 extern const unsigned char icon_games_large_bits[];
 extern const unsigned char icon_settings_large_bits[];
@@ -75,6 +78,7 @@ extern const unsigned char icon_ui_flashlight_large_bits[];
 extern const unsigned char icon_utilities_category_large_bits[];
 extern const unsigned char icon_sd_card_large_bits[];
 extern const unsigned char icon_beacon_large_bits[];
+extern const unsigned char icon_skull_large_bits[];
 
 // Small Icons
 extern const unsigned char icon_ui_charging_bolt_small_bits[];

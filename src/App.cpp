@@ -77,6 +77,9 @@ App::App() :
                 JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if(jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::BLE);
+                    JammerConfig cfg;
+                    cfg.technique = JammingTechnique::NOISE_INJECTION; // Correct for BLE
+                    jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }
@@ -86,6 +89,9 @@ App::App() :
                 JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if(jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
+                    JammerConfig cfg;
+                    cfg.technique = JammingTechnique::CONSTANT_CARRIER; // Correct for BT
+                    jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }
@@ -95,6 +101,9 @@ App::App() :
                 JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if(jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
+                    JammerConfig cfg;
+                    cfg.technique = JammingTechnique::NOISE_INJECTION; // --- REVERTED FOR FAST SWEEP ---
+                    jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }
@@ -104,6 +113,9 @@ App::App() :
                 JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if(jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
+                    JammerConfig cfg;
+                    cfg.technique = JammingTechnique::CONSTANT_CARRIER; // Correct for wide sweep
+                    jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }
@@ -112,24 +124,24 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     deauthToolsMenu_("Deauth Attack", {
-        MenuItem{"RogueAP (Once)", IconType::NET_WIFI_LOCK, MenuType::NONE,
+        MenuItem{"RogueAP (Once)", IconType::BEACON, MenuType::NONE,
             [](App* app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 app->getWifiListDataSource().setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
-        MenuItem{"Bcast (Once)", IconType::NET_WIFI, MenuType::NONE,
+        MenuItem{"Bcast (Once)", IconType::SKULL, MenuType::NONE,
             [](App* app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 app->getWifiListDataSource().setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
-        MenuItem{"RogueAP (All)", IconType::NET_WIFI_LOCK, MenuType::NONE,
+        MenuItem{"RogueAP (All)", IconType::BEACON, MenuType::NONE,
             [](App* app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::ALL_APS);
                 app->changeMenu(MenuType::DEAUTH_ACTIVE);
             }},
-        MenuItem{"Bcast (All)", IconType::NET_WIFI, MenuType::NONE,
+        MenuItem{"Bcast (All)", IconType::SKULL, MenuType::NONE,
             [](App* app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::ALL_APS);
                 app->changeMenu(MenuType::DEAUTH_ACTIVE);
@@ -149,7 +161,6 @@ App::App() :
         MenuItem{"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
-    // --- MODIFIED: Remove old menu constructors ---
     textInputMenu_(),
     connectionStatusMenu_(),
     popUpMenu_(),
@@ -158,7 +169,6 @@ App::App() :
     jammingActiveMenu_(),
     jammer_(),
     beaconSpammer_(),
-    // --- ADDED: Initialize new list menu system ---
     wifiListDataSource_(),
     firmwareListDataSource_(),
     beaconFileListDataSource_(),
