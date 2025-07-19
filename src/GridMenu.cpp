@@ -80,17 +80,17 @@ void GridMenu::onExit(App *app)
 
 void GridMenu::handleInput(App* app, InputEvent event) {
     switch(event) {
-        case InputEvent::ENCODER_CW:
         case InputEvent::BTN_DOWN_PRESS:
             scroll(columns_); // Move down one row
             break;
-        case InputEvent::ENCODER_CCW:
         case InputEvent::BTN_UP_PRESS:
             scroll(-columns_); // Move up one row
             break;
+        case InputEvent::ENCODER_CW:
         case InputEvent::BTN_RIGHT_PRESS:
             scroll(1); // Move to next column
             break;
+        case InputEvent::ENCODER_CCW:
         case InputEvent::BTN_LEFT_PRESS:
             scroll(-1); // Move to previous column
             break;

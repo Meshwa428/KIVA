@@ -18,7 +18,8 @@ enum class JammingMode {
     BT_CLASSIC,
     WIFI_NARROWBAND,
     WIDE_SPECTRUM,
-    CHANNEL_FLOOD_CUSTOM
+    CHANNEL_FLOOD_CUSTOM,
+    ZIGBEE
 };
 
 // Defines the underlying RF transmission technique

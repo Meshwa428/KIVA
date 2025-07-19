@@ -49,12 +49,12 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiToolsMenu_("WiFi Tools", {
-        MenuItem{"Beacon Spam", IconType::TOOL_INJECTION, MenuType::BEACON_MODE_SELECTION},
-        MenuItem{"Deauth", IconType::TOOL_JAMMING, MenuType::DEAUTH_TOOLS_GRID},
+        MenuItem{"Beacon Spam", IconType::TOOL_JAMMING, MenuType::BEACON_MODE_SELECTION},
+        MenuItem{"Deauth", IconType::TOOL_INJECTION, MenuType::DEAUTH_TOOLS_GRID},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
-        MenuItem{"Web Update", IconType::NET_WIFI, MenuType::NONE,
+        MenuItem{"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App* app) {
                 if (app->getOtaManager().startWebUpdate()) {
                     app->changeMenu(MenuType::OTA_STATUS);
@@ -63,8 +63,8 @@ App::App() :
                 }
             }
         },
-        MenuItem{"SD Card", IconType::INFO, MenuType::FIRMWARE_LIST_SD}, 
-        MenuItem{"Basic OTA", IconType::TOOL_INJECTION, MenuType::NONE,
+        MenuItem{"SD Card", IconType::SD_CARD, MenuType::FIRMWARE_LIST_SD}, 
+        MenuItem{"Basic OTA", IconType::BASIC_OTA, MenuType::NONE,
             [](App* app) {
                 app->getOtaManager().startBasicOta();
             }
@@ -115,6 +115,19 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
                     JammerConfig cfg;
                     cfg.technique = JammingTechnique::CONSTANT_CARRIER; // Correct for wide sweep
+                    jammerMenu->setJammingConfig(cfg);
+                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE,
+            [](App* app) {
+                JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if(jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::ZIGBEE);
+                    JammerConfig cfg;
+                    // The sample code uses noise injection (sending junk packets).
+                    cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }

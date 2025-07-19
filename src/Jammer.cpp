@@ -131,6 +131,23 @@ void Jammer::loop() {
             }
             break;
         }
+        case JammingMode::ZIGBEE: {
+            // This logic is taken directly from the user's sample code.
+            // It iterates through all 16 Zigbee channels (11 through 26).
+            for (int channel = 11; channel < 27; channel++) {
+                
+                // For each Zigbee channel, this inner loop calculates and sweeps across the corresponding
+                // narrow nRF24 frequencies to cover the Zigbee channel's bandwidth.
+                int start_freq = 5 + 5 * (channel - 11);
+                for (int i = start_freq; i < start_freq + 6; i++) {
+                    
+                    // The second radio sweeps from a complementary frequency.
+                    // The jamWithNoise helper handles sending junk data.
+                    jamWithNoise(i, 85 - i);
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -166,6 +183,7 @@ const char* Jammer::getModeString() const {
         case JammingMode::WIFI_NARROWBAND: return "WiFi Barrage";
         case JammingMode::WIDE_SPECTRUM: return "Wide Spectrum Barrage";
         case JammingMode::CHANNEL_FLOOD_CUSTOM: return "Custom Barrage";
+        case JammingMode::ZIGBEE: return "Zigbee Barrage";
         default: return "Idle";
     }
 }

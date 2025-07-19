@@ -172,6 +172,10 @@ void OtaManager::scanSdForFirmware() {
 void OtaManager::setupArduinoOta() {
     ArduinoOTA.setHostname(Firmware::OTA_HOSTNAME);
 
+    if (!SdCardManager::exists(Firmware::OTA_AP_PASSWORD_FILE)) {
+        SdCardManager::writeFile(Firmware::OTA_AP_PASSWORD_FILE, "KIVA_PASS");
+    }
+    
     String password = SdCardManager::readFile(Firmware::OTA_AP_PASSWORD_FILE);
     password.trim();
     if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {

@@ -45,6 +45,8 @@ enum class IconType
     SD_CARD,
     BEACON,
     SKULL,
+    BASIC_OTA,
+    FIRMWARE_UPDATE,
     NONE,
     NUM_ICON_TYPES
 };
@@ -79,6 +81,8 @@ extern const unsigned char icon_utilities_category_large_bits[];
 extern const unsigned char icon_sd_card_large_bits[];
 extern const unsigned char icon_beacon_large_bits[];
 extern const unsigned char icon_skull_large_bits[];
+extern const unsigned char icon_basic_ota_large_bits[];
+extern const unsigned char icon_firmware_update_large_bits[];
 
 // Small Icons
 extern const unsigned char icon_ui_charging_bolt_small_bits[];
