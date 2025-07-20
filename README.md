@@ -124,3 +124,7 @@ Kiva OS is envisioned as a lightweight, modular software layer designed to:
   - Surface-flush display integration.
 
 ---
+
+
+### Credits
+[Evil Portals](https://github.com/CodyTolene/Red-Portals)
