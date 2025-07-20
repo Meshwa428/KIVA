@@ -107,6 +107,8 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
         case ListItemType::NETWORK: {
             // --- NEW LOGIC: CHECK IF WE ARE SELECTING A DEAUTH TARGET ---
             auto& deauther = app->getDeauther();
+            auto& evilTwin = app->getEvilTwin();
+
             if (deauther.isAttackPending()) {
                 const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
                 if (deauther.start(netInfo)) {
@@ -115,6 +117,16 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                     app->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 }
                 return; // Exit here, do not proceed to connection logic
+            }
+
+            if (evilTwin.isAttackPending()) {
+                const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
+                if (evilTwin.start(netInfo)) {
+                    app->changeMenu(MenuType::EVIL_TWIN_ACTIVE); // Navigate to our new active menu
+                } else {
+                    app->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
+                }
+                return; // Exit here
             }
             
             if (selectedItem.label.rfind("* ", 0) == 0) {

@@ -27,6 +27,10 @@
 #include "BeaconSpamActiveMenu.h"
 #include "Deauther.h"
 #include "DeauthActiveMenu.h"
+#include "EvilTwin.h"
+#include "EvilTwinActiveMenu.h"
+#include "PortalListDataSource.h"
+#include "Logger.h"
 
 class App
 {
@@ -46,6 +50,7 @@ public:
     Jammer &getJammer() { return jammer_; }
     BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
     Deauther &getDeauther() { return deauther_; }
+    EvilTwin &getEvilTwin() { return evilTwin_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -72,6 +77,7 @@ private:
     Jammer jammer_;
     BeaconSpammer beaconSpammer_;
     Deauther deauther_;
+    EvilTwin evilTwin_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -105,17 +111,17 @@ private:
     JammingActiveMenu jammingActiveMenu_;
     BeaconSpamActiveMenu beaconSpamActiveMenu_;
     DeauthActiveMenu deauthActiveMenu_;
+    EvilTwinActiveMenu evilTwinActiveMenu_;
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;
+    PortalListDataSource portalListDataSource_;
     ListMenu wifiListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;
-
-    
-
+    ListMenu portalListMenu_;
 };
 
 #endif

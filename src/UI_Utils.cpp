@@ -138,6 +138,9 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::FIRMWARE_UPDATE:
             xbm_data = icon_firmware_update_large_bits;
             break;
+        case IconType::DISCONNECT:
+            xbm_data = icon_disconnect_large_bits;
+            break;
         case IconType::NONE:
             xbm_data = icon_none_large_bits;
             break;
