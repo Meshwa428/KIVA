@@ -57,10 +57,8 @@ void EvilTwinActiveMenu::draw(App* app, U8G2& display) {
         // Top of text area is ~42px, bottom is ~60px. Center is ~51px.
         // profont17 has an ascent of 12, so y-baseline should be 51 + (12/2) = ~57.
         // Let's adjust for perfect centering.
-        int text_area_center_y = 51;
-        int text_baseline_y = text_area_center_y + (display.getAscent() - display.getDescent()) / 2;
-
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(countStr)) / 2, text_baseline_y, countStr);
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(countStr)) / 2, 52, countStr);
     } else {
         // If no victims yet, show the "waiting" status
         const char* status_msg = "Waiting for victim...";

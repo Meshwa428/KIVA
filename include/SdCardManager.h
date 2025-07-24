@@ -4,11 +4,6 @@
 #include <Arduino.h>
 #include <SD.h>
 
-// Standard directory paths
-#define WIFI_DIR        "/wifi"
-#define KNOWN_WIFI_FILE (WIFI_DIR "/known.txt")
-#define OTA_HTML_PAGE_PATH "/system/ota_page.html"
-
 namespace SdCardManager {
     // --- NEW: LineReader Class ---
     /**

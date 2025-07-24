@@ -105,15 +105,39 @@ namespace Battery
     static constexpr unsigned long CHECK_INTERVAL_MS = 1000;
 }
 
+// --- NEW: Centralized SD Card Path Definitions ---
+namespace SD_ROOT
+{
+    // Top-level directories
+    static constexpr const char *CONFIG = "/config";
+    static constexpr const char *DATA = "/data";
+    static constexpr const char *USER = "/user";
+    static constexpr const char *FIRMWARE = "/firmware";
+    static constexpr const char *WEB = "/web";
+
+    // Second-level and specific file paths
+    static constexpr const char *WIFI_KNOWN_NETWORKS = "/config/wifi_known_networks.txt";
+    static constexpr const char *WIFI_OTA_PASSWORD = "/config/wifi_ota_password.txt";
+    static constexpr const char *CONFIG_CURRENT_FIRMWARE = "/config/current_firmware.json";
+
+    static constexpr const char *DATA_LOGS = "/data/logs";
+    static constexpr const char *DATA_CAPTURES = "/data/captures";
+    static constexpr const char *CAPTURES_EVILTWIN_CSV = "/data/captures/evil_twin_credentials.csv";
+
+    static constexpr const char *USER_BEACON_LISTS = "/user/beacon_lists";
+    static constexpr const char *USER_PORTALS = "/user/portals";
+
+    static constexpr const char *WEB_OTA_PAGE = "/web/ota_page.html";
+
+    // Log file info
+    static constexpr const char *LOG_BASE_NAME = "/system_";
+}
+
 // Firmware & OTA Constants
 namespace Firmware
 {
     static constexpr const char* OTA_HOSTNAME = "kiva-device";
-    static constexpr const char* FIRMWARE_DIR_PATH = "/firmware";
-    static constexpr const char* SYSTEM_INFO_DIR_PATH = "/system";
-    static constexpr const char* CURRENT_FIRMWARE_INFO_FILENAME = "/system/current_fw.json";
     static constexpr const char* METADATA_EXTENSION = ".kfw";
-    static constexpr const char* OTA_AP_PASSWORD_FILE = "/system/ota_ap_passwd.txt";
     static constexpr int MAX_FIRMWARES_ON_SD = 10;
     static constexpr int MIN_AP_PASSWORD_LEN = 8;
     static constexpr int MAX_AP_PASSWORD_LEN = 63;

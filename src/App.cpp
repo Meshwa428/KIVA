@@ -366,7 +366,7 @@ void App::loop()
 
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
-        LOG(LogLevel::DEBUG, "Input", "Event: %s", DebugUtils::inputEventToString(event));
+        // LOG(LogLevel::DEBUG, "Input", "Event: %s", DebugUtils::inputEventToString(event));
         Serial.printf("[INPUT] Event: %s\n", DebugUtils::inputEventToString(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
@@ -378,7 +378,7 @@ void App::loop()
         currentMenu_->onUpdate(this);
     }
 
-    // --- FIX: PERFORMANCE MODE RENDERING THROTTLE ---
+    // --- PERFORMANCE MODE RENDERING THROTTLE ---
     bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive();
     static unsigned long lastRenderTime = 0;
     // Update screen only once per second in performance mode.
@@ -391,7 +391,6 @@ void App::loop()
         return;
     }
     lastRenderTime = millis();
-    // --- END FIX ---
 
     U8G2 &mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();

@@ -3,19 +3,16 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
-#include "EvilTwin.h" // Needed to set the portal
+#include "EvilTwin.h"
 
 void PortalListDataSource::onEnter(App* app, ListMenu* menu) {
     portalNames_.clear();
-    const char* dirPath = "/portals";
+    const char* dirPath = SD_ROOT::USER_PORTALS;
     if (!SdCardManager::isAvailable()) {
         app->showPopUp("Error", "SD Card not found.", nullptr, "OK", "", true);
         return;
     }
-    if (!SdCardManager::exists(dirPath)) {
-        SdCardManager::createDir(dirPath);
-    }
-
+    
     File root = SdCardManager::openFile(dirPath);
     if (!root || !root.isDirectory()) return;
 
@@ -29,12 +26,10 @@ void PortalListDataSource::onEnter(App* app, ListMenu* menu) {
     }
     root.close();
 
-    // Always add a "Back" option
     portalNames_.push_back("Back");
 }
 
 void PortalListDataSource::onExit(App* app, ListMenu* menu) {
-    // No cleanup needed, vector will be cleared on next enter
 }
 
 int PortalListDataSource::getNumberOfItems(App* app) {
@@ -50,14 +45,9 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
         return;
     }
 
-    // --- CORRECTED LOGICAL FLOW ---
-    // 1. Prepare the attack module, which resets all its state.
     app->getEvilTwin().prepareAttack();
-
-    // 2. Set the selected portal for this specific attack run.
     app->getEvilTwin().setSelectedPortal(selectedPortal);
     
-    // 3. Now that the attack is correctly pending, proceed to the WiFi list to select a target.
     app->getWifiListDataSource().setScanOnEnter(true);
     app->getWifiListDataSource().setBackNavOverride(false);
     app->changeMenu(MenuType::WIFI_LIST);

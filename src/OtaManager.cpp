@@ -13,7 +13,6 @@ OtaManager::OtaManager() :
     state_(OtaState::IDLE),
     uploadError_(false)
 {
-    // The progress_ struct is default-initialized to zeros.
 }
 
 void OtaManager::setup(App* app, WifiManager* wifiManager) {
@@ -123,7 +122,7 @@ void OtaManager::enterTerminalState() {
 }
 
 void OtaManager::loadCurrentFirmware() {
-    if (FirmwareUtils::parseMetadataFile(Firmware::CURRENT_FIRMWARE_INFO_FILENAME, currentFirmware_)) {
+    if (FirmwareUtils::parseMetadataFile(SD_ROOT::CONFIG_CURRENT_FIRMWARE, currentFirmware_)) {
         Serial.printf("[OTA-LOG] Loaded current firmware: %s\n", currentFirmware_.version);
     } else {
         Serial.println("[OTA-LOG] Could not load current firmware info.");
@@ -133,7 +132,7 @@ void OtaManager::loadCurrentFirmware() {
 }
 
 void OtaManager::saveCurrentFirmware(const FirmwareInfo& info) {
-    if (FirmwareUtils::saveMetadataFile(Firmware::CURRENT_FIRMWARE_INFO_FILENAME, info)) {
+    if (FirmwareUtils::saveMetadataFile(SD_ROOT::CONFIG_CURRENT_FIRMWARE, info)) {
         Serial.printf("[OTA-LOG] Saved current firmware info: %s\n", info.version);
         currentFirmware_ = info;
     } else {
@@ -143,10 +142,10 @@ void OtaManager::saveCurrentFirmware(const FirmwareInfo& info) {
 
 void OtaManager::scanSdForFirmware() {
     availableSdFirmwares_.clear();
-    if (!SdCardManager::isAvailable() || !SdCardManager::exists(Firmware::FIRMWARE_DIR_PATH)) {
+    if (!SdCardManager::isAvailable() || !SdCardManager::exists(SD_ROOT::FIRMWARE)) {
         return;
     }
-    File root = SD.open(Firmware::FIRMWARE_DIR_PATH);
+    File root = SD.open(SD_ROOT::FIRMWARE);
     if (!root || !root.isDirectory()) {
         if(root) root.close();
         return;
@@ -157,7 +156,7 @@ void OtaManager::scanSdForFirmware() {
         if(!file.isDirectory() && fileName.endsWith(Firmware::METADATA_EXTENSION)) {
             FirmwareInfo info;
             if(FirmwareUtils::parseMetadataFile(file.path(), info)) {
-                String binPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + info.binary_filename;
+                String binPath = String(SD_ROOT::FIRMWARE) + "/" + info.binary_filename;
                 if(SD.exists(binPath)) {
                     availableSdFirmwares_.push_back(info);
                 }
@@ -172,11 +171,11 @@ void OtaManager::scanSdForFirmware() {
 void OtaManager::setupArduinoOta() {
     ArduinoOTA.setHostname(Firmware::OTA_HOSTNAME);
 
-    if (!SdCardManager::exists(Firmware::OTA_AP_PASSWORD_FILE)) {
-        SdCardManager::writeFile(Firmware::OTA_AP_PASSWORD_FILE, "KIVA_PASS");
+    if (!SdCardManager::exists(SD_ROOT::WIFI_OTA_PASSWORD)) {
+        SdCardManager::writeFile(SD_ROOT::WIFI_OTA_PASSWORD, "KIVA_PASS");
     }
     
-    String password = SdCardManager::readFile(Firmware::OTA_AP_PASSWORD_FILE);
+    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
     password.trim();
     if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {
         ArduinoOTA.setPassword(password.c_str());
@@ -211,13 +210,12 @@ void OtaManager::setupArduinoOta() {
     });
 }
 
-void OtaManager::startBasicOta() { // NEW: Return type is void
+void OtaManager::startBasicOta() {
     if (state_ != OtaState::IDLE) return;
     
     if (wifiManager_->getState() != WifiState::CONNECTED) {
         app_->showPopUp("WiFi Required", "Connect to use Basic OTA?", 
             [this](App* app_cb) {
-                // --- MODIFIED ---
                 WifiListDataSource& wifiDataSource = app_cb->getWifiListDataSource();
                 wifiDataSource.setBackNavOverride(true);
                 wifiDataSource.setScanOnEnter(true);
@@ -227,11 +225,10 @@ void OtaManager::startBasicOta() { // NEW: Return type is void
         return;
     }
 
-    // This part executes if WiFi is ALREADY connected.
     resetState();
     state_ = OtaState::BASIC_ACTIVE;
 
-    String password = SdCardManager::readFile(Firmware::OTA_AP_PASSWORD_FILE);
+    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
     password.trim();
     if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {
         statusMessage_ = "P: " + password;
@@ -243,7 +240,6 @@ void OtaManager::startBasicOta() { // NEW: Return type is void
     ArduinoOTA.begin();
     Serial.println("[OTA-LOG] Basic OTA (IDE) started.");
     
-    // NEW: Directly navigate to the status menu
     app_->changeMenu(MenuType::OTA_STATUS);
 }
 
@@ -259,7 +255,7 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
         return;
     }
 
-    String binPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + fwInfo.binary_filename;
+    String binPath = String(SD_ROOT::FIRMWARE) + "/" + fwInfo.binary_filename;
     uploadFile_ = SD.open(binPath, FILE_READ);
     if (!uploadFile_) {
         statusMessage_ = "Firmware file error";
@@ -292,7 +288,7 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
 bool OtaManager::startWebUpdate() {
     if (state_ != OtaState::IDLE) return false;
     resetState();
-    String password = SdCardManager::readFile(Firmware::OTA_AP_PASSWORD_FILE);
+    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
     password.trim();
     if (password.length() < Firmware::MIN_AP_PASSWORD_LEN) {
         password = "";
@@ -324,7 +320,7 @@ bool OtaManager::startWebUpdate() {
 
 void OtaManager::setupWebServer() {
     webServer_.on("/", HTTP_GET, [this](AsyncWebServerRequest *request){
-        String path = OTA_HTML_PAGE_PATH;
+        String path = SD_ROOT::WEB_OTA_PAGE;
         if (SdCardManager::exists(path.c_str())) {
             request->send(SD, path, "text/html");
         } else {
@@ -345,7 +341,7 @@ void OtaManager::onUpload(AsyncWebServerRequest *request, String filename, size_
         progress_.totalBytes = request->contentLength();
         progress_.receivedBytes = 0;
         
-        String tempPath = String(Firmware::FIRMWARE_DIR_PATH) + "/web_upload.bin";
+        String tempPath = String(SD_ROOT::FIRMWARE) + "/web_upload.bin";
         if (SD.exists(tempPath)) SD.remove(tempPath);
         uploadFile_ = SD.open(tempPath, FILE_WRITE);
         if (!uploadFile_) {
@@ -377,7 +373,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     }
 
     statusMessage_ = "Verifying...";
-    String tempPath = String(Firmware::FIRMWARE_DIR_PATH) + "/web_upload.bin";
+    String tempPath = String(SD_ROOT::FIRMWARE) + "/web_upload.bin";
     String md5 = FirmwareUtils::calculateFileMD5(SD, tempPath);
 
     if (md5.isEmpty()) {
@@ -401,7 +397,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     unsigned long timestamp = millis();
     String baseFilename = "fw_" + String(timestamp);
     String permanentBinFilename = baseFilename + ".bin";
-    String permanentBinPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + permanentBinFilename;
+    String permanentBinPath = String(SD_ROOT::FIRMWARE) + "/" + permanentBinFilename;
 
     if (SdCardManager::renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
         Serial.printf("[OTA-WEB] Saved new firmware as %s\n", permanentBinPath.c_str());
@@ -414,7 +410,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
         strcpy(newFwInfo.description, "Uploaded via web interface");
         newFwInfo.isValid = true;
 
-        String kfwPath = String(Firmware::FIRMWARE_DIR_PATH) + "/" + baseFilename + Firmware::METADATA_EXTENSION;
+        String kfwPath = String(SD_ROOT::FIRMWARE) + "/" + baseFilename + Firmware::METADATA_EXTENSION;
         FirmwareUtils::saveMetadataFile(kfwPath, newFwInfo);
         
         pathToFlash = permanentBinPath;

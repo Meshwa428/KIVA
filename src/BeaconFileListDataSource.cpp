@@ -3,15 +3,13 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
-#include "BeaconSpammer.h" // Keep this include
+#include "BeaconSpammer.h"
 
 void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu) {
-    fileNames_.clear(); // Clearing on enter is correct
-    const char* dirPath = "/wifi/beacon_attack";
-    if (!SdCardManager::isAvailable() || !SdCardManager::exists(dirPath)) {
-        SdCardManager::createDir(dirPath); // Create dir if it doesn't exist
-    }
-
+    fileNames_.clear();
+    const char* dirPath = SD_ROOT::USER_BEACON_LISTS;
+    
+    // The directory is created at boot by SdCardManager::ensureStandardDirs()
     File root = SdCardManager::openFile(dirPath);
     if (!root || !root.isDirectory()) return;
 
@@ -25,12 +23,10 @@ void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu) {
     }
     root.close();
 
-    // Always add a "Back" option
     fileNames_.push_back("Back");
 }
 
 void BeaconFileListDataSource::onExit(App* app, ListMenu* menu) {
-    // fileNames_.clear(); // <-- REMOVE THIS LINE. This is the fix.
 }
 
 int BeaconFileListDataSource::getNumberOfItems(App* app) {
@@ -46,7 +42,7 @@ void BeaconFileListDataSource::onItemSelected(App* app, ListMenu* menu, int inde
         return;
     }
 
-    std::string fullPath = "/wifi/beacon_attack/" + selectedFile;
+    std::string fullPath = std::string(SD_ROOT::USER_BEACON_LISTS) + "/" + selectedFile;
 
     if (!BeaconSpammer::isSsidFileValid(fullPath)) {
         app->showPopUp("Error", "File is empty or invalid.", nullptr, "OK", "", true);
@@ -61,7 +57,6 @@ void BeaconFileListDataSource::onItemSelected(App* app, ListMenu* menu, int inde
 }
 
 void BeaconFileListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
-    // This check is now more important because the vector might be accessed while empty if there's a different bug
     if (index >= fileNames_.size()) return;
 
     const std::string& label = fileNames_[index];

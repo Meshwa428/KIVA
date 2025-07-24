@@ -9,7 +9,7 @@ Logger& Logger::getInstance() {
     return instance;
 }
 
-Logger::Logger() {}
+Logger::Logger() : logDir_(SD_ROOT::DATA_LOGS), logBaseName_(SD_ROOT::LOG_BASE_NAME), logExtension_(".txt") {}
 
 void Logger::setup() {
     if (!SdCardManager::isAvailable()) {
@@ -26,7 +26,7 @@ void Logger::setup() {
     manageLogFiles();
 
     // Create the new log file path
-    char newLogFileName[32];
+    char newLogFileName[48];
     snprintf(newLogFileName, sizeof(newLogFileName), "%s%s%lu%s", logDir_, logBaseName_, millis(), logExtension_);
     currentLogFile_ = newLogFileName;
 

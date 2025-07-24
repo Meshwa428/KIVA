@@ -47,46 +47,34 @@ namespace SdCardManager {
             return "";
         }
     
-        // This loop handles the "forever" part, but with a safety exit.
         while (true) {
-            // Remember where we started the search in the file.
             uint32_t search_start_pos = file_.position();
             
-            // Search for a non-empty line from the current position to the end.
             while (file_.available()) {
                 String line = file_.readStringUntil('\n');
                 line.trim();
                 if (!line.isEmpty()) {
-                    return line; // Found a valid line, return it.
+                    return line;
                 }
             }
     
-            // If we get here, we've hit the end of the file. Rewind to the beginning.
             file_.seek(0);
     
-            // SAFETY BREAK: If our search started at the very beginning (pos 0)
-            // and we read the entire file without finding a single valid line,
-            // it means the file is composed entirely of whitespace. We must
-            // return an empty string to signal this and prevent an infinite loop.
             if (search_start_pos == 0) {
                 return "";
             }
-            
-            // If we started mid-file, we now continue the loop, searching from the top.
         }
     }
 
-    // --- NEW: Factory Function Implementation ---
     LineReader openLineReader(const char* path) {
         if (!sdCardInitialized) {
-            return LineReader(); // Return a closed/invalid reader
+            return LineReader();
         }
         File f = SD.open(path, FILE_READ);
         if (!f || f.isDirectory()) {
             if (f) f.close();
-            return LineReader(); // Return a closed/invalid reader
+            return LineReader();
         }
-        // Construct a LineReader from the valid File object
         return LineReader(f);
     }
     
@@ -114,8 +102,20 @@ namespace SdCardManager {
 
     void ensureStandardDirs() {
         if (!isAvailable()) return;
-        const char *dirs[] = {"/wifi", "/firmware", "/system", "/captures", "/logs"};
-        for (const char* dir : dirs) {
+
+        const char* dirsToCreate[] = {
+            SD_ROOT::CONFIG,
+            SD_ROOT::DATA,
+            SD_ROOT::USER,
+            SD_ROOT::FIRMWARE,
+            SD_ROOT::WEB,
+            SD_ROOT::DATA_LOGS,
+            SD_ROOT::DATA_CAPTURES,
+            SD_ROOT::USER_BEACON_LISTS,
+            SD_ROOT::USER_PORTALS
+        };
+
+        for (const char* dir : dirsToCreate) {
             if (!exists(dir)) {
                 createDir(dir);
             }
@@ -172,10 +172,9 @@ namespace SdCardManager {
         return SD.rename(pathFrom, pathTo);
     }
 
-    // Implementation of the new function
     File openFile(const char* path, const char* mode) {
         if (!sdCardInitialized) {
-            return File(); // Return an invalid/closed File object
+            return File();
         }
         return SD.open(path, mode);
     }

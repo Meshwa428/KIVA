@@ -2,6 +2,7 @@
 #define LOGGER_H
 
 #include <Arduino.h>
+#include "Config.h"
 #include <cstdarg> // For va_list, va_start, va_end
 
 // Define a log level for filtering
