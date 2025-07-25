@@ -31,7 +31,9 @@ enum class MenuType
     DEAUTH_TOOLS_GRID,
     DEAUTH_ACTIVE,
     EVIL_TWIN_PORTAL_SELECTION,
-    EVIL_TWIN_ACTIVE
+    EVIL_TWIN_ACTIVE,
+    PROBE_ACTIVE,
+    KARMA_ACTIVE
 };
 
 // Input Event System
@@ -122,6 +124,7 @@ namespace SD_ROOT
 
     static constexpr const char *DATA_LOGS = "/data/logs";
     static constexpr const char *DATA_CAPTURES = "/data/captures";
+    static constexpr const char *DATA_PROBES = "/data/captures/probes";
     static constexpr const char *CAPTURES_EVILTWIN_CSV = "/data/captures/evil_twin_credentials.csv";
 
     static constexpr const char *USER_BEACON_LISTS = "/user/beacon_lists";

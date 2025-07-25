@@ -2,6 +2,7 @@
 #include "App.h"
 #include "Deauther.h"
 #include "UI_Utils.h"
+#include <vector> // <-- ADD THIS INCLUDE for the font vector
 
 DeauthActiveMenu::DeauthActiveMenu() {}
 
@@ -10,8 +11,6 @@ void DeauthActiveMenu::onEnter(App* app) {
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
         if (config.target == DeauthTarget::ALL_APS) {
-            // The startAllAPs now correctly initiates a scan.
-            // The Deauther::loop will handle the rest.
             deauther.startAllAPs();
         }
         // For SPECIFIC_AP, start() is called by WifiListDataSource.
@@ -32,40 +31,79 @@ void DeauthActiveMenu::handleInput(App* app, InputEvent event) {
     }
 }
 
+bool DeauthActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
+    auto& deauther = app->getDeauther();
+    const auto& config = deauther.getPendingConfig();
+
+    display.setFont(u8g2_font_6x10_tf);
+    display.setDrawColor(1);
+
+    // Left side: Attack Method
+    const char* modeText = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP" : "Broadcast";
+    display.drawStr(2, 8, modeText);
+
+    // Right side: Attack Scope
+    const char* scopeText = (config.target == DeauthTarget::ALL_APS) ? "Target: All" : "Target: 1";
+    int textWidth = display.getStrWidth(scopeText);
+    display.drawStr(128 - textWidth - 2, 8, scopeText);
+    
+    // Bottom line
+    display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
+
+    return true; // We handled it.
+}
+
 void DeauthActiveMenu::draw(App* app, U8G2& display) {
     auto& deauther = app->getDeauther();
-
-    // --- NEW DRAWING LOGIC ---
+    
+    // Handle initial states before an attack is fully running
     if (!deauther.isActive()) {
-        // This case handles the frame before onEnter completes.
         const char* msg = "Initializing...";
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
         return;
     }
-
+    
     const auto& config = deauther.getPendingConfig();
-
-    // If attacking all APs and the target list is still empty, it means we are scanning.
     if (config.target == DeauthTarget::ALL_APS && deauther.getCurrentTargetSsid().empty()) {
-        const char* msg = "Scanning...";
-        display.setFont(u8g2_font_7x13B_tr);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
+        // --- THIS IS THE FIX ---
+        // Replace the simple drawStr with the word-wrapping utility
+        const char* msg = "Scanning for targets...";
+        
+        // Define the area on the screen for the message to be centered and wrapped within.
+        int textAreaX = 4;
+        int textAreaY = 25;
+        int textAreaW = 120; // 128px width minus 4px padding on each side
+        int textAreaH = 30;
+        
+        // Define the font to use for wrapping.
+        std::vector<const uint8_t*> fonts = {u8g2_font_6x10_tf};
+        
+        // Call the utility function to draw the wrapped text.
+        drawWrappedText(display, msg, textAreaX, textAreaY, textAreaW, textAreaH, fonts);
+        // --- END OF FIX ---
         return;
     }
 
-    // --- Original drawing logic for when attack is running ---
-    std::string title = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP Attack" : "Broadcast Deauth";
+    // --- Refined Main Drawing Area ---
     
-    display.setFont(u8g2_font_7x13B_tr);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(title.c_str())) / 2, 28, title.c_str());
-
+    // 1. Attack Mode Title (using a smaller font)
     display.setFont(u8g2_font_6x10_tf);
-    std::string target_line = "Target: " + deauther.getCurrentTargetSsid();
-    
-    char* truncated = truncateText(target_line.c_str(), 124, display);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 42, truncated);
+    display.setDrawColor(1);
+    const char* title = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP Attack" : "Broadcast Deauth";
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(title)) / 2, 28, title);
 
+    // 2. Current Target SSID (large, bold, and centered)
+    display.setFont(u8g2_font_7x13B_tr);
+    std::string targetSsid = deauther.getCurrentTargetSsid();
+    if (targetSsid.empty()) {
+        targetSsid = "---"; // Placeholder if SSID is not yet set
+    }
+    char* truncated = truncateText(targetSsid.c_str(), 124, display);
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 44, truncated);
+    
+    // 3. Footer Instruction
+    display.setFont(u8g2_font_5x7_tf);
     const char* instruction = "Press BACK to Stop";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 56, instruction);
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 63, instruction);
 }

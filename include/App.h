@@ -30,6 +30,10 @@
 #include "EvilTwin.h"
 #include "EvilTwinActiveMenu.h"
 #include "PortalListDataSource.h"
+#include "ProbeSniffer.h"
+#include "ProbeSnifferActiveMenu.h"
+#include "KarmaAttacker.h"
+#include "KarmaActiveMenu.h" // <-- ADDED
 #include "Logger.h"
 
 class App
@@ -51,6 +55,8 @@ public:
     BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
     Deauther &getDeauther() { return deauther_; }
     EvilTwin &getEvilTwin() { return evilTwin_; }
+    ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
+    KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -78,6 +84,8 @@ private:
     BeaconSpammer beaconSpammer_;
     Deauther deauther_;
     EvilTwin evilTwin_;
+    ProbeSniffer probeSniffer_;
+    KarmaAttacker karmaAttacker_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -112,12 +120,15 @@ private:
     BeaconSpamActiveMenu beaconSpamActiveMenu_;
     DeauthActiveMenu deauthActiveMenu_;
     EvilTwinActiveMenu evilTwinActiveMenu_;
+    ProbeSnifferActiveMenu probeSnifferActiveMenu_;
+    KarmaActiveMenu karmaActiveMenu_; // <-- ADDED
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
+
     ListMenu wifiListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;

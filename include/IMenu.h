@@ -33,9 +33,14 @@ public:
     virtual void onExit(App* app) = 0;
 
     virtual void draw(App* app, U8G2& display) = 0;
-
     virtual void handleInput(App* app, InputEvent event) = 0;
     
+    /**
+     * @brief [NEW] Draws a custom status bar for this menu.
+     * @return true if a custom status bar was drawn, false to use the default one from App.
+     */
+    virtual bool drawCustomStatusBar(App* app, U8G2& display) { return false; }
+
     virtual const char* getTitle() const = 0;
     virtual MenuType getMenuType() const = 0;
 };

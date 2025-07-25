@@ -111,6 +111,7 @@ namespace SdCardManager {
             SD_ROOT::WEB,
             SD_ROOT::DATA_LOGS,
             SD_ROOT::DATA_CAPTURES,
+            SD_ROOT::DATA_PROBES,
             SD_ROOT::USER_BEACON_LISTS,
             SD_ROOT::USER_PORTALS
         };

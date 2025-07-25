@@ -48,8 +48,9 @@ App::App() :
     wifiToolsMenu_("WiFi Tools", {
         MenuItem{"Beacon Spam", IconType::TOOL_JAMMING, MenuType::BEACON_MODE_SELECTION},
         MenuItem{"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_TOOLS_GRID},
-        // --- MODIFIED ATTACK FLOW ---
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
+        MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
+        MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE}, // <-- MODIFIED
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
@@ -180,6 +181,7 @@ App::App() :
     jammingActiveMenu_(),
     jammer_(),
     beaconSpammer_(),
+    karmaAttacker_(),
     wifiListDataSource_(),
     firmwareListDataSource_(),
     beaconFileListDataSource_(),
@@ -189,7 +191,9 @@ App::App() :
     portalListMenu_("Select Portal", MenuType::EVIL_TWIN_PORTAL_SELECTION, &portalListDataSource_),
     beaconSpamActiveMenu_(),
     deauthActiveMenu_(),
-    evilTwinActiveMenu_()
+    evilTwinActiveMenu_(),
+    probeSnifferActiveMenu_(),
+    karmaActiveMenu_()
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -285,6 +289,8 @@ void App::setup()
     beaconSpammer_.setup(this);
     deauther_.setup(this);
     evilTwin_.setup(this);
+    probeSniffer_.setup(this);
+    karmaAttacker_.setup(this);
 
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -316,6 +322,8 @@ void App::setup()
     menuRegistry_[MenuType::BEACON_SPAM_ACTIVE] = &beaconSpamActiveMenu_;
     menuRegistry_[MenuType::DEAUTH_ACTIVE] = &deauthActiveMenu_;
     menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
+    menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
+    menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
 
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -332,6 +340,8 @@ void App::loop()
     beaconSpammer_.loop();
     deauther_.loop();
     evilTwin_.loop();
+    probeSniffer_.loop();
+    karmaAttacker_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;
@@ -353,7 +363,7 @@ void App::loop()
     }
     // Also keep WiFi on if we are connected for other reasons (e.g. background task)
     if (wifiManager_.getState() == WifiState::CONNECTED || beaconSpammer_.isActive() ||
-        deauther_.isActive() || evilTwin_.isActive())
+        deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || karmaAttacker_.isSniffing()) // <-- MODIFIED
     {
         wifiIsRequired = true;
     }
@@ -379,7 +389,7 @@ void App::loop()
     }
 
     // --- PERFORMANCE MODE RENDERING THROTTLE ---
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive();
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking(); // <-- MODIFIED
     static unsigned long lastRenderTime = 0;
     // Update screen only once per second in performance mode.
     // This frees up massive amounts of CPU time for the attack loops.
@@ -395,22 +405,35 @@ void App::loop()
     U8G2 &mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();
 
-    if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP)
-    {
-        IMenu *underlyingMenu = getMenu(getPreviousMenuType());
-        if (underlyingMenu)
-        {
-            drawStatusBar();
-            underlyingMenu->draw(this, mainDisplay);
-        }
+    // --- NEW MODULAR STATUS BAR DRAWING LOGIC ---
+    IMenu *menuForUI = currentMenu_;
+    IMenu *underlyingMenu = nullptr;
+
+    if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
+        underlyingMenu = getMenu(getPreviousMenuType());
+        menuForUI = underlyingMenu; // The main UI is the underlying menu
     }
-    else if (currentMenu_)
-    {
+    
+    // Draw the status bar for the main UI menu.
+    if (menuForUI) {
+        if (!menuForUI->drawCustomStatusBar(this, mainDisplay)) {
+            drawStatusBar();
+        }
+    } else if (currentMenu_) {
+        // Fallback if menuForUI is null but currentMenu isn't (e.g. popup with no underlying)
         drawStatusBar();
     }
-
-    if (currentMenu_)
-    {
+    
+    // Draw the main UI content.
+    if (underlyingMenu) {
+        // This is a popup, so we draw the underlying menu's content first.
+        underlyingMenu->draw(this, mainDisplay);
+    }
+    
+    // Always draw the current menu's content on top.
+    // For a normal menu, this is its main content.
+    // For a popup, this draws the popup box over the underlying menu.
+    if (currentMenu_) {
         currentMenu_->draw(this, mainDisplay);
     }
 

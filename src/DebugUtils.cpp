@@ -29,6 +29,7 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DEAUTH_ACTIVE: return "DEAUTH_ACTIVE";
         case MenuType::EVIL_TWIN_PORTAL_SELECTION: return "EVIL_TWIN_PORTAL_SELECTION";
         case MenuType::EVIL_TWIN_ACTIVE: return "EVIL_TWIN_ACTIVE";
+        case MenuType::KARMA_ACTIVE: return "KARMA_ACTIVE";
         default: return "UNKNOWN_MENU";
     }
 }
