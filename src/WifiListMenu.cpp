@@ -20,9 +20,9 @@ void WifiListMenu::setBackNavOverride(bool override) {
     backNavOverride_ = override;
 }
 
-void WifiListMenu::onEnter(App* app) {
+void WifiListMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) selectedIndex_ = 0;
     WifiManager& wifi = app->getWifiManager();
-    selectedIndex_ = 0;
 
     if (scanOnEnter_) {
         // This is for a full, slow re-scan.
@@ -129,7 +129,7 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
             switch(selectedItem.type) {
                 case ListItemType::SCAN:
                     setScanOnEnter(true);
-                    onEnter(app);
+                    onEnter(app, false);
                     break;
                 case ListItemType::BACK:
                     // Treat list item "Back" like the physical button

@@ -6,7 +6,7 @@
 
 ConnectionStatusMenu::ConnectionStatusMenu() : entryTime_(0) {}
 
-void ConnectionStatusMenu::onEnter(App* app) {
+void ConnectionStatusMenu::onEnter(App* app, bool isForwardNav) {
     entryTime_ = millis();
 }
 

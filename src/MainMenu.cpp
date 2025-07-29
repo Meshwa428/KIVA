@@ -11,8 +11,10 @@ MainMenu::MainMenu() : selectedIndex_(0) {
     menuItems_.push_back(MenuItem{"Info",      IconType::INFO,     MenuType::NONE});
 }
 
-void MainMenu::onEnter(App* app) {
-    selectedIndex_ = 0;
+void MainMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+    }
     animation_.init();
     animation_.startIntro(selectedIndex_, menuItems_.size());
 }

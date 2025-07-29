@@ -15,7 +15,7 @@ class ChannelSelectionMenu : public IMenu {
 public:
     ChannelSelectionMenu();
 
-    void onEnter(App* app) override;
+    void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;
     void onExit(App* app) override;
     void draw(App* app, U8G2& display) override;

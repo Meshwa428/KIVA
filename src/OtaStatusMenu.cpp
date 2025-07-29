@@ -7,7 +7,7 @@ OtaStatusMenu::OtaStatusMenu() {
     strcpy(titleBuffer_, "Firmware Update");
 }
 
-void OtaStatusMenu::onEnter(App* app) {
+void OtaStatusMenu::onEnter(App* app, bool isForwardNav) {
     // The OtaManager should already be in an active state.
     // We just display its current status.
 }

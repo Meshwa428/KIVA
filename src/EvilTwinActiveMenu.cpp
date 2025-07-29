@@ -10,10 +10,12 @@ EvilTwinActiveMenu::EvilTwinActiveMenu() :
     lastKnownVictimCount_(0)
 {}
 
-void EvilTwinActiveMenu::onEnter(App* app) {
-    // Reset list state when the menu is entered
-    topDisplayIndex_ = 0;
-    selectedIndex_ = 0;
+void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        // Reset list state when the menu is entered
+        topDisplayIndex_ = 0;
+        selectedIndex_ = 0;
+    }
     lastKnownVictimCount_ = 0;
 }
 

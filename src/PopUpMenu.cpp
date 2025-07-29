@@ -21,7 +21,7 @@ void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallb
     executeOnConfirmBeforeExit_ = executeOnConfirmBeforeExit;
 }
 
-void PopUpMenu::onEnter(App* app) {
+void PopUpMenu::onEnter(App* app, bool isForwardNav) {
     // If there is no "Cancel" button, default the selection to "Confirm" (option 1).
     // Otherwise, default to "Cancel" (option 0).
     bool hasCancelButton = !cancelText_.empty();

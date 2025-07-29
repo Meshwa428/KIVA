@@ -22,8 +22,10 @@ SplitSelectionMenu::SplitSelectionMenu(std::string title, MenuType menuType, con
     }
 }
 
-void SplitSelectionMenu::onEnter(App* app) {
-    selectedIndex_ = 0;
+void SplitSelectionMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+    }
     isAnimatingIn_ = true;
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
@@ -36,7 +38,7 @@ void SplitSelectionMenu::onEnter(App* app) {
             panelCurrentOffsetX_[i] = (i == 0) ? -64.f : 64.f;
         }
     }
-    scroll(0);
+    scroll(0); // Sets up targets based on the (potentially preserved) selectedIndex_
 }
 
 void SplitSelectionMenu::onUpdate(App* app) {

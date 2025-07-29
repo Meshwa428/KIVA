@@ -33,7 +33,9 @@
 #include "ProbeSniffer.h"
 #include "ProbeSnifferActiveMenu.h"
 #include "KarmaAttacker.h"
-#include "KarmaActiveMenu.h" // <-- ADDED
+#include "KarmaActiveMenu.h"
+#include "BleSpammer.h"
+#include "BleSpamActiveMenu.h"
 #include "Logger.h"
 
 class App
@@ -57,6 +59,7 @@ public:
     EvilTwin &getEvilTwin() { return evilTwin_; }
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
+    BleSpammer &getBleSpammer() { return bleSpammer_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -86,6 +89,7 @@ private:
     EvilTwin evilTwin_;
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
+    BleSpammer bleSpammer_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -101,6 +105,7 @@ private:
     CarouselMenu utilitiesMenu_;
 
     GridMenu wifiToolsMenu_;
+    GridMenu bleToolsMenu_;
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
     GridMenu deauthToolsMenu_;
@@ -121,7 +126,8 @@ private:
     DeauthActiveMenu deauthActiveMenu_;
     EvilTwinActiveMenu evilTwinActiveMenu_;
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
-    KarmaActiveMenu karmaActiveMenu_; // <-- ADDED
+    KarmaActiveMenu karmaActiveMenu_;
+    BleSpamActiveMenu bleSpamActiveMenu_;
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;

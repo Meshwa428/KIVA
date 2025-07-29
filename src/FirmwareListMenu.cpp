@@ -9,8 +9,10 @@ FirmwareListMenu::FirmwareListMenu() :
     marqueeScrollLeft_(true)    // <-- Initialize Marquee
 {}
 
-void FirmwareListMenu::onEnter(App* app) {
-    selectedIndex_ = 0;
+void FirmwareListMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+    }
     OtaManager& ota = app->getOtaManager();
     ota.scanSdForFirmware(); // Re-scan the SD card for firmware every time this menu is entered.
     
@@ -25,8 +27,6 @@ void FirmwareListMenu::onEnter(App* app) {
         displayItems_.push_back({"No firmware found", true, -1});
     }
     displayItems_.push_back({"Back", true, -1});
-    
-    selectedIndex_ = 0;
     marqueeActive_ = false; // Reset marquee state on enter
     marqueeScrollLeft_ = true;
     animation_.init();

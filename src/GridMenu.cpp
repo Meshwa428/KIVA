@@ -21,15 +21,16 @@ GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) 
     else menuType_ = MenuType::NONE;
 }
 
-void GridMenu::onEnter(App *app)
+void GridMenu::onEnter(App *app, bool isForwardNav)
 {
-    selectedIndex_ = 0;
-    targetGridScrollOffset_Y_ = 0;
-    currentGridScrollOffset_Y_anim_ = 0;
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+        targetGridScrollOffset_Y_ = 0;
+        currentGridScrollOffset_Y_anim_ = 0;
+        marqueeScrollLeft_ = true;
+    }
     startGridAnimation();
-    
     marqueeActive_ = false;
-    marqueeScrollLeft_ = true;
 }
 
 void GridMenu::onUpdate(App *app)

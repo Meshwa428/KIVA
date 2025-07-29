@@ -33,7 +33,9 @@ enum class MenuType
     EVIL_TWIN_PORTAL_SELECTION,
     EVIL_TWIN_ACTIVE,
     PROBE_ACTIVE,
-    KARMA_ACTIVE
+    KARMA_ACTIVE,
+    BLE_TOOLS_GRID,
+    BLE_SPAM_ACTIVE
 };
 
 // Input Event System

@@ -28,7 +28,7 @@ public:
     virtual ~IMenu() {}
 
     // Lifecycle methods
-    virtual void onEnter(App* app) = 0;
+    virtual void onEnter(App* app, bool isForwardNav) = 0;
     virtual void onUpdate(App* app) = 0;
     virtual void onExit(App* app) = 0;
 

@@ -24,7 +24,7 @@ void TextInputMenu::configure(std::string title, OnSubmitCallback callback, bool
     cursorPosition_ = strlen(inputBuffer_);
 }
 
-void TextInputMenu::onEnter(App* app) {
+void TextInputMenu::onEnter(App* app, bool isForwardNav) {
     currentLayer_ = KeyboardLayer::LOWERCASE;
     capsLock_ = false;
     focusRow_ = 0;

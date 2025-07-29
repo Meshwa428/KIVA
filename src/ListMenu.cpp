@@ -12,21 +12,31 @@ ListMenu::ListMenu(std::string title, MenuType menuType, IListMenuDataSource* da
     marqueeScrollLeft_(true)
 {}
 
-void ListMenu::reloadData(App* app) {
+void ListMenu::reloadData(App* app, bool resetSelection) {
     if (!dataSource_) return;
     
     totalItems_ = dataSource_->getNumberOfItems(app);
-    selectedIndex_ = 0;
+
+    if (resetSelection) {
+        selectedIndex_ = 0;
+    }
+    // Clamp selectedIndex in case the list size changed while we were away
+    if (totalItems_ > 0 && selectedIndex_ >= totalItems_) {
+        selectedIndex_ = totalItems_ - 1;
+    } else if (totalItems_ == 0) {
+        selectedIndex_ = 0;
+    }
+
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
     animation_.init();
     animation_.startIntro(selectedIndex_, totalItems_);
 }
 
-void ListMenu::onEnter(App* app) {
+void ListMenu::onEnter(App* app, bool isForwardNav) {
     if (!dataSource_) return;
-    dataSource_->onEnter(app, this);
-    reloadData(app);
+    dataSource_->onEnter(app, this, isForwardNav);
+    reloadData(app, isForwardNav); // Pass the flag to reloadData
 }
 
 void ListMenu::onUpdate(App* app) {

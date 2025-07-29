@@ -10,7 +10,7 @@ class ListMenu : public IMenu {
 public:
     ListMenu(std::string title, MenuType menuType, IListMenuDataSource* dataSource);
 
-    void onEnter(App* app) override;
+    void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;
     void onExit(App* app) override;
     void draw(App* app, U8G2& display) override;
@@ -19,7 +19,7 @@ public:
     const char* getTitle() const override { return title_.c_str(); }
     MenuType getMenuType() const override { return menuType_; }
 
-    void reloadData(App* app);
+    void reloadData(App* app, bool resetSelection = true);
     int getSelectedIndex() const { return selectedIndex_; }
     
     // --- NEW: Public helper for marquee text ---

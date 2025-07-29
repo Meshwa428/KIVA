@@ -6,7 +6,7 @@
 
 FirmwareListDataSource::FirmwareListDataSource() {}
 
-void FirmwareListDataSource::onEnter(App* app, ListMenu* menu) {
+void FirmwareListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     rebuildDisplayItems(app);
 }
 

@@ -9,7 +9,7 @@ void BeaconSpamActiveMenu::setAttackParameters(BeaconSsidMode mode, const std::s
     filePathToUse_ = filePath;
 }
 
-void BeaconSpamActiveMenu::onEnter(App* app) {
+void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
     app->getHardwareManager().setPerformanceMode(true);
 
     auto& spammer = app->getBeaconSpammer();

@@ -11,7 +11,7 @@ ProbeSnifferActiveMenu::ProbeSnifferActiveMenu() :
     lastKnownSsidCount_(0) 
 {}
 
-void ProbeSnifferActiveMenu::onEnter(App* app) {
+void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
     topDisplayIndex_ = 0;
     selectedIndex_ = 0;
     lastKnownSsidCount_ = 0;

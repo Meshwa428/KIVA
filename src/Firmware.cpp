@@ -15,7 +15,7 @@ bool parseMetadataFile(const String& kfwFilePath, FirmwareInfo& info) {
         info.isValid = false;
         return false;
     }
-    StaticJsonDocument<512> doc;
+    JsonDocument doc; // <-- CORRECTED
     DeserializationError error = deserializeJson(doc, metaFile);
     metaFile.close();
     if (error) {
@@ -38,7 +38,7 @@ bool parseMetadataFile(const String& kfwFilePath, FirmwareInfo& info) {
 bool saveMetadataFile(const String& kfwFilePath, const FirmwareInfo& info) {
     File metaFile = SD.open(kfwFilePath, FILE_WRITE);
     if (!metaFile) return false;
-    StaticJsonDocument<512> doc;
+    JsonDocument doc; // <-- CORRECTED
     doc["version"] = info.version;
     doc["build_date"] = info.build_date;
     doc["checksum_md5"] = info.checksum_md5;

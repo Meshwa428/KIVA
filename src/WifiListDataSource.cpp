@@ -20,14 +20,16 @@ void WifiListDataSource::forceReload(App* app, ListMenu* menu) {
     menu->reloadData(app);
 }
 
-void WifiListDataSource::onEnter(App* app, ListMenu* menu) {
+void WifiListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     WifiManager& wifi = app->getWifiManager();
-    if (scanOnEnter_) {
+    // Only start a new scan if navigating forward AND scan is enabled for this entry.
+    if (isForwardNav && scanOnEnter_) {
         wifi.startScan();
         isScanning_ = true;
         lastKnownScanCount_ = wifi.getScanCompletionCount();
         displayItems_.clear(); // Clear items to show "Scanning..."
     } else {
+        // If not forward nav, or scan is disabled, just rebuild from current data.
         rebuildDisplayItems(app);
         isScanning_ = false;
     }
@@ -98,7 +100,7 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     switch(selectedItem.type) {
         case ListItemType::SCAN:
             setScanOnEnter(true);
-            onEnter(app, menu);
+            onEnter(app, menu, true);
             menu->reloadData(app);
             break;
         case ListItemType::BACK:

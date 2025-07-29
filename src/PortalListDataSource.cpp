@@ -5,7 +5,7 @@
 #include "UI_Utils.h"
 #include "EvilTwin.h"
 
-void PortalListDataSource::onEnter(App* app, ListMenu* menu) {
+void PortalListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     portalNames_.clear();
     const char* dirPath = SD_ROOT::USER_PORTALS;
     if (!SdCardManager::isAvailable()) {

@@ -15,14 +15,13 @@ ChannelSelectionMenu::ChannelSelectionMenu() :
     }
 }
 
-void ChannelSelectionMenu::onEnter(App* app) {
-    selectedIndex_ = 0;
-    targetScrollOffset_Y_ = 0.0f;
-    currentScrollOffset_Y_ = 0.0f;
-    for (int i = 0; i < NUM_NRF_CHANNELS; ++i) {
-        channelIsSelected_[i] = false;
+void ChannelSelectionMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+        targetScrollOffset_Y_ = 0.0f;
+        currentScrollOffset_Y_ = 0.0f;
+        // Selections are intentionally preserved
     }
-    // Note: We intentionally do not clear selections, allowing the user to resume.
 }
 
 void ChannelSelectionMenu::onUpdate(App* app) {

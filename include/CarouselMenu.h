@@ -10,7 +10,7 @@ class CarouselMenu : public IMenu {
 public:
     CarouselMenu(std::string title, std::vector<MenuItem> items);
 
-    void onEnter(App* app) override;
+    void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;
     void onExit(App* app) override;
     void draw(App* app, U8G2& display) override;

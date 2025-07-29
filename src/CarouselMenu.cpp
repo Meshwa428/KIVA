@@ -17,11 +17,13 @@ CarouselMenu::CarouselMenu(std::string title, std::vector<MenuItem> items) :
     else menuType_ = MenuType::NONE;
 }
 
-void CarouselMenu::onEnter(App* app) {
-    selectedIndex_ = 0;
+void CarouselMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+        marqueeScrollLeft_ = true; // Reset marquee direction
+    }
     animation_.init();
     animation_.setTargets(selectedIndex_, menuItems_.size());
-    marqueeScrollLeft_ = true; // Reset on enter
 }
 
 void CarouselMenu::onUpdate(App* app) {

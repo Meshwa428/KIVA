@@ -51,7 +51,7 @@ public:
      * @brief Called when the ListMenu is first entered. 
      * The implementation can use this to refresh its data (e.g., start a new Wi-Fi scan).
      */
-    virtual void onEnter(App* app, ListMenu* menu) = 0;
+    virtual void onEnter(App* app, ListMenu* menu, bool isForwardNav) = 0;
     
     /**
      * @brief Called when the ListMenu is exited.

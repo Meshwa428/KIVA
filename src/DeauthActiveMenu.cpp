@@ -6,7 +6,7 @@
 
 DeauthActiveMenu::DeauthActiveMenu() {}
 
-void DeauthActiveMenu::onEnter(App* app) {
+void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();

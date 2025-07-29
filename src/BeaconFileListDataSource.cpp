@@ -5,7 +5,7 @@
 #include "UI_Utils.h"
 #include "BeaconSpammer.h"
 
-void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu) {
+void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     fileNames_.clear();
     const char* dirPath = SD_ROOT::USER_BEACON_LISTS;
     

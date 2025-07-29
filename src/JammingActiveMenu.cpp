@@ -11,7 +11,7 @@ void JammingActiveMenu::setJammingConfig(const JammerConfig& config) {
     startConfig_ = config;
 }
 
-void JammingActiveMenu::onEnter(App* app) {
+void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
     if (modeToStart_ != JammingMode::IDLE) {
         app->getHardwareManager().setPerformanceMode(true);
 

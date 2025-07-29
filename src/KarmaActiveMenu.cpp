@@ -10,11 +10,13 @@ KarmaActiveMenu::KarmaActiveMenu() :
     lastKnownSsidCount_(0)
 {}
 
-void KarmaActiveMenu::onEnter(App* app) {
-    topDisplayIndex_ = 0;
-    selectedIndex_ = 0;
-    lastKnownSsidCount_ = 0;
-    displaySsids_.clear();
+void KarmaActiveMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        topDisplayIndex_ = 0;
+        selectedIndex_ = 0;
+        lastKnownSsidCount_ = 0;
+        displaySsids_.clear();
+    }
     app->getKarmaAttacker().startSniffing();
 }
 

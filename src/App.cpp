@@ -2,6 +2,7 @@
 #include "Icons.h"
 #include "UI_Utils.h"
 #include "Jammer.h"
+#include "BleSpammer.h"
 #include "DebugUtils.h"
 #include <algorithm>
 #include <cmath>
@@ -14,6 +15,7 @@ App::App() :
     mainMenu_(),
     toolsMenu_("Tools", {
         MenuItem{"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
+        MenuItem{"BLE Tools", IconType::NET_BLUETOOTH, MenuType::BLE_TOOLS_GRID},
         MenuItem{"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     gamesMenu_("Games", {
@@ -51,6 +53,39 @@ App::App() :
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
         MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
         MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE}, // <-- MODIFIED
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+    bleToolsMenu_("BLE Tools", {
+        MenuItem{"Apple Juice", IconType::BEACON, MenuType::NONE, 
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
+        MenuItem{"Sour Apple", IconType::BEACON, MenuType::NONE, 
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
+        MenuItem{"Android", IconType::BEACON, MenuType::NONE,
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
+        MenuItem{"Samsung", IconType::BEACON, MenuType::NONE,
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
+        MenuItem{"Swift Pair", IconType::BEACON, MenuType::NONE,
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
+        MenuItem{"Tutti-Frutti", IconType::SKULL, MenuType::NONE,
+            [](App* app){
+                auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
+                if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
@@ -193,7 +228,8 @@ App::App() :
     deauthActiveMenu_(),
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
-    karmaActiveMenu_()
+    karmaActiveMenu_(),
+    bleSpamActiveMenu_()
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -291,6 +327,7 @@ void App::setup()
     evilTwin_.setup(this);
     probeSniffer_.setup(this);
     karmaAttacker_.setup(this);
+    bleSpammer_.setup(this);
 
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -300,6 +337,7 @@ void App::setup()
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
 
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
+    menuRegistry_[MenuType::BLE_TOOLS_GRID] = &bleToolsMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
     menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
@@ -324,6 +362,7 @@ void App::setup()
     menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
+    menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
 
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -342,6 +381,7 @@ void App::loop()
     evilTwin_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
+    bleSpammer_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;
@@ -363,7 +403,7 @@ void App::loop()
     }
     // Also keep WiFi on if we are connected for other reasons (e.g. background task)
     if (wifiManager_.getState() == WifiState::CONNECTED || beaconSpammer_.isActive() ||
-        deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || karmaAttacker_.isSniffing()) // <-- MODIFIED
+        deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || karmaAttacker_.isSniffing())
     {
         wifiIsRequired = true;
     }
@@ -389,7 +429,7 @@ void App::loop()
     }
 
     // --- PERFORMANCE MODE RENDERING THROTTLE ---
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking(); // <-- MODIFIED
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive();
     static unsigned long lastRenderTime = 0;
     // Update screen only once per second in performance mode.
     // This frees up massive amounts of CPU time for the attack loops.
@@ -504,7 +544,7 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
 
         if (isForwardNav || exitingMenuType != MenuType::POPUP)
         {
-            currentMenu_->onEnter(this);
+            currentMenu_->onEnter(this, isForwardNav); // <-- MODIFIED: Pass the flag
         }
 
         if (isForwardNav)
