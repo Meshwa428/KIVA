@@ -18,6 +18,10 @@ public:
     const char* getTitle() const override { return title_.c_str(); }
     MenuType getMenuType() const override { return menuType_; }
 
+    // --- ADD THESE METHODS ---
+    void setScriptPath(const std::string& path) { scriptPath_ = path; }
+    const std::string& getScriptPath() const { return scriptPath_; }
+
 private:
     void scroll(int direction);
     
@@ -26,6 +30,8 @@ private:
     std::vector<MenuItem> menuItems_;
     
     int selectedIndex_;
+
+    std::string scriptPath_;
 
     // Animation state
     float panelTargetOffsetX_[3];

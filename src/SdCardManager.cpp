@@ -113,7 +113,8 @@ namespace SdCardManager {
             SD_ROOT::DATA_CAPTURES,
             SD_ROOT::DATA_PROBES,
             SD_ROOT::USER_BEACON_LISTS,
-            SD_ROOT::USER_PORTALS
+            SD_ROOT::USER_PORTALS,
+            SD_ROOT::USER_DUCKY
         };
 
         for (const char* dir : dirsToCreate) {

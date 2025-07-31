@@ -36,6 +36,9 @@
 #include "KarmaActiveMenu.h"
 #include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
+#include "BadUSB.h"
+#include "DuckyScriptListDataSource.h"
+#include "BadUSBActiveMenu.h"
 #include "Logger.h"
 
 class App
@@ -60,6 +63,9 @@ public:
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
+    BadUSB &getBadUSB() { return badUSB_; }
+    DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
+    SplitSelectionMenu& getBadUsbModeSelectionMenu() { return badUsbModeSelectionMenu_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -90,6 +96,7 @@ private:
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
     BleSpammer bleSpammer_;
+    BadUSB badUSB_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -106,11 +113,13 @@ private:
 
     GridMenu wifiToolsMenu_;
     GridMenu bleToolsMenu_;
+    GridMenu hostToolsMenu_;
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
     GridMenu deauthToolsMenu_;
     
     SplitSelectionMenu beaconModeMenu_;
+    SplitSelectionMenu badUsbModeSelectionMenu_;
 
     // WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
@@ -128,17 +137,20 @@ private:
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
+    BadUSBActiveMenu badUSBActiveMenu_;
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
+    DuckyScriptListDataSource duckyScriptListDataSource_;
 
     ListMenu wifiListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
+    ListMenu duckyScriptListMenu_;
 };
 
 #endif

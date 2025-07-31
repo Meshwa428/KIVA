@@ -3,11 +3,13 @@
 #include "UI_Utils.h"
 #include "Jammer.h"
 #include "BleSpammer.h"
+#include "BadUSB.h"
 #include "DebugUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
+// #include "USB.h" // <-- REMOVED THIS INCLUDE AND ANY USB CALLS FROM THIS FILE
 
 App::App() : 
     currentMenu_(nullptr),
@@ -16,6 +18,7 @@ App::App() :
     toolsMenu_("Tools", {
         MenuItem{"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
         MenuItem{"BLE Tools", IconType::NET_BLUETOOTH, MenuType::BLE_TOOLS_GRID},
+        MenuItem{"Host Tools", IconType::TOOL_INJECTION, MenuType::HOST_TOOLS_GRID},
         MenuItem{"Jamming", IconType::TOOL_JAMMING, MenuType::JAMMING_TOOLS_GRID},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     gamesMenu_("Games", {
@@ -88,6 +91,33 @@ App::App() :
             }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    hostToolsMenu_("Host Tools", {
+        MenuItem{"BadUSB", IconType::TOOL_INJECTION, MenuType::BAD_USB_SCRIPT_LIST},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+
+    // ADD the new BadUSB Mode Selection Menu
+    badUsbModeSelectionMenu_("Execution Mode", MenuType::BAD_USB_MODE_SELECTION, {
+        MenuItem{"USB", IconType::INFO, MenuType::NONE,
+            [](App* app) {
+                const auto& path = static_cast<SplitSelectionMenu*>(app->getMenu(MenuType::BAD_USB_MODE_SELECTION))->getScriptPath();
+                if (app->getBadUSB().startScript(path, BadUSB::Mode::USB)) {
+                    app->changeMenu(MenuType::BAD_USB_ACTIVE);
+                } else {
+                    app->showPopUp("Error", "Failed to start USB HID.", nullptr, "OK", "", true);
+                }
+            }},
+        MenuItem{"BLE", IconType::NET_BLUETOOTH, MenuType::NONE,
+            [](App* app) {
+                const auto& path = static_cast<SplitSelectionMenu*>(app->getMenu(MenuType::BAD_USB_MODE_SELECTION))->getScriptPath();
+                if (app->getBadUSB().startScript(path, BadUSB::Mode::BLE)) {
+                    app->changeMenu(MenuType::BAD_USB_ACTIVE);
+                } else {
+                    app->showPopUp("Error", "Failed to start BLE HID.", nullptr, "OK", "", true);
+                }
+            }},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }),
     firmwareUpdateGrid_("Update", {
         MenuItem{"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App *app) {
@@ -229,7 +259,11 @@ App::App() :
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
-    bleSpamActiveMenu_()
+    bleSpamActiveMenu_(),
+    badUSB_(),
+    duckyScriptListDataSource_(),
+    duckyScriptListMenu_("Ducky Scripts", MenuType::BAD_USB_SCRIPT_LIST, &duckyScriptListDataSource_),
+    badUSBActiveMenu_()
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -240,6 +274,7 @@ App::App() :
 void App::setup()
 {
     Serial.begin(115200);
+    // USB.begin(); // <-- REMOVED! This will be called on-demand now.
     delay(100);
     Wire.begin();
 
@@ -328,6 +363,7 @@ void App::setup()
     probeSniffer_.setup(this);
     karmaAttacker_.setup(this);
     bleSpammer_.setup(this);
+    badUSB_.setup(this);
 
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -338,10 +374,12 @@ void App::setup()
 
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::BLE_TOOLS_GRID] = &bleToolsMenu_;
+    menuRegistry_[MenuType::HOST_TOOLS_GRID] = &hostToolsMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
     menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
     menuRegistry_[MenuType::BEACON_MODE_SELECTION] = &beaconModeMenu_;
+    menuRegistry_[MenuType::BAD_USB_MODE_SELECTION] = &badUsbModeSelectionMenu_;
 
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::POPUP] = &popUpMenu_;
@@ -353,6 +391,7 @@ void App::setup()
     menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
     menuRegistry_[MenuType::BEACON_FILE_LIST] = &beaconFileListMenu_;
     menuRegistry_[MenuType::EVIL_TWIN_PORTAL_SELECTION] = &portalListMenu_;
+    menuRegistry_[MenuType::BAD_USB_SCRIPT_LIST] = &duckyScriptListMenu_;
 
     menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
 
@@ -363,6 +402,7 @@ void App::setup()
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
+    menuRegistry_[MenuType::BAD_USB_ACTIVE] = &badUSBActiveMenu_;
 
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -382,6 +422,7 @@ void App::loop()
     probeSniffer_.loop();
     karmaAttacker_.loop();
     bleSpammer_.loop();
+    badUSB_.loop();
 
     // --- REFINED WiFi Power Management Logic ---
     bool wifiIsRequired = false;
@@ -429,7 +470,9 @@ void App::loop()
     }
 
     // --- PERFORMANCE MODE RENDERING THROTTLE ---
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive();
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
+                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive() ||
+                    badUSB_.isActive();
     static unsigned long lastRenderTime = 0;
     // Update screen only once per second in performance mode.
     // This frees up massive amounts of CPU time for the attack loops.

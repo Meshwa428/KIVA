@@ -34,8 +34,12 @@ enum class MenuType
     EVIL_TWIN_ACTIVE,
     PROBE_ACTIVE,
     KARMA_ACTIVE,
-    BLE_TOOLS_GRID,
-    BLE_SPAM_ACTIVE
+    BLE_TOOLS_GRID,       // <-- ADD THIS
+    HOST_TOOLS_GRID,      // <-- ADD THIS,
+    BLE_SPAM_ACTIVE,
+    BAD_USB_SCRIPT_LIST,
+    BAD_USB_MODE_SELECTION,
+    BAD_USB_ACTIVE
 };
 
 // Input Event System
@@ -131,6 +135,7 @@ namespace SD_ROOT
 
     static constexpr const char *USER_BEACON_LISTS = "/user/beacon_lists";
     static constexpr const char *USER_PORTALS = "/user/portals";
+    static constexpr const char *USER_DUCKY = "/user/ducky_scripts";
 
     static constexpr const char *WEB_OTA_PAGE = "/web/ota_page.html";
 

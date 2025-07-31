@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory> // For std::unique_ptr
 #include <RF24.h>
+#undef FEATURE // <-- ADD THIS LINE to resolve the macro conflict with BLE libraries
 #include <SPI.h>
 
 // Enum to identify which system is requesting RF control
