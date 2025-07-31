@@ -186,6 +186,60 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
     return std::unique_ptr<RfLock>(new RfLock(*this, false));
 }
 
+// --- NEW IMPLEMENTATIONS FOR HOST CONTROL ---
+bool HardwareManager::requestHostControl(HostClient client) {
+    if (client == currentHostClient_) {
+        return true; // Already has control
+    }
+
+    // If another host peripheral is active, release it FIRST.
+    if (currentHostClient_ != HostClient::NONE) {
+        releaseHostControl();
+        delay(100); // Give hardware time to settle after release
+    }
+
+    Serial.printf("[HW-HOST] GRANTED request for client %d\n", (int)client);
+
+    bool success = false;
+    switch(client) {
+        case HostClient::USB_HID:
+            USB.begin();
+            success = true;
+            break;
+        case HostClient::BLE_HID:
+            NimBLEDevice::init("");
+            success = true;
+            break;
+        case HostClient::NONE:
+            success = true; // Request to release is always successful
+            break;
+    }
+
+    if (success) {
+        currentHostClient_ = client;
+    }
+    return success;
+}
+
+void HardwareManager::releaseHostControl() {
+    Serial.printf("[HW-HOST] Releasing Host lock from client %d\n", (int)currentHostClient_);
+    switch(currentHostClient_) {
+        case HostClient::USB_HID:
+            // The USB.end() is not very reliable. A soft reboot might be better in some cases,
+            // but for now, we follow the API.
+            // USB.end(); 
+            break;
+        case HostClient::BLE_HID:
+            // This is the correct place for the full teardown.
+            // It ensures the BLE stack is completely off before USB tries to start.
+            NimBLEDevice::deinit(true);
+            break;
+        case HostClient::NONE:
+            break;
+    }
+    currentHostClient_ = HostClient::NONE;
+}
+
 void HardwareManager::update()
 {
     // --- Define intervals based on performance mode ---

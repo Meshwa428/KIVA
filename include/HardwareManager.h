@@ -8,6 +8,8 @@
 #include <RF24.h>
 #undef FEATURE // <-- ADD THIS LINE to resolve the macro conflict with BLE libraries
 #include <SPI.h>
+#include "USB.h"
+#include <NimBLEDevice.h>
 
 // Enum to identify which system is requesting RF control
 enum class RfClient {
@@ -16,6 +18,13 @@ enum class RfClient {
     WIFI,
     WIFI_PROMISCUOUS,
     ROGUE_AP
+};
+
+// --- NEW ENUM FOR HOST PERIPHERALS ---
+enum class HostClient {
+    NONE,
+    USB_HID,
+    BLE_HID
 };
 
 static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
@@ -43,6 +52,10 @@ public:
 
     // --- NEW: RF Control Method ---
     std::unique_ptr<RfLock> requestRfControl(RfClient client);
+
+    // --- NEW: Host Peripheral Control Methods ---
+    bool requestHostControl(HostClient client);
+    void releaseHostControl();
 
     // Display accessors
     U8G2& getMainDisplay();
@@ -92,6 +105,9 @@ private:
     RF24 radio1_;
     RF24 radio2_;
     RfClient currentRfClient_;
+
+    // --- NEW: Host Peripheral State ---
+    HostClient currentHostClient_;
 
     // Input state
     bool prevDbncHState0_[8];

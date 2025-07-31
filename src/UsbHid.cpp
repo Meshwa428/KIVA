@@ -1,18 +1,24 @@
 #include "BadUSB.h"
 #include "USB.h"
-#include "USBHIDKeyboard.h"
+#include "USBHIDKeyboard.h" // <--- Include the real header here
 
 UsbHid::UsbHid() {
     usb_keyboard_.reset(new USBHIDKeyboard());
 }
+
+// --- NEWLY DEFINED DESTRUCTOR ---
+UsbHid::~UsbHid() {
+    // Empty destructor body is sufficient.
+}
+
 bool UsbHid::begin() {
-    USB.begin();
+    // USB.begin() is now called by HardwareManager
     usb_keyboard_->begin();
     return true;
 }
 void UsbHid::end() {
     usb_keyboard_->end();
-    // USB.end();
+    // USB.end() is now handled by HardwareManager's releaseHostControl()
 }
 size_t UsbHid::press(uint8_t k) {
     return usb_keyboard_->press(k);

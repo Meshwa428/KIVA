@@ -6,20 +6,19 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <NimBLEDevice.h> 
 
-// --- Forward Declarations to resolve header conflicts ---
-class App;
+// --- MODIFICATION: REVERT to Forward Declarations ---
+// This prevents header conflicts.
 class USBHIDKeyboard;
-class NimBLEHIDDevice;
-class NimBLECharacteristic;
+class BleKeyboard;
+// --- END MODIFICATION ---
 
-// --- Key definitions (single source of truth) ---
-#include "HIDKeys.h"
+// Forward Declarations to resolve header conflicts
+class App;
 
-// --- Abstract HID Interface ---
 class HIDInterface {
 public:
+    enum class Type { USB, BLE };
     virtual ~HIDInterface() {}
     virtual bool begin() = 0;
     virtual void end() = 0;
@@ -28,12 +27,15 @@ public:
     virtual void releaseAll() = 0;
     virtual size_t write(const uint8_t *buffer, size_t size) = 0;
     virtual bool isConnected() = 0;
+    virtual Type getType() const = 0;
 };
 
-// --- Concrete BLE HID Implementation (using NimBLE) ---
-class BleHid : public HIDInterface, public NimBLEServerCallbacks {
+
+// --- Concrete BLE HID Implementation ---
+class BleHid : public HIDInterface {
 public:
     BleHid(const std::string& deviceName = "Kiva BadUSB");
+    ~BleHid(); // <--- We will define the destructor in the .cpp file
     bool begin() override;
     void end() override;
     size_t press(uint8_t k) override;
@@ -41,25 +43,17 @@ public:
     void releaseAll() override;
     size_t write(const uint8_t *buffer, size_t size) override;
     bool isConnected() override;
-
-    // NimBLEServerCallbacks overrides
-    void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) override;
-    void onDisconnect(NimBLEServer* pServer) override;
+    Type getType() const override { return Type::BLE; }
 
 private:
-    void sendReport();
-    std::string deviceName_;
-    NimBLEHIDDevice* hid_;
-    NimBLECharacteristic* inputKeyboard_;
-    NimBLEServer* pServer_;
-    bool connected_;
-    uint8_t _keyReport[8]; // Modifier, reserved, 6 keys
+    std::unique_ptr<BleKeyboard> bleKeyboard_;
 };
 
 // --- Concrete USB HID Implementation ---
 class UsbHid : public HIDInterface {
 public:
     UsbHid();
+    ~UsbHid(); // <--- We will define the destructor in the .cpp file
     bool begin() override;
     void end() override;
     size_t press(uint8_t k) override;
@@ -67,6 +61,7 @@ public:
     void releaseAll() override;
     size_t write(const uint8_t *buffer, size_t size) override;
     bool isConnected() override;
+    Type getType() const override { return Type::USB; }
 private:
     std::unique_ptr<USBHIDKeyboard> usb_keyboard_;
 };
@@ -109,8 +104,11 @@ private:
     void executeCombination(const std::string& command, const std::string& arg);
 
     App* app_;
-    std::unique_ptr<HIDInterface> hid_;
     SdCardManager::LineReader scriptReader_;
+    
+    HIDInterface* activeHid_;
+    BleHid bleHid_;
+    UsbHid usbHid_;
     
     State state_;
     Mode currentMode_;
@@ -121,7 +119,6 @@ private:
     unsigned long delayUntil_;
     int defaultDelay_;
     
-    // For REPEAT command
     std::string lastLine_;
 };
 

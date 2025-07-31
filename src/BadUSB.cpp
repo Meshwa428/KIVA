@@ -1,6 +1,8 @@
 #include "BadUSB.h"
 #include "App.h"
 #include "Logger.h"
+#include <BleKeyboard.h> // For KEY_* constants
+// #include <NimBLEDevice.h> // For the explicit deinit call
 
 // --- Ducky Script Command Definitions ---
 static const DuckyCommand duckyCmds[] = {
@@ -68,30 +70,48 @@ static const DuckyCombination duckyCombos[] = {
 };
 
 // --- BadUSB Manager Implementation ---
-BadUSB::BadUSB() : app_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
+// --- BadUSB Manager Implementation ---
+BadUSB::BadUSB() : app_(nullptr), activeHid_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
 void BadUSB::setup(App* app) { app_ = app; }
 
 bool BadUSB::startScript(const std::string& scriptPath, Mode mode) {
-    if (isActive()) return false;
+    if (isActive()) {
+        // If already active, stop the current script before starting a new one
+        stopScript();
+        delay(100); // Give a moment for hardware to settle
+    }
     LOG(LogLevel::INFO, "BadUSB", "Starting script %s in %s mode", scriptPath.c_str(), (mode == Mode::USB ? "USB" : "BLE"));
 
+    // --- MODIFIED LOGIC ---
+    HostClient requestedClient;
     if (mode == Mode::USB) {
-        hid_.reset(new UsbHid());
+        activeHid_ = &usbHid_;
+        requestedClient = HostClient::USB_HID;
     } else {
-        hid_.reset(new BleHid());
+        activeHid_ = &bleHid_;
+        requestedClient = HostClient::BLE_HID;
     }
-    
-    if (!hid_ || !hid_->begin()) {
-        LOG(LogLevel::ERROR, "BadUSB", "Failed to initialize HID");
-        hid_.reset();
+
+    if (!app_->getHardwareManager().requestHostControl(requestedClient)) {
+        LOG(LogLevel::ERROR, "BadUSB", "Failed to acquire host control from HardwareManager.");
+        activeHid_ = nullptr;
         return false;
     }
+    
+    if (!activeHid_->begin()) {
+        LOG(LogLevel::ERROR, "BadUSB", "Failed to initialize HID library component.");
+        app_->getHardwareManager().releaseHostControl();
+        activeHid_ = nullptr;
+        return false;
+    }
+    // --- END MODIFICATION ---
 
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "BadUSB", "Failed to open script file: %s", scriptPath.c_str());
-        hid_->end();
-        hid_.reset();
+        activeHid_->end();
+        app_->getHardwareManager().releaseHostControl();
+        activeHid_ = nullptr;
         return false;
     }
     
@@ -112,11 +132,19 @@ void BadUSB::stopScript() {
     if (!isActive()) return;
     LOG(LogLevel::INFO, "BadUSB", "Stopping script.");
     
-    if (hid_) {
-        hid_->releaseAll();
-        hid_->end();
-        hid_.reset();
+    // --- MODIFIED LOGIC ---
+    if (activeHid_) {
+        // 1. Call high-level library functions.
+        activeHid_->releaseAll();
+        activeHid_->end();
+
+        // 2. Tell the HardwareManager to shut down the underlying hardware controller.
+        app_->getHardwareManager().releaseHostControl();
+
+        // 3. Simply set our active pointer to null. DO NOT delete/reset.
+        activeHid_ = nullptr;
     }
+    // --- END MODIFICATION ---
     
     scriptReader_.close();
     state_ = State::IDLE;
@@ -126,18 +154,17 @@ void BadUSB::stopScript() {
 }
 
 void BadUSB::loop() {
-    if (!isActive()) return;
+    if (!isActive() || !activeHid_) return; // Add guard for activeHid_
     if (state_ == State::WAITING_FOR_CONNECTION) {
-        if (hid_->isConnected()) {
+        if (activeHid_->isConnected()) {
             LOG(LogLevel::INFO, "BadUSB", "HID connected. Starting execution.");
             state_ = State::RUNNING;
-            delay(500);
         }
         return;
     }
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
-        hid_->releaseAll();
+        activeHid_->releaseAll();
         delay(defaultDelay_);
         currentLine_ = scriptReader_.readLine().c_str(); 
         if (currentLine_.empty()) {
@@ -152,6 +179,11 @@ void BadUSB::loop() {
 }
 
 void BadUSB::parseAndExecute(const std::string& line) {
+    // This function needs to be updated to use activeHid_
+    // It's a bit long, so I'll show the key changes. All 'hid_->' become 'activeHid_->'
+
+    if (!activeHid_) return; // Guard at the top
+
     std::string command;
     std::string arg;
     size_t firstSpace = line.find(' ');
@@ -169,10 +201,10 @@ void BadUSB::parseAndExecute(const std::string& line) {
             switch (cmd.type) {
                 case DuckyCommand::Type::PRINT:
                     if (command == "STRING") {
-                        hid_->write((const uint8_t*)arg.c_str(), arg.length());
+                        activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
                     } else if (command == "STRINGLN") {
-                        hid_->write((const uint8_t*)arg.c_str(), arg.length());
-                        hid_->press(KEY_RETURN);
+                        activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
+                        activeHid_->press(KEY_RETURN);
                     }
                     return;
                 case DuckyCommand::Type::DELAY:
@@ -187,7 +219,7 @@ void BadUSB::parseAndExecute(const std::string& line) {
                         int count = std::stoi(arg);
                         for (int i = 0; i < count; ++i) {
                             if (i > 0) { 
-                                hid_->releaseAll();
+                                activeHid_->releaseAll();
                                 delay(defaultDelay_);
                             }
                             parseAndExecute(lastLine_);
@@ -198,15 +230,16 @@ void BadUSB::parseAndExecute(const std::string& line) {
             }
         }
     }
-    hid_->write((const uint8_t*)line.c_str(), line.length());
+    activeHid_->write((const uint8_t*)line.c_str(), line.length());
 }
 
 void BadUSB::executeCombination(const std::string& command, const std::string& arg) {
+    if (!activeHid_) return; // Guard
     for (const auto& combo : duckyCombos) {
         if (command == combo.command) {
-            hid_->press(combo.key1);
-            hid_->press(combo.key2);
-            if (!arg.empty()) hid_->write((const uint8_t*)arg.c_str(), arg.length());
+            activeHid_->press(combo.key1);
+            activeHid_->press(combo.key2);
+            if (!arg.empty()) activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
             return;
         }
     }
@@ -218,10 +251,11 @@ void BadUSB::executeCombination(const std::string& command, const std::string& a
         }
     }
     if (keyToPress) {
-        hid_->press(keyToPress);
-        if (!arg.empty()) hid_->write((const uint8_t*)arg.c_str(), arg.length());
+        activeHid_->press(keyToPress);
+        if (!arg.empty()) activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
     }
 }
+
 
 // Getters
 BadUSB::State BadUSB::getState() const { return state_; }
