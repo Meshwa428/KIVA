@@ -4,7 +4,7 @@
 namespace SdCardManager {
     static bool sdCardInitialized = false;
 
-    // --- NEW: LineReader Implementation ---
+    // --- LineReader Implementation ---
     LineReader::LineReader() : file_() {}
 
     LineReader::LineReader(File file) : file_(file) {}
@@ -15,12 +15,10 @@ namespace SdCardManager {
         }
     }
 
-    // Move constructor
     LineReader::LineReader(LineReader&& other) noexcept : file_(other.file_) {
-        other.file_ = File(); // Invalidate other's file handle
+        other.file_ = File();
     }
 
-    // Move assignment
     LineReader& LineReader::operator=(LineReader&& other) noexcept {
         if (this != &other) {
             if (file_) {
@@ -42,28 +40,22 @@ namespace SdCardManager {
         }
     }
 
+    // --- THIS IS THE CORRECTED, SIMPLIFIED LOGIC ---
     String LineReader::readLine() {
-        if (!file_ || file_.size() == 0) {
-            return "";
+        if (!file_ || !file_.available()) {
+            return ""; // Return empty string if file is closed or already at the end.
         }
     
-        while (true) {
-            uint32_t search_start_pos = file_.position();
-            
-            while (file_.available()) {
-                String line = file_.readStringUntil('\n');
-                line.trim();
-                if (!line.isEmpty()) {
-                    return line;
-                }
-            }
-    
-            file_.seek(0);
-    
-            if (search_start_pos == 0) {
-                return "";
+        // Keep reading until we find a non-empty line or hit the end of the file.
+        while (file_.available()) {
+            String line = file_.readStringUntil('\n');
+            line.trim(); // Remove leading/trailing whitespace and CR/LF
+            if (!line.isEmpty()) {
+                return line; // Found a valid line, return it.
             }
         }
+    
+        return ""; // Reached the end of the file and found no more content.
     }
 
     LineReader openLineReader(const char* path) {
@@ -78,7 +70,7 @@ namespace SdCardManager {
         return LineReader(f);
     }
     
-    // --- Existing function implementations ---
+    // ... rest of SdCardManager.cpp is unchanged ...
     bool setup() {
         if (!SD.begin(Pins::SD_CS_PIN)) {
             Serial.println("[SD-LOG] Mount Failed");

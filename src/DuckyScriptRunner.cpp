@@ -1,10 +1,8 @@
-#include "BadUSB.h"
+#include "DuckyScriptRunner.h"
 #include "App.h"
 #include "Logger.h"
-#include <BleKeyboard.h> // For KEY_* constants
-// #include <NimBLEDevice.h> // For the explicit deinit call
+#include <BleKeyboard.h> 
 
-// --- Ducky Script Command Definitions ---
 static const DuckyCommand duckyCmds[] = {
     {"STRING", 0, DuckyCommand::Type::PRINT},
     {"STRINGLN", 0, DuckyCommand::Type::PRINT},
@@ -59,7 +57,6 @@ static const DuckyCommand duckyCmds[] = {
     {"F11", KEY_F11, DuckyCommand::Type::CMD},
     {"F12", KEY_F12, DuckyCommand::Type::CMD},
 };
-
 static const DuckyCombination duckyCombos[] = {
     {"CTRL-ALT",   KEY_LEFT_CTRL, KEY_LEFT_ALT,   0},
     {"CTRL-SHIFT", KEY_LEFT_CTRL, KEY_LEFT_SHIFT, 0},
@@ -69,83 +66,84 @@ static const DuckyCombination duckyCombos[] = {
     {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT, 0}
 };
 
-// --- BadUSB Manager Implementation ---
-// --- BadUSB Manager Implementation ---
-BadUSB::BadUSB() : app_(nullptr), activeHid_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
-void BadUSB::setup(App* app) { app_ = app; }
 
-bool BadUSB::startScript(const std::string& scriptPath, Mode mode) {
-    if (isActive()) {
-        // If already active, stop the current script before starting a new one
-        stopScript();
-        delay(100); // Give a moment for hardware to settle
-    }
-    LOG(LogLevel::INFO, "BadUSB", "Starting script %s in %s mode", scriptPath.c_str(), (mode == Mode::USB ? "USB" : "BLE"));
+DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
 
-    // --- MODIFIED LOGIC ---
-    HostClient requestedClient;
-    if (mode == Mode::USB) {
-        activeHid_ = &usbHid_;
-        requestedClient = HostClient::USB_HID;
-    } else {
-        activeHid_ = &bleHid_;
-        requestedClient = HostClient::BLE_HID;
-    }
+void DuckyScriptRunner::setup(App* app) { app_ = app; }
 
-    if (!app_->getHardwareManager().requestHostControl(requestedClient)) {
-        LOG(LogLevel::ERROR, "BadUSB", "Failed to acquire host control from HardwareManager.");
-        activeHid_ = nullptr;
-        return false;
+bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
+    if (isActive()) stopScript();
+    
+    LOG(LogLevel::INFO, "DuckyRunner", "Starting script %s in %s mode", scriptPath.c_str(), (mode == Mode::USB ? "USB" : "BLE"));
+    currentMode_ = mode;
+
+    if (mode == Mode::BLE) {
+        if (!app_->getBleManager().requestKeyboard()) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "BLE Manager denied or timed out keyboard request.");
+            return false;
+        }
+        
+        BleKeyboard* kb = app_->getBleManager().getKeyboard();
+        if (!kb) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "Manager reported success but keyboard is null.");
+            app_->getBleManager().releaseKeyboard();
+            return false;
+        }
+        activeHid_.reset(new BleHid(kb));
+    } else { // USB Mode
+        // --- RESTORED: USB needs to request control from HardwareManager ---
+        if (!app_->getHardwareManager().requestHostControl(HostClient::USB_HID)) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "Failed to acquire USB host control.");
+            return false;
+        }
+        activeHid_.reset(new UsbHid());
     }
     
-    if (!activeHid_->begin()) {
-        LOG(LogLevel::ERROR, "BadUSB", "Failed to initialize HID library component.");
-        app_->getHardwareManager().releaseHostControl();
-        activeHid_ = nullptr;
+    if (!activeHid_ || !activeHid_->begin()) {
+        LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
+        if (mode == Mode::BLE) {
+            app_->getBleManager().releaseKeyboard();
+        } else if (mode == Mode::USB) {
+            app_->getHardwareManager().releaseHostControl();
+        }
+        activeHid_.reset();
         return false;
     }
-    // --- END MODIFICATION ---
 
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
-        LOG(LogLevel::ERROR, "BadUSB", "Failed to open script file: %s", scriptPath.c_str());
-        activeHid_->end();
-        app_->getHardwareManager().releaseHostControl();
-        activeHid_ = nullptr;
+        LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
+        stopScript();
         return false;
     }
     
     state_ = State::WAITING_FOR_CONNECTION;
-    currentMode_ = mode;
     scriptName_ = scriptPath.substr(scriptPath.find_last_of('/') + 1);
     currentLine_ = "Connecting...";
     linesExecuted_ = 0;
     delayUntil_ = 0;
     defaultDelay_ = 100;
     lastLine_ = "";
-
+    
     app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
-void BadUSB::stopScript() {
+void DuckyScriptRunner::stopScript() {
     if (!isActive()) return;
-    LOG(LogLevel::INFO, "BadUSB", "Stopping script.");
     
-    // --- MODIFIED LOGIC ---
     if (activeHid_) {
-        // 1. Call high-level library functions.
         activeHid_->releaseAll();
         activeHid_->end();
-
-        // 2. Tell the HardwareManager to shut down the underlying hardware controller.
-        app_->getHardwareManager().releaseHostControl();
-
-        // 3. Simply set our active pointer to null. DO NOT delete/reset.
-        activeHid_ = nullptr;
     }
-    // --- END MODIFICATION ---
     
+    if (currentMode_ == Mode::BLE) {
+        app_->getBleManager().releaseKeyboard();
+    } else if (currentMode_ == Mode::USB) {
+        app_->getHardwareManager().releaseHostControl();
+    }
+
+    activeHid_.reset();
     scriptReader_.close();
     state_ = State::IDLE;
     currentLine_ = "";
@@ -153,36 +151,38 @@ void BadUSB::stopScript() {
     app_->getHardwareManager().setPerformanceMode(false);
 }
 
-void BadUSB::loop() {
-    if (!isActive() || !activeHid_) return; // Add guard for activeHid_
+void DuckyScriptRunner::loop() {
+    if (!isActive() || !activeHid_) return;
+    
     if (state_ == State::WAITING_FOR_CONNECTION) {
         if (activeHid_->isConnected()) {
-            LOG(LogLevel::INFO, "BadUSB", "HID connected. Starting execution.");
+            LOG(LogLevel::INFO, "DuckyRunner", "loop: HID connected. Changing state to RUNNING.");
             state_ = State::RUNNING;
         }
         return;
     }
+
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
+        
         activeHid_->releaseAll();
         delay(defaultDelay_);
+        
         currentLine_ = scriptReader_.readLine().c_str(); 
+
         if (currentLine_.empty()) {
             state_ = State::FINISHED;
             currentLine_ = "Finished";
-            LOG(LogLevel::INFO, "BadUSB", "Script finished.");
             return;
         }
+        
         linesExecuted_++;
         parseAndExecute(currentLine_);
     }
 }
 
-void BadUSB::parseAndExecute(const std::string& line) {
-    // This function needs to be updated to use activeHid_
-    // It's a bit long, so I'll show the key changes. All 'hid_->' become 'activeHid_->'
-
-    if (!activeHid_) return; // Guard at the top
+void DuckyScriptRunner::parseAndExecute(const std::string& line) {
+    if (!activeHid_) return;
 
     std::string command;
     std::string arg;
@@ -233,8 +233,8 @@ void BadUSB::parseAndExecute(const std::string& line) {
     activeHid_->write((const uint8_t*)line.c_str(), line.length());
 }
 
-void BadUSB::executeCombination(const std::string& command, const std::string& arg) {
-    if (!activeHid_) return; // Guard
+void DuckyScriptRunner::executeCombination(const std::string& command, const std::string& arg) {
+    if (!activeHid_) return;
     for (const auto& combo : duckyCombos) {
         if (command == combo.command) {
             activeHid_->press(combo.key1);
@@ -256,10 +256,8 @@ void BadUSB::executeCombination(const std::string& command, const std::string& a
     }
 }
 
-
-// Getters
-BadUSB::State BadUSB::getState() const { return state_; }
-bool BadUSB::isActive() const { return state_ != State::IDLE; }
-const std::string& BadUSB::getCurrentLine() const { return currentLine_; }
-const std::string& BadUSB::getScriptName() const { return scriptName_; }
-uint32_t BadUSB::getLinesExecuted() const { return linesExecuted_; }
+DuckyScriptRunner::State DuckyScriptRunner::getState() const { return state_; }
+bool DuckyScriptRunner::isActive() const { return state_ != State::IDLE; }
+const std::string& DuckyScriptRunner::getCurrentLine() const { return currentLine_; }
+const std::string& DuckyScriptRunner::getScriptName() const { return scriptName_; }
+uint32_t DuckyScriptRunner::getLinesExecuted() const { return linesExecuted_; }

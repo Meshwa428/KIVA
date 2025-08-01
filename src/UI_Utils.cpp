@@ -141,6 +141,9 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::DISCONNECT:
             xbm_data = icon_disconnect_large_bits;
             break;
+        case IconType::USB:
+            xbm_data = icon_usb_large_bits;
+            break;
         case IconType::NONE:
             xbm_data = icon_none_large_bits;
             break;

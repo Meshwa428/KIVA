@@ -92,7 +92,7 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
         }
     } else {
         if (hardwareEnabled_) {
-            Serial.println("[WIFI-LOG] Disabling WiFi hardware.");
+            LOG(LogLevel::WARN, "WIFI_MANAGER", "Disabling radio hardware completely.");
             MDNS.end();
             WiFi.disconnect(true, true);
             WiFi.softAPdisconnect(true);

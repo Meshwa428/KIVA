@@ -3,15 +3,12 @@
 #include "UI_Utils.h"
 #include "Jammer.h"
 #include "BleSpammer.h"
-#include "BadUSB.h"
+#include "DuckyScriptRunner.h" // UPDATED
 #include "DebugUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
-#include <vector>
-#include <functional>
-// #include "USB.h" // <-- REMOVED THIS INCLUDE AND ANY USB CALLS FROM THIS FILE
 
 App::App() : 
     currentMenu_(nullptr),
@@ -94,32 +91,24 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     hostToolsMenu_("Host Tools", {
-        MenuItem{"BadUSB", IconType::TOOL_INJECTION, MenuType::BAD_USB_SCRIPT_LIST},
+        MenuItem{"USB Ducky", IconType::USB, MenuType::NONE, 
+            [](App* app){
+                // Configure the data source for USB mode before showing the list
+                app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
+                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+            }},
+        MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
+            [](App* app){
+                // Configure the data source for BLE mode before showing the list
+                app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
+                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+            }},
+        // --- PLACEHOLDERS FOR FUTURE FEATURES ---
+        MenuItem{"BLE Keyboard", IconType::NONE, MenuType::NONE}, // TODO: Link to BLE_KEYBOARD_MAPPER_ACTIVE
+        MenuItem{"BLE Media", IconType::NONE, MenuType::NONE},    // TODO: Link to BLE_MEDIA_CONTROLLER_ACTIVE
+        MenuItem{"BLE Scroller", IconType::NONE, MenuType::NONE}, // TODO: Link to BLE_SCROLL_HELPER_ACTIVE
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-
-    // ADD the new BadUSB Mode Selection Menu
-    badUsbModeSelectionMenu_("Execution Mode", MenuType::BAD_USB_MODE_SELECTION, {
-        MenuItem{"USB", IconType::INFO, MenuType::NONE,
-            [](App* app) {
-                const auto& path = static_cast<SplitSelectionMenu*>(app->getMenu(MenuType::BAD_USB_MODE_SELECTION))->getScriptPath();
-                if (app->getBadUSB().startScript(path, BadUSB::Mode::USB)) {
-                    app->changeMenu(MenuType::BAD_USB_ACTIVE);
-                } else {
-                    app->showPopUp("Error", "Failed to start USB HID.", nullptr, "OK", "", true);
-                }
-            }},
-        MenuItem{"BLE", IconType::NET_BLUETOOTH, MenuType::NONE,
-            [](App* app) {
-                const auto& path = static_cast<SplitSelectionMenu*>(app->getMenu(MenuType::BAD_USB_MODE_SELECTION))->getScriptPath();
-                if (app->getBadUSB().startScript(path, BadUSB::Mode::BLE)) {
-                    app->changeMenu(MenuType::BAD_USB_ACTIVE);
-                } else {
-                    app->showPopUp("Error", "Failed to start BLE HID.", nullptr, "OK", "", true);
-                }
-            }},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
-    }),
     firmwareUpdateGrid_("Update", {
         MenuItem{"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App *app) {
@@ -256,16 +245,17 @@ App::App() :
     firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
     beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
     portalListMenu_("Select Portal", MenuType::EVIL_TWIN_PORTAL_SELECTION, &portalListDataSource_),
+    duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
     beaconSpamActiveMenu_(),
     deauthActiveMenu_(),
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
     bleSpamActiveMenu_(),
-    badUSB_(),
+    duckyRunner_(),
+    bleManager_(),
     duckyScriptListDataSource_(),
-    duckyScriptListMenu_("Ducky Scripts", MenuType::BAD_USB_SCRIPT_LIST, &duckyScriptListDataSource_),
-    badUSBActiveMenu_()
+    duckyScriptActiveMenu_()
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -307,7 +297,8 @@ void App::setup()
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",          [&](){ badUSB_.setup(this); }}
+        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
+        {"BLE Manager",     [&](){ bleManager_.setup(this); }}
     };
 
     int totalTasks = bootTasks.size();
@@ -363,7 +354,6 @@ void App::setup()
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
     menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
     menuRegistry_[MenuType::BEACON_MODE_SELECTION] = &beaconModeMenu_;
-    menuRegistry_[MenuType::BAD_USB_MODE_SELECTION] = &badUsbModeSelectionMenu_;
 
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::POPUP] = &popUpMenu_;
@@ -375,7 +365,7 @@ void App::setup()
     menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
     menuRegistry_[MenuType::BEACON_FILE_LIST] = &beaconFileListMenu_;
     menuRegistry_[MenuType::EVIL_TWIN_PORTAL_SELECTION] = &portalListMenu_;
-    menuRegistry_[MenuType::BAD_USB_SCRIPT_LIST] = &duckyScriptListMenu_;
+    menuRegistry_[MenuType::DUCKY_SCRIPT_LIST] = &duckyScriptListMenu_;
 
     menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
 
@@ -386,7 +376,7 @@ void App::setup()
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
-    menuRegistry_[MenuType::BAD_USB_ACTIVE] = &badUSBActiveMenu_;
+    menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
 
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -406,43 +396,56 @@ void App::loop()
     probeSniffer_.loop();
     karmaAttacker_.loop();
     bleSpammer_.loop();
-    badUSB_.loop();
+    duckyRunner_.loop();
 
-    // --- REFINED WiFi Power Management Logic ---
-    bool wifiIsRequired = false;
+    // --- FINAL, CORRECTED POWER MANAGEMENT LOGIC ---
+    bool wifiIsRequired = false; 
     if (currentMenu_)
     {
         MenuType currentType = currentMenu_->getMenuType();
-        // Menus that ALWAYS require WiFi to be on
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
             currentType == MenuType::WIFI_CONNECTION_STATUS)
         {
             wifiIsRequired = true;
         }
-        // The OTA Status menu ONLY requires WiFi if an OTA process is actually running
         else if (currentType == MenuType::OTA_STATUS && otaManager_.getState() != OtaState::IDLE)
         {
             wifiIsRequired = true;
         }
     }
-    // Also keep WiFi on if we are connected for other reasons (e.g. background task)
-    if (wifiManager_.getState() == WifiState::CONNECTED || beaconSpammer_.isActive() ||
-        deauther_.isActive() || evilTwin_.isActive() || karmaAttacker_.isAttacking() || karmaAttacker_.isSniffing())
+    
+    // Also keep the radio on if any BACKGROUND WIFI task is active.
+    if (wifiManager_.getState() == WifiState::CONNECTED || 
+        beaconSpammer_.isActive() ||
+        deauther_.isActive() || 
+        evilTwin_.isActive() || 
+        karmaAttacker_.isAttacking() || 
+        karmaAttacker_.isSniffing())
     {
         wifiIsRequired = true;
     }
 
-    // Auto-disable WiFi if it's enabled but no longer required by the current context
-    if (!wifiIsRequired && wifiManager_.isHardwareEnabled())
+    // --- THIS IS THE CRITICAL FIX ---
+    // Check if any HOST peripheral (BLE/USB) is active before touching the radio.
+    // The HardwareManager is the single source of truth for this.
+    // NOTE: This check doesn't exist in HardwareManager, so we need to add a getter.
+    // For now, we can check the DuckyScriptRunner directly. Let's add the getter later.
+    bool hostIsActive = duckyRunner_.isActive(); // We'll improve this in Step 2
+
+    // Auto-disable radio ONLY if it's enabled for WiFi, AND no WiFi task needs it,
+    // AND no Host peripheral (BLE) needs it.
+    if (!wifiIsRequired && !hostIsActive && wifiManager_.isHardwareEnabled())
     {
+        LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
         wifiManager_.setHardwareState(false);
     }
+    // --- END CRITICAL FIX ---
+
 
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
-        // LOG(LogLevel::DEBUG, "Input", "Event: %s", DebugUtils::inputEventToString(event));
-        Serial.printf("[INPUT] Event: %s\n", DebugUtils::inputEventToString(event));
+        LOG(LogLevel::DEBUG, "Input", "Event: %s", DebugUtils::inputEventToString(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
         }
@@ -456,14 +459,10 @@ void App::loop()
     // --- PERFORMANCE MODE RENDERING THROTTLE ---
     bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
                     evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive() ||
-                    badUSB_.isActive();
+                    duckyRunner_.isActive();
     static unsigned long lastRenderTime = 0;
-    // Update screen only once per second in performance mode.
-    // This frees up massive amounts of CPU time for the attack loops.
     if (perfMode && (millis() - lastRenderTime < 1000))
     {
-        // In performance mode, we skip drawing to save CPU time,
-        // but feed the watchdog timer to prevent reboots.
         esp_task_wdt_reset();
         return;
     }
@@ -478,28 +477,21 @@ void App::loop()
 
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
         underlyingMenu = getMenu(getPreviousMenuType());
-        menuForUI = underlyingMenu; // The main UI is the underlying menu
+        menuForUI = underlyingMenu; 
     }
     
-    // Draw the status bar for the main UI menu.
     if (menuForUI) {
         if (!menuForUI->drawCustomStatusBar(this, mainDisplay)) {
             drawStatusBar();
         }
     } else if (currentMenu_) {
-        // Fallback if menuForUI is null but currentMenu isn't (e.g. popup with no underlying)
         drawStatusBar();
     }
     
-    // Draw the main UI content.
     if (underlyingMenu) {
-        // This is a popup, so we draw the underlying menu's content first.
         underlyingMenu->draw(this, mainDisplay);
     }
     
-    // Always draw the current menu's content on top.
-    // For a normal menu, this is its main content.
-    // For a popup, this draws the popup box over the underlying menu.
     if (currentMenu_) {
         currentMenu_->draw(this, mainDisplay);
     }

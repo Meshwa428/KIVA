@@ -29,7 +29,16 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DEAUTH_ACTIVE: return "DEAUTH_ACTIVE";
         case MenuType::EVIL_TWIN_PORTAL_SELECTION: return "EVIL_TWIN_PORTAL_SELECTION";
         case MenuType::EVIL_TWIN_ACTIVE: return "EVIL_TWIN_ACTIVE";
+        case MenuType::PROBE_ACTIVE: return "PROBE_ACTIVE";
         case MenuType::KARMA_ACTIVE: return "KARMA_ACTIVE";
+        case MenuType::BLE_TOOLS_GRID: return "BLE_TOOLS_GRID";
+        case MenuType::HOST_TOOLS_GRID: return "HOST_TOOLS_GRID";
+        case MenuType::BLE_SPAM_ACTIVE: return "BLE_SPAM_ACTIVE";
+        case MenuType::DUCKY_SCRIPT_LIST: return "DUCKY_SCRIPT_LIST";
+        case MenuType::DUCKY_SCRIPT_ACTIVE: return "DUCKY_SCRIPT_ACTIVE";
+        case MenuType::BLE_KEYBOARD_MAPPER_ACTIVE: return "BLE_KEYBOARD_MAPPER_ACTIVE";
+        case MenuType::BLE_MEDIA_CONTROLLER_ACTIVE: return "BLE_MEDIA_CONTROLLER_ACTIVE";
+        case MenuType::BLE_SCROLL_HELPER_ACTIVE: return "BLE_SCROLL_HELPER_ACTIVE";
         default: return "UNKNOWN_MENU";
     }
 }

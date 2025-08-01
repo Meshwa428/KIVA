@@ -36,9 +36,10 @@
 #include "KarmaActiveMenu.h"
 #include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
-#include "BadUSB.h"
+#include "BleManager.h" // ADD
+#include "DuckyScriptRunner.h"
+#include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
-#include "BadUSBActiveMenu.h"
 #include "Logger.h"
 
 class App
@@ -63,9 +64,9 @@ public:
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
-    BadUSB &getBadUSB() { return badUSB_; }
+    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; } // RESTORE THIS
+    BleManager &getBleManager() { return bleManager_; } // KEEP THIS
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
-    SplitSelectionMenu& getBadUsbModeSelectionMenu() { return badUsbModeSelectionMenu_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
@@ -96,7 +97,8 @@ private:
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
     BleSpammer bleSpammer_;
-    BadUSB badUSB_;
+    DuckyScriptRunner duckyRunner_;
+    BleManager bleManager_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -119,7 +121,6 @@ private:
     GridMenu deauthToolsMenu_;
     
     SplitSelectionMenu beaconModeMenu_;
-    SplitSelectionMenu badUsbModeSelectionMenu_;
 
     // WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
@@ -137,7 +138,7 @@ private:
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
-    BadUSBActiveMenu badUSBActiveMenu_;
+    DuckyScriptActiveMenu duckyScriptActiveMenu_; // RENAMED
 
     // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;

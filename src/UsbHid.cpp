@@ -1,24 +1,22 @@
-#include "BadUSB.h"
+#include "DuckyScriptRunner.h"
 #include "USB.h"
-#include "USBHIDKeyboard.h" // <--- Include the real header here
+#include "USBHIDKeyboard.h" 
 
 UsbHid::UsbHid() {
     usb_keyboard_.reset(new USBHIDKeyboard());
 }
 
-// --- NEWLY DEFINED DESTRUCTOR ---
 UsbHid::~UsbHid() {
-    // Empty destructor body is sufficient.
+    // The unique_ptr will handle destruction
 }
 
 bool UsbHid::begin() {
-    // USB.begin() is now called by HardwareManager
+    USB.begin(); // USB stack is simple and can be started here
     usb_keyboard_->begin();
     return true;
 }
 void UsbHid::end() {
     usb_keyboard_->end();
-    // USB.end() is now handled by HardwareManager's releaseHostControl()
 }
 size_t UsbHid::press(uint8_t k) {
     return usb_keyboard_->press(k);

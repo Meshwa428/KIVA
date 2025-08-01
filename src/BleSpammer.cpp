@@ -51,10 +51,20 @@ void BleSpammer::setup(App* app) {
 
 void BleSpammer::start(BleSpamMode mode) {
     if (isActive_) return;
+    
+    // This now correctly initializes the entire BLE stack via HardwareManager
+    if (!app_->getHardwareManager().requestHostControl(HostClient::BLE_HID)) {
+        LOG(LogLevel::ERROR, "BLESPAM", "Failed to acquire BLE host control.");
+        return;
+    }
+    
+    // One-time setup after hardware is confirmed ready
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, MAX_TX_POWER);
+
     LOG(LogLevel::INFO, "BLESPAM", "Starting BLE Spam Mode: %d", (int)mode);
     isActive_ = true;
     currentMode_ = mode;
-    currentSubMode_ = BleSpamMode::APPLE_JUICE; // Start cycle for 'ALL'
+    currentSubMode_ = BleSpamMode::APPLE_JUICE; // Start cycle from first real mode
     lastPacketTime_ = 0;
 }
 
@@ -62,45 +72,53 @@ void BleSpammer::stop() {
     if (!isActive_) return;
     LOG(LogLevel::INFO, "BLESPAM", "Stopping BLE Spam.");
     isActive_ = false;
-    // The spam loop handles deinit, so no extra cleanup is needed.
+
+    // --- MODIFIED: Ensure advertising is stopped before releasing control ---
+    if(NimBLEDevice::getAdvertising() && NimBLEDevice::getAdvertising()->isAdvertising()) {
+      NimBLEDevice::getAdvertising()->stop();
+    }
+
+    // This now correctly puts the stack into a clean idle state
+    app_->getHardwareManager().releaseHostControl();
 }
 
 void BleSpammer::loop() {
     if (!isActive_) return;
 
-    // The interval from the reference code's main loop
-    if (millis() - lastPacketTime_ > 100) {
+    if (millis() - lastPacketTime_ > 40) {
         executeSpamPacket();
         lastPacketTime_ = millis();
     }
 }
 
+
 void BleSpammer::executeSpamPacket() {
+    // --- REFACTORED: No more init() or deinit() in the loop ---
     uint8_t macAddr[6];
     generateRandomMac(macAddr);
+    // --- THIS IS THE FIX: Revert to the low-level ESP-IDF call ---
     esp_base_mac_addr_set(macAddr);
 
-    NimBLEDevice::init("");
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, MAX_TX_POWER);
-    
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
+    if (!pAdvertising) return; // Safety check
     
     BleSpamMode modeToSpam = currentMode_;
     if (modeToSpam == BleSpamMode::ALL) {
+        // Cycle through modes for 'ALL'
         modeToSpam = currentSubMode_;
-        // Cycle through modes for "ALL"
-        currentSubMode_ = static_cast<BleSpamMode>((static_cast<int>(currentSubMode_) + 1) % static_cast<int>(BleSpamMode::ALL));
+        currentSubMode_ = static_cast<BleSpamMode>((static_cast<int>(currentSubMode_) + 1));
+        // If we've cycled past the last real mode, loop back to the first one.
+        if (currentSubMode_ >= BleSpamMode::ALL) {
+            currentSubMode_ = BleSpamMode::APPLE_JUICE;
+        }
     }
 
     NimBLEAdvertisementData advertisementData = getAdvertisementData(modeToSpam);
     pAdvertising->setAdvertisementData(advertisementData);
     
     pAdvertising->start();
-    vTaskDelay(50 / portTICK_PERIOD_MS); // Let advertisement run
+    vTaskDelay(20 / portTICK_PERIOD_MS); // Let advertisement run briefly
     pAdvertising->stop();
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-    NimBLEDevice::deinit(true); // Release memory
 }
 
 

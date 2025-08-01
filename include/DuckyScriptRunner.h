@@ -1,5 +1,5 @@
-#ifndef BAD_USB_H
-#define BAD_USB_H
+#ifndef DUCKY_SCRIPT_RUNNER_H
+#define DUCKY_SCRIPT_RUNNER_H
 
 #include "HardwareManager.h"
 #include "SdCardManager.h"
@@ -7,15 +7,12 @@
 #include <memory>
 #include <vector>
 
-// --- MODIFICATION: REVERT to Forward Declarations ---
-// This prevents header conflicts.
+// Forward Declarations
 class USBHIDKeyboard;
 class BleKeyboard;
-// --- END MODIFICATION ---
-
-// Forward Declarations to resolve header conflicts
 class App;
 
+// --- HID Interface (Restored) ---
 class HIDInterface {
 public:
     enum class Type { USB, BLE };
@@ -30,12 +27,11 @@ public:
     virtual Type getType() const = 0;
 };
 
-
 // --- Concrete BLE HID Implementation ---
 class BleHid : public HIDInterface {
 public:
-    BleHid(const std::string& deviceName = "Kiva BadUSB");
-    ~BleHid(); // <--- We will define the destructor in the .cpp file
+    BleHid(BleKeyboard* keyboard); // Constructor takes a pointer
+    ~BleHid();
     bool begin() override;
     void end() override;
     size_t press(uint8_t k) override;
@@ -44,16 +40,15 @@ public:
     size_t write(const uint8_t *buffer, size_t size) override;
     bool isConnected() override;
     Type getType() const override { return Type::BLE; }
-
 private:
-    std::unique_ptr<BleKeyboard> bleKeyboard_;
+    BleKeyboard* bleKeyboard_; // Stores a pointer, doesn't own it
 };
 
 // --- Concrete USB HID Implementation ---
 class UsbHid : public HIDInterface {
 public:
     UsbHid();
-    ~UsbHid(); // <--- We will define the destructor in the .cpp file
+    ~UsbHid();
     bool begin() override;
     void end() override;
     size_t press(uint8_t k) override;
@@ -80,16 +75,16 @@ struct DuckyCombination {
     uint8_t key3;
 };
 
-// --- Main BadUSB Manager Class ---
-class BadUSB {
+class DuckyScriptRunner {
 public:
     enum class Mode { USB, BLE };
     enum class State { IDLE, WAITING_FOR_CONNECTION, RUNNING, FINISHED };
 
-    BadUSB();
+    DuckyScriptRunner();
     void setup(App* app);
     void loop();
 
+    // --- Back to original, powerful startScript ---
     bool startScript(const std::string& scriptPath, Mode mode);
     void stopScript();
 
@@ -106,9 +101,7 @@ private:
     App* app_;
     SdCardManager::LineReader scriptReader_;
     
-    HIDInterface* activeHid_;
-    BleHid bleHid_;
-    UsbHid usbHid_;
+    std::unique_ptr<HIDInterface> activeHid_; // Manages the active interface
     
     State state_;
     Mode currentMode_;
@@ -122,4 +115,4 @@ private:
     std::string lastLine_;
 };
 
-#endif // BAD_USB_H
+#endif // DUCKY_SCRIPT_RUNNER_H

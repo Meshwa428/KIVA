@@ -8,7 +8,7 @@ CarouselMenu::CarouselMenu(std::string title, std::vector<MenuItem> items) :
     menuItems_(items),
     selectedIndex_(0),
     marqueeActive_(false),
-    marqueeScrollLeft_(true) // ** NEW: Initialize here **
+    marqueeScrollLeft_(true)
 {
     if (title == "Tools") menuType_ = MenuType::TOOLS_CAROUSEL;
     else if (title == "Games") menuType_ = MenuType::GAMES_CAROUSEL;
@@ -51,15 +51,9 @@ void CarouselMenu::handleInput(App* app, InputEvent event) {
                 if (selectedIndex_ >= menuItems_.size()) break;
                 const MenuItem& selected = menuItems_[selectedIndex_];
 
-                // --- NEW GENERIC LOGIC ---
                 if (selected.action) {
-                    // If an action is defined, execute it. This handles things
-                    // like toggling the laser/vibration without the menu needing
-                    // to know about the HardwareManager. The action may also
-                    // trigger a navigation change.
                     selected.action(app);
                 } else {
-                    // Otherwise, just navigate to the target menu.
                     app->changeMenu(selected.targetMenu);
                 }
             }
@@ -86,7 +80,13 @@ void CarouselMenu::scroll(int direction) {
 }
 
 void CarouselMenu::draw(App* app, U8G2& display) {
-    const int carousel_center_y = 44;
+    // --- THIS IS THE FIX ---
+    // Calculate the center of the screen area *below* the status bar.
+    const int drawable_area_y_start = STATUS_BAR_H;
+    const int drawable_area_height = display.getDisplayHeight() - drawable_area_y_start;
+    const int carousel_center_y = drawable_area_y_start + (drawable_area_height / 2);
+    // --- END FIX ---
+
     const int screen_center_x = 64;
     const int card_padding = 3;
     const int icon_margin_top = 3;
@@ -135,7 +135,6 @@ void CarouselMenu::draw(App* app, U8G2& display) {
 
             int inner_w = card_w - 2 * card_padding;
             
-            // ** MODIFIED: Pass all marquee state variables **
             updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                           marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
                           marqueeText_, marqueeTextLenPx_, itemTextToDisplay, inner_w, display);

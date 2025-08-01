@@ -3,6 +3,7 @@
 #include <numeric>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include "Logger.h"
 
 // --- Constructor ---
 HardwareManager::HardwareManager() : 
@@ -11,6 +12,8 @@ HardwareManager::HardwareManager() :
                                      radio1_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, SPI_SPEED_NRF), 
                                      radio2_(Pins::NRF2_CE_PIN, Pins::NRF2_CSN_PIN, SPI_SPEED_NRF), 
                                      currentRfClient_(RfClient::NONE),
+                                     currentHostClient_(HostClient::NONE),
+                                     bleStackInitialized_(false),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
@@ -186,59 +189,54 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
     return std::unique_ptr<RfLock>(new RfLock(*this, false));
 }
 
-// --- NEW IMPLEMENTATIONS FOR HOST CONTROL ---
+// --- REVISED AND FINALIZED HOST CONTROL LOGIC ---
 bool HardwareManager::requestHostControl(HostClient client) {
     if (client == currentHostClient_) {
-        return true; // Already has control
+        return true;
     }
-
-    // If another host peripheral is active, release it FIRST.
     if (currentHostClient_ != HostClient::NONE) {
-        releaseHostControl();
-        delay(100); // Give hardware time to settle after release
+        LOG(LogLevel::ERROR, "HW_MANAGER", "DENIED request from client %d. Lock held by %d", (int)client, (int)currentHostClient_);
+        return false; 
     }
 
-    Serial.printf("[HW-HOST] GRANTED request for client %d\n", (int)client);
+    LOG(LogLevel::INFO, "HW_MANAGER", "GRANTING host control to client %d.", (int)client);
 
-    bool success = false;
     switch(client) {
         case HostClient::USB_HID:
             USB.begin();
-            success = true;
             break;
         case HostClient::BLE_HID:
-            NimBLEDevice::init("");
-            success = true;
+            // --- REMOVED ---
+            // BLE stack is now fully managed by BleManager's dedicated task.
+            // HardwareManager should not touch it.
             break;
         case HostClient::NONE:
-            success = true; // Request to release is always successful
             break;
     }
 
-    if (success) {
-        currentHostClient_ = client;
-    }
-    return success;
+    currentHostClient_ = client;
+    return true;
 }
 
 void HardwareManager::releaseHostControl() {
-    Serial.printf("[HW-HOST] Releasing Host lock from client %d\n", (int)currentHostClient_);
+    LOG(LogLevel::INFO, "HW_MANAGER", "RELEASING host control from client %d.", (int)currentHostClient_);
+    
     switch(currentHostClient_) {
         case HostClient::USB_HID:
-            // The USB.end() is not very reliable. A soft reboot might be better in some cases,
-            // but for now, we follow the API.
-            // USB.end(); 
+            // USB.end(); // Optional, often better to leave it.
             break;
         case HostClient::BLE_HID:
-            // This is the correct place for the full teardown.
-            // It ensures the BLE stack is completely off before USB tries to start.
-            NimBLEDevice::deinit(true);
+            // --- REMOVED ---
+            // BLE stack is now fully managed by BleManager's dedicated task.
             break;
         case HostClient::NONE:
             break;
     }
+    
     currentHostClient_ = HostClient::NONE;
 }
+
+
 
 void HardwareManager::update()
 {

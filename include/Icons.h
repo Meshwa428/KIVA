@@ -48,6 +48,7 @@ enum class IconType
     BASIC_OTA,
     FIRMWARE_UPDATE,
     DISCONNECT,
+    USB,
     NONE,
     NUM_ICON_TYPES
 };
@@ -85,6 +86,7 @@ extern const unsigned char icon_skull_large_bits[];
 extern const unsigned char icon_basic_ota_large_bits[];
 extern const unsigned char icon_firmware_update_large_bits[];
 extern const unsigned char icon_disconnect_large_bits[];
+extern const unsigned char icon_usb_large_bits[];
 
 // Small Icons
 extern const unsigned char icon_ui_charging_bolt_small_bits[];

@@ -108,6 +108,7 @@ private:
 
     // --- NEW: Host Peripheral State ---
     HostClient currentHostClient_;
+    bool bleStackInitialized_;
 
     // Input state
     bool prevDbncHState0_[8];

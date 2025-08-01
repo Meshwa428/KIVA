@@ -1,30 +1,24 @@
-#include "BadUSB.h"
-#include <BleKeyboard.h> // <--- Include the real header here
+#include "DuckyScriptRunner.h"
+#include <BleKeyboard.h>
 
-// --- BleHid Implementation (ESP32 BLE Keyboard Wrapper) ---
+// This class now acts as a wrapper around the BleKeyboard object
+// managed by the BleManager.
 
-BleHid::BleHid(const std::string& deviceName) {
-    bleKeyboard_.reset(new BleKeyboard(deviceName, "Kiva", 100));
-}
+BleHid::BleHid(BleKeyboard* keyboard) : bleKeyboard_(keyboard) {}
 
-// --- NEWLY DEFINED DESTRUCTOR ---
 BleHid::~BleHid() {
-    // The empty destructor body is sufficient. Its presence in the .cpp file
-    // ensures the compiler knows the full type of BleKeyboard when it
-    // automatically generates the code to destroy the unique_ptr member.
+    // Do not delete bleKeyboard_, it is owned and managed by BleManager
 }
 
 bool BleHid::begin() {
-    if (bleKeyboard_) {
-        bleKeyboard_->begin();
-        return true;
-    }
-    return false;
+    // The BleKeyboard object is already "begun" by the BleManager task.
+    // This method is just for interface compatibility.
+    return bleKeyboard_ != nullptr;
 }
 
-// ... (rest of BleHid.cpp is unchanged)
 void BleHid::end() {
-    // Intentionally empty, as the library's destructor does the work.
+    // The BleKeyboard object will be "ended" by the BleManager task.
+    // This method is just for interface compatibility.
 }
 
 size_t BleHid::press(uint8_t k) {

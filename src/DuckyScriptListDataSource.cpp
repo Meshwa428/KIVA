@@ -3,7 +3,14 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
-#include "BadUSB.h"
+
+// --- ADD CONSTRUCTOR ---
+DuckyScriptListDataSource::DuckyScriptListDataSource() : modeToExecute_(DuckyScriptRunner::Mode::USB) {}
+
+// --- ADD SETTER IMPLEMENTATION ---
+void DuckyScriptListDataSource::setExecutionMode(DuckyScriptRunner::Mode mode) {
+    modeToExecute_ = mode;
+}
 
 void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     fileNames_.clear();
@@ -37,11 +44,15 @@ const std::string& DuckyScriptListDataSource::getSelectedScriptPath(int index) {
 
 void DuckyScriptListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     if (index >= filePaths_.size()) return;
-
-    // We don't start the script directly. Instead, we configure and switch
-    // to the mode selection menu, passing the chosen script path.
-    app->getBadUsbModeSelectionMenu().setScriptPath(filePaths_[index]);
-    app->changeMenu(MenuType::BAD_USB_MODE_SELECTION);
+    const std::string& path = filePaths_[index];
+    if (app->getDuckyRunner().startScript(path, modeToExecute_)) {
+        app->changeMenu(MenuType::DUCKY_SCRIPT_ACTIVE);
+    } else {
+        const char* errorMsg = (modeToExecute_ == DuckyScriptRunner::Mode::USB) 
+                                ? "Failed to start USB HID." 
+                                : "Failed to start BLE HID.";
+        app->showPopUp("Error", errorMsg, nullptr, "OK", "", true);
+    }
 }
 
 void DuckyScriptListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {

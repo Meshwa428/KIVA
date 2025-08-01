@@ -24,11 +24,15 @@ void OtaManager::setup(App* app, WifiManager* wifiManager) {
 }
 
 void OtaManager::loop() {
-    if (state_ == OtaState::BASIC_ACTIVE) {
-        ArduinoOTA.handle();
-    }
-    if (state_ == OtaState::FLASHING) {
-        loopFlashing();
+    switch (state_) {
+        case OtaState::BASIC_ACTIVE:
+            ArduinoOTA.handle();
+            break;
+        case OtaState::FLASHING:
+            loopFlashing();
+            break;
+        default:
+            break;
     }
 }
 
