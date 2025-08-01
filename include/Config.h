@@ -140,7 +140,7 @@ namespace SD_ROOT
     static constexpr const char *WEB_OTA_PAGE = "/web/ota_page.html";
 
     // Log file info
-    static constexpr const char *LOG_BASE_NAME = "/system_";
+    static constexpr const char *LOG_BASE_NAME = "system_log_";
 }
 
 // Firmware & OTA Constants

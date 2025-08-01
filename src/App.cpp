@@ -9,6 +9,8 @@
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
+#include <vector>
+#include <functional>
 // #include "USB.h" // <-- REMOVED THIS INCLUDE AND ANY USB CALLS FROM THIS FILE
 
 App::App() : 
@@ -274,97 +276,79 @@ App::App() :
 void App::setup()
 {
     Serial.begin(115200);
-    // USB.begin(); // <-- REMOVED! This will be called on-demand now.
     delay(100);
     Wire.begin();
 
-    // --- NEW CONTINUOUS BOOT SEQUENCE ---
-    Serial.println("\n[APP-LOG] Starting Kiva Boot Sequence...");
-
-    // Initialize displays early
+    // Initialize displays early for boot screen
     hardware_.getMainDisplay().begin();
     hardware_.getMainDisplay().enableUTF8Print();
     hardware_.getSmallDisplay().begin();
     hardware_.getSmallDisplay().enableUTF8Print();
 
-    const unsigned long TOTAL_BOOT_DURATION_MS = 3000;
-    const unsigned long bootStartTime = millis();
-    unsigned long currentTime = 0;
-
-    // Define boot task milestones (in milliseconds)
-    const unsigned long MILESTONE_I2C = 200;
-    const unsigned long MILESTONE_HW_MANAGER = 800;
-    const unsigned long MILESTONE_WIFI = 1400;
-    const unsigned long MILESTONE_JAMMER = 2000;
-    const unsigned long MILESTONE_READY = 2600;
-
-    bool i2c_done = false, hw_done = false, wifi_done = false, jammer_done = false, ready_done = false;
-
     logToSmallDisplay("Kiva Boot Agent v1.0", nullptr);
 
-    // This loop runs for the total duration of the boot animation.
-    while ((currentTime = millis()) - bootStartTime < TOTAL_BOOT_DURATION_MS)
-    {
-        unsigned long elapsedTime = currentTime - bootStartTime;
+    // --- NEW TASK-DRIVEN BOOT SEQUENCE ---
+    // This structure links visual progress to actual initialization tasks.
+    struct BootTask {
+        const char* name;
+        std::function<void()> action;
+    };
 
-        // Perform boot tasks as we pass their milestones
-        if (!i2c_done && elapsedTime >= MILESTONE_I2C)
-        {
-            logToSmallDisplay("I2C Bus Initialized", "OK");
-            i2c_done = true;
-        }
-        if (!hw_done && elapsedTime >= MILESTONE_HW_MANAGER)
-        {
-            hardware_.setup();
-            logToSmallDisplay("Hardware Manager", "OK");
-            hw_done = true;
-        }
-        if (!wifi_done && elapsedTime >= MILESTONE_WIFI)
-        {
-            logToSmallDisplay("WiFi Subsystem", "INIT");
-            wifi_done = true;
-        }
-        if (!jammer_done && elapsedTime >= MILESTONE_JAMMER)
-        {
-            logToSmallDisplay("Jamming System", "INIT");
-            jammer_done = true;
-        }
-        if (!ready_done && elapsedTime >= MILESTONE_READY)
-        {
-            logToSmallDisplay("Main Display OK", "READY");
-            ready_done = true;
-        }
+    std::vector<BootTask> bootTasks = {
+        {"SD Card",         [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
+        {"Hardware Manager",[&](){ hardware_.setup(); }},
+        {"Logger",          [&](){ Logger::getInstance().setup(); }},
+        {"WiFi System",     [&](){ wifiManager_.setup(this); }},
+        {"OTA System",      [&](){ otaManager_.setup(this, &wifiManager_); }},
+        {"Jammer",          [&](){ jammer_.setup(this); }},
+        {"Beacon Spammer",  [&](){ beaconSpammer_.setup(this); }},
+        {"Deauther",        [&](){ deauther_.setup(this); }},
+        {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
+        {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
+        {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
+        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
+        {"BadUSB",          [&](){ badUSB_.setup(this); }}
+    };
 
-        // Continuously update and draw the smooth progress bar
-        updateAndDrawBootScreen(bootStartTime, TOTAL_BOOT_DURATION_MS);
-        delay(16); // Maintain ~60 FPS update rate
+    int totalTasks = bootTasks.size();
+    U8G2 &mainDisplay = hardware_.getMainDisplay(); // Get main display once
+    int progressBarDrawableWidth = mainDisplay.getDisplayWidth() - 40 - 2;
+
+    for (int i = 0; i < totalTasks; ++i) {
+        // Log task start on small display
+        logToSmallDisplay(bootTasks[i].name, "INIT");
+
+        // Execute the actual initialization task
+        bootTasks[i].action();
+        
+        // Animate the progress bar on the main display to show completion
+        float targetFillPx = (float)(i + 1) / totalTasks * progressBarDrawableWidth;
+        while (currentProgressBarFillPx_ < targetFillPx - 0.5f) {
+            float diff = targetFillPx - currentProgressBarFillPx_;
+            currentProgressBarFillPx_ += diff * 0.2f; // simple ease-out
+            if (currentProgressBarFillPx_ > targetFillPx) currentProgressBarFillPx_ = targetFillPx;
+
+            // This function now correctly draws ONLY to the main display
+            updateAndDrawBootScreen(0, 0); // Pass dummy values, as progress is now external
+            delay(10); 
+        }
+        currentProgressBarFillPx_ = targetFillPx; // Snap to final position for this step
+
+        // Log task completion on small display
+        logToSmallDisplay(bootTasks[i].name, "OK");
+        delay(30); // Small pause so the "OK" is readable
     }
+    
+    // Final draw at 100%
+    currentProgressBarFillPx_ = progressBarDrawableWidth;
+    updateAndDrawBootScreen(0, 0);
 
-    // Ensure the bar is 100% full at the end and show the final log
     logToSmallDisplay("KivaOS Loading...");
-    updateAndDrawBootScreen(bootStartTime, TOTAL_BOOT_DURATION_MS); // Final draw at 100%
-    delay(500);                                                     // Pause on the full bar for a moment
+    delay(500);
 
-    // --- Boot Sequence End. Transition to main application ---
-    // Serial.println("[APP-LOG] Boot sequence finished. Initializing menus.");
-
-    SdCardManager::setup();   // Setup SD Card first
-
-    Logger::getInstance().setup();
-
-    LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing managers.");
-
-    wifiManager_.setup(this); // Then WifiManager which may depend on it. Pass App context.
-    otaManager_.setup(this, &wifiManager_);
-    jammer_.setup(this);
-    beaconSpammer_.setup(this);
-    deauther_.setup(this);
-    evilTwin_.setup(this);
-    probeSniffer_.setup(this);
-    karmaAttacker_.setup(this);
-    bleSpammer_.setup(this);
-    badUSB_.setup(this);
-
+    // --- Boot Sequence End. Register menus ---
+    LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing menus.");
+    
     // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
@@ -751,19 +735,12 @@ void App::drawStatusBar()
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
 }
 
+// This function is now responsible for drawing the boot screen on the MAIN display.
+// It no longer calculates progress; it just draws based on the current value
+// of the member variable 'currentProgressBarFillPx_'.
 void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration)
 {
-    U8G2 &display = hardware_.getMainDisplay();
-
-    float progress_t = (float)(millis() - bootStartTime) / totalBootDuration;
-    progress_t = std::max(0.0f, std::min(1.0f, progress_t));
-
-    float eased_t = progress_t < 0.5f
-                        ? 4.0f * progress_t * progress_t * progress_t
-                        : 1.0f - pow(-2.0f * progress_t + 2.0f, 3) / 2.0f;
-
-    int progressBarDrawableWidth = display.getDisplayWidth() - 40 - 2;
-    currentProgressBarFillPx_ = progressBarDrawableWidth * eased_t;
+    U8G2 &display = hardware_.getMainDisplay(); // Explicitly get the main display
 
     display.clearBuffer();
     drawCustomIcon(display, 0, -4, IconType::BOOT_LOGO);
@@ -772,6 +749,7 @@ void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long tot
     int progressBarHeight = 7;
     int progressBarWidth = display.getDisplayWidth() - 40;
     int progressBarX = (display.getDisplayWidth() - progressBarWidth) / 2;
+    int progressBarDrawableWidth = progressBarWidth - 2;
 
     display.setDrawColor(1);
     display.drawRFrame(progressBarX, progressBarY, progressBarWidth, progressBarHeight, 1);
@@ -784,12 +762,13 @@ void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long tot
         display.drawRBox(progressBarX + 1, progressBarY + 1, fillWidthToDraw, progressBarHeight - 2, 0);
     }
 
-    display.sendBuffer();
+    display.sendBuffer(); // Send the buffer to the main display
 }
 
+// This function is responsible for drawing logs on the SMALL display.
 void App::logToSmallDisplay(const char *message, const char *status)
 {
-    U8G2 &display = hardware_.getSmallDisplay();
+    U8G2 &display = hardware_.getSmallDisplay(); // Explicitly get the small display
     display.setFont(u8g2_font_5x7_tf);
 
     char fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
@@ -806,11 +785,13 @@ void App::logToSmallDisplay(const char *message, const char *status)
                  (int)(sizeof(fullMessage) - charsWritten - 1), message);
     }
 
+    // Scroll the log buffer up
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY - 1; ++i)
     {
         strncpy(smallDisplayLogBuffer_[i], smallDisplayLogBuffer_[i + 1], MAX_LOG_LINE_LENGTH_SMALL_DISPLAY);
     }
 
+    // Add the new message at the bottom
     strncpy(smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY - 1], fullMessage, MAX_LOG_LINE_LENGTH_SMALL_DISPLAY);
     smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY - 1][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY - 1] = '\0';
 
@@ -822,5 +803,5 @@ void App::logToSmallDisplay(const char *message, const char *status)
     {
         display.drawStr(2, yPos + (i * lineHeight), smallDisplayLogBuffer_[i]);
     }
-    display.sendBuffer();
+    display.sendBuffer(); // Send the buffer to the small display
 }

@@ -9,7 +9,8 @@ Logger& Logger::getInstance() {
     return instance;
 }
 
-Logger::Logger() : logDir_(SD_ROOT::DATA_LOGS), logBaseName_(SD_ROOT::LOG_BASE_NAME), logExtension_(".txt") {}
+// Constructor is simple, member variables for paths are no longer needed.
+Logger::Logger() : isInitialized_(false) {}
 
 void Logger::setup() {
     if (!SdCardManager::isAvailable()) {
@@ -19,16 +20,18 @@ void Logger::setup() {
     }
 
     // Ensure the logs directory exists
-    if (!SdCardManager::exists(logDir_)) {
-        SdCardManager::createDir(logDir_);
+    const char* logDir = SD_ROOT::DATA_LOGS;
+    if (!SdCardManager::exists(logDir)) {
+        SdCardManager::createDir(logDir);
     }
 
+    // Perform the new archive and cleanup logic
     manageLogFiles();
 
-    // Create the new log file path
-    char newLogFileName[48];
-    snprintf(newLogFileName, sizeof(newLogFileName), "%s%s%lu%s", logDir_, logBaseName_, millis(), logExtension_);
-    currentLogFile_ = newLogFileName;
+    // The new log file for this session is ALWAYS the "latest" file.
+    char latestLogPath[64];
+    snprintf(latestLogPath, sizeof(latestLogPath), "%s/system_log_latest.txt", logDir);
+    currentLogFile_ = latestLogPath;
 
     isInitialized_ = true;
     Serial.printf("[LOGGER] Logging to new file: %s\n", currentLogFile_.c_str());
@@ -36,31 +39,56 @@ void Logger::setup() {
 }
 
 void Logger::manageLogFiles() {
-    std::vector<String> logFiles;
-    File root = SdCardManager::openFile(logDir_);
+    const char* logDir = SD_ROOT::DATA_LOGS;
+    const char* logPrefix = "system_log_";
+    const char* latestLogName = "system_log_latest.txt";
+    const char* logExtension = ".txt";
+
+    char previousLatestPath[64];
+    snprintf(previousLatestPath, sizeof(previousLatestPath), "%s/%s", logDir, latestLogName);
+
+    // 1. Archive the previous "latest" log file if it exists
+    if (SdCardManager::exists(previousLatestPath)) {
+        // Generate a new unique name for the old file using the current boot time (millis)
+        char archivePath[64];
+        snprintf(archivePath, sizeof(archivePath), "%s/%s%lu%s", logDir, logPrefix, millis(), logExtension);
+        
+        if (SdCardManager::renameFile(previousLatestPath, archivePath)) {
+            Serial.printf("[LOGGER] Archived previous log to: %s\n", archivePath);
+        } else {
+            Serial.printf("[LOGGER] ERROR: Failed to archive %s\n", previousLatestPath);
+        }
+    }
+
+    // 2. Clean up old archived logs if we exceed the limit
+    std::vector<String> archivedLogs;
+    File root = SdCardManager::openFile(logDir);
     if (!root || !root.isDirectory()) {
+        if (root) root.close();
         return;
     }
 
     File file = root.openNextFile();
     while(file) {
         String fileName = file.name();
-        if (!file.isDirectory() && fileName.startsWith(logBaseName_) && fileName.endsWith(logExtension_)) {
-            logFiles.push_back(String(logDir_) + "/" + fileName);
+        // An archived log starts with the prefix but IS NOT the "latest" log.
+        if (!file.isDirectory() && fileName.startsWith(logPrefix) && fileName != latestLogName) {
+            archivedLogs.push_back(String(logDir) + "/" + fileName);
         }
         file.close();
         file = root.openNextFile();
     }
     root.close();
 
-    // Sort files alphabetically (which also sorts by timestamp in the name)
-    std::sort(logFiles.begin(), logFiles.end());
+    // Sort files alphabetically, which also sorts them by timestamp in the name.
+    std::sort(archivedLogs.begin(), archivedLogs.end());
 
-    // If we have too many log files, delete the oldest ones
-    while (logFiles.size() >= MAX_LOG_FILES) {
-        Serial.printf("[LOGGER] Deleting old log file: %s\n", logFiles[0].c_str());
-        SdCardManager::deleteFile(logFiles[0].c_str());
-        logFiles.erase(logFiles.begin());
+    // We keep (MAX_LOG_FILES - 1) archives, because one slot is for the "latest" file.
+    // The check `archivedLogs.size() >= MAX_LOG_FILES` is more robust.
+    while (!archivedLogs.empty() && archivedLogs.size() >= MAX_LOG_FILES) {
+        Serial.printf("[LOGGER] Max log files reached. Deleting oldest archive: %s\n", archivedLogs[0].c_str());
+        SdCardManager::deleteFile(archivedLogs[0].c_str());
+        archivedLogs.erase(archivedLogs.begin());
     }
 }
 
@@ -89,7 +117,7 @@ void Logger::log(LogLevel level, const char* component, const char* format, ...)
     Serial.println(buffer);
 
     // Print to SD card file
-    if (isInitialized_) {
+    if (isInitialized_ && !currentLogFile_.isEmpty()) {
         File logFile = SdCardManager::openFile(currentLogFile_.c_str(), FILE_APPEND);
         if (logFile) {
             logFile.println(buffer);
