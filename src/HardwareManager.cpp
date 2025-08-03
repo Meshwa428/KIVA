@@ -264,6 +264,11 @@ void HardwareManager::setPerformanceMode(bool highPerf) {
     Serial.printf("[HW-LOG] Performance mode set to: %s\n", highPerf ? "HIGH" : "NORMAL (UI)");
 }
 
+void HardwareManager::setBrightness(uint8_t contrast) {
+    getMainDisplay().setContrast(contrast);
+    getSmallDisplay().setContrast(contrast);
+}
+
 void HardwareManager::updateBattery()
 {
     unsigned long currentTime = millis();

@@ -119,6 +119,7 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     linesExecuted_ = 0;
     delayUntil_ = 0;
     defaultDelay_ = 100;
+    connectionTime_ = 0;
     lastLine_ = "";
     
     return true;
@@ -151,17 +152,27 @@ void DuckyScriptRunner::loop() {
     
     if (state_ == State::WAITING_FOR_CONNECTION) {
         if (activeHid_->isConnected()) {
-            LOG(LogLevel::INFO, "DuckyRunner", "loop: HID connected. Changing state to RUNNING.");
-            state_ = State::RUNNING;
+            LOG(LogLevel::INFO, "DuckyRunner", "HID connected. Starting post-connection delay.");
+            state_ = State::POST_CONNECTION_DELAY;
+            connectionTime_ = millis();
         }
-        return;
+        return; // Important: exit loop iteration here
+    }
+
+    if (state_ == State::POST_CONNECTION_DELAY) {
+        // Wait for 750ms after connection before starting the script.
+        if (millis() - connectionTime_ > 750) {
+             LOG(LogLevel::INFO, "DuckyRunner", "Delay complete. Changing state to RUNNING.");
+             state_ = State::RUNNING;
+        }
+        return; // Don't proceed to RUNNING state in the same loop iteration
     }
 
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
         
         activeHid_->releaseAll();
-        delay(defaultDelay_);
+        delay(defaultDelay_); // This is the inter-command delay
         
         currentLine_ = scriptReader_.readLine().c_str(); 
 

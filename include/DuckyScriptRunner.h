@@ -77,7 +77,7 @@ struct DuckyCombination {
 class DuckyScriptRunner {
 public:
     enum class Mode { USB, BLE };
-    enum class State { IDLE, WAITING_FOR_CONNECTION, RUNNING, FINISHED };
+    enum class State { IDLE, WAITING_FOR_CONNECTION, POST_CONNECTION_DELAY, RUNNING, FINISHED };
 
     DuckyScriptRunner();
     void setup(App* app);
@@ -109,6 +109,7 @@ private:
     
     unsigned long delayUntil_;
     int defaultDelay_;
+    unsigned long connectionTime_; // <-- ADD THIS MEMBER
     
     std::string lastLine_;
 };

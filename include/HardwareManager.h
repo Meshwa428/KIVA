@@ -71,6 +71,7 @@ public:
     bool isVibrationOn() const;
 
     void setPerformanceMode(bool highPerf);
+    void setBrightness(uint8_t contrast);
 
     // Battery Status Methods
     float getBatteryVoltage() const;
