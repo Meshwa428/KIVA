@@ -77,23 +77,35 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     currentMode_ = mode;
 
     if (mode == Mode::BLE) {
-        // <-- FIX: The call to startKeyboard() is now void. 
-        // It just initiates the process.
-        app_->getBleManager().startKeyboard();
-        activeHid_.reset(new BleHid(app_->getBleManager().getKeyboard()));
+        // --- THIS IS THE FIX ---
+        // 1. Call the new blocking start function.
+        BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
+
+        // 2. If it returns nullptr, the startup failed or timed out. Abort cleanly.
+        if (!keyboard) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard instance.");
+            // No need to call stopKeyboard() here, as the BleManager is still in an idle state.
+            return false;
+        }
+        
+        // 3. If we get here, 'keyboard' is a valid pointer.
+        activeHid_.reset(new BleHid(keyboard));
+
     } else { // USB Mode
         activeHid_.reset(new UsbHid());
     }
     
-    if (!activeHid_ || !activeHid_->begin()) {
+    if (!activeHid_->begin()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
         if (mode == Mode::BLE) {
+            // If begin fails for some reason, we must now stop the manager we just started.
             app_->getBleManager().stopKeyboard();
         }
         activeHid_.reset();
         return false;
     }
 
+    // ... (rest of the function is correct) ...
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");

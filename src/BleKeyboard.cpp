@@ -154,14 +154,23 @@ void BleKeyboard::end(void)
 {
     NimBLEServer* pServer = NimBLEDevice::getServer();
     if (pServer && hid) {
+        // --- THIS IS THE FIX ---
+        // Unregister ourselves as the callback handler BEFORE de-initialization.
+        // This prevents the NimBLE stack from trying to delete this object.
+        pServer->setCallbacks(nullptr);
+        // --- END OF FIX ---
+
+        // Retrieve the services created by this HID device instance
         NimBLEService* hidService = hid->getHidService();
         NimBLEService* deviceInfoService = hid->getDeviceInfoService();
         NimBLEService* batteryService = hid->getBatteryService();
 
+        // Remove the services from the server to allow them to be re-created later
         if (hidService) pServer->removeService(hidService, true);
         if (deviceInfoService) pServer->removeService(deviceInfoService, true);
         if (batteryService) pServer->removeService(batteryService, true);
 
+        // Delete the HID device object itself to clean up its resources
         delete hid;
         hid = nullptr;
     }

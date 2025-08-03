@@ -3,7 +3,6 @@
 
 #include <string>
 #include <memory>
-#include <functional>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -14,8 +13,8 @@ class BleKeyboard;
 class BleManager {
 public:
     enum class State {
-        IDLE,           // Stack is on, but keyboard is not advertising
-        KEYBOARD_ACTIVE // Keyboard is advertising and/or connected
+        IDLE,           // Stack is off
+        KEYBOARD_ACTIVE // Stack is on and keyboard services are running
     };
 
     BleManager();
@@ -23,10 +22,13 @@ public:
 
     void setup(App* app);
 
-    // --- Public API for DuckyScriptRunner ---
-    void startKeyboard();
+    // --- REVISED Public API ---
+    // Returns a valid keyboard pointer on success, nullptr on failure.
+    // This function BLOCKS until the BLE task is fully ready.
+    BleKeyboard* startKeyboard();
+
+    // This function BLOCKS until the BLE task has fully shut down.
     void stopKeyboard();
-    BleKeyboard* getKeyboard();
     
     // --- Getters for UI ---
     State getState() const;
@@ -38,12 +40,14 @@ private:
 
     App* app_;
     TaskHandle_t bleTaskHandle_;
-    SemaphoreHandle_t stopSemaphore_; // Used to confirm graceful shutdown
+    SemaphoreHandle_t startSemaphore_; // Confirms startup is complete
+    SemaphoreHandle_t stopSemaphore_;  // Confirms shutdown is complete
 
     volatile State currentState_;
     volatile bool startKeyboardRequested_;
     volatile bool stopKeyboardRequested_;
     
+    // unique_ptr to manage the keyboard object's lifetime
     std::unique_ptr<BleKeyboard> bleKeyboard_;
 };
 

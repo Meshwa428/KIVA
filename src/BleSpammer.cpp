@@ -52,19 +52,25 @@ void BleSpammer::setup(App* app) {
 void BleSpammer::start(BleSpamMode mode) {
     if (isActive_) return;
     
-    // This now correctly initializes the entire BLE stack via HardwareManager
-    if (!app_->getHardwareManager().requestHostControl(HostClient::BLE_HID)) {
-        LOG(LogLevel::ERROR, "BLESPAM", "Failed to acquire BLE host control.");
-        return;
+    // --- THIS IS THE FIX ---
+    // DO NOT call requestHostControl or init the stack. 
+    // The BLE stack is assumed to be initialized by the system when needed.
+    // If the Ducky keyboard was used, the stack is already on. If not, this will fail gracefully.
+    if(!NimBLEDevice::isInitialized()) {
+        LOG(LogLevel::ERROR, "BLESPAM", "Cannot start spam, BLE stack is not initialized.");
+        // We could optionally initialize it here, but it's better to
+        // have a single manager class. For now, we fail.
+        // A more advanced solution would be for BleSpammer to also use BleManager.
+        return; 
     }
     
-    // One-time setup after hardware is confirmed ready
+    // Set power level every time to be sure
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, MAX_TX_POWER);
 
     LOG(LogLevel::INFO, "BLESPAM", "Starting BLE Spam Mode: %d", (int)mode);
     isActive_ = true;
     currentMode_ = mode;
-    currentSubMode_ = BleSpamMode::APPLE_JUICE; // Start cycle from first real mode
+    currentSubMode_ = BleSpamMode::APPLE_JUICE; 
     lastPacketTime_ = 0;
 }
 
@@ -73,13 +79,13 @@ void BleSpammer::stop() {
     LOG(LogLevel::INFO, "BLESPAM", "Stopping BLE Spam.");
     isActive_ = false;
 
-    // --- MODIFIED: Ensure advertising is stopped before releasing control ---
+    // Stop advertising if it's running
     if(NimBLEDevice::getAdvertising() && NimBLEDevice::getAdvertising()->isAdvertising()) {
       NimBLEDevice::getAdvertising()->stop();
     }
 
-    // This now correctly puts the stack into a clean idle state
-    app_->getHardwareManager().releaseHostControl();
+    // --- THIS IS THE FIX ---
+    // DO NOT release host control or deinit the stack. Let the manager handle it.
 }
 
 void BleSpammer::loop() {
