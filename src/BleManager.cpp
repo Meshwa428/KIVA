@@ -4,41 +4,27 @@
 #include <NimBLEDevice.h>
 #include <BleKeyboard.h>
 
-// --- Helper Class for Server Callbacks ---
-class BleManagerServerCallbacks : public NimBLEServerCallbacks {
-public:
-    BleManagerServerCallbacks(SemaphoreHandle_t semaphore) : disconnectSemaphore(semaphore) {}
-
-    void onDisconnect(NimBLEServer* pServer) override {
-        LOG(LogLevel::INFO, "BLE_MGR_CB", "Client disconnected.");
-        // Give the semaphore to signal that the disconnect is complete.
-        xSemaphoreGive(disconnectSemaphore);
-    }
-
-private:
-    SemaphoreHandle_t disconnectSemaphore;
-};
-
 BleManager::BleManager() :
     app_(nullptr),
     bleTaskHandle_(nullptr),
-    syncSemaphore_(nullptr),
-    currentState_(State::OFF),
-    requestedState_(State::OFF)
+    stopSemaphore_(nullptr),
+    currentState_(State::IDLE),
+    startKeyboardRequested_(false),
+    stopKeyboardRequested_(false)
 {}
 
 BleManager::~BleManager() {
     if (bleTaskHandle_ != nullptr) {
         vTaskDelete(bleTaskHandle_);
     }
-    if (syncSemaphore_ != nullptr) {
-        vSemaphoreDelete(syncSemaphore_);
+    if (stopSemaphore_ != nullptr) {
+        vSemaphoreDelete(stopSemaphore_);
     }
 }
 
 void BleManager::setup(App* app) {
     app_ = app;
-    syncSemaphore_ = xSemaphoreCreateBinary();
+    stopSemaphore_ = xSemaphoreCreateBinary();
 
     xTaskCreatePinnedToCore(
         this->bleTaskWrapper,
@@ -51,30 +37,19 @@ void BleManager::setup(App* app) {
     );
 }
 
-bool BleManager::requestKeyboard() {
-    if (currentState_ != State::IDLE) {
-        LOG(LogLevel::WARN, "BLE_MGR", "Request for keyboard while not idle.");
-        return false;
-    }
-    LOG(LogLevel::INFO, "BLE_MGR", "Keyboard requested. Waking task and waiting for completion.");
-    requestedState_ = State::STARTING_KEYBOARD;
+// --- Public API ---
 
-    if (xSemaphoreTake(syncSemaphore_, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        LOG(LogLevel::INFO, "BLE_MGR", "Semaphore received. Keyboard is ready.");
-        return true;
-    } else {
-        LOG(LogLevel::ERROR, "BLE_MGR", "Timed out waiting for keyboard semaphore.");
-        requestedState_ = State::STOPPING_KEYBOARD;
-        return false;
-    }
+void BleManager::startKeyboard() {
+    startKeyboardRequested_ = true;
+    stopKeyboardRequested_ = false;
 }
 
-void BleManager::releaseKeyboard() {
-    if (currentState_ == State::KEYBOARD_ACTIVE || currentState_ == State::STARTING_KEYBOARD) {
-        LOG(LogLevel::INFO, "BLE_MGR", "Keyboard released. Idling task.");
-        requestedState_ = State::STOPPING_KEYBOARD;
-        xSemaphoreTake(syncSemaphore_, pdMS_TO_TICKS(2000)); // Wait for full shutdown
-    }
+void BleManager::stopKeyboard() {
+    stopKeyboardRequested_ = true;
+    startKeyboardRequested_ = false;
+    // Block the main thread until the task confirms the keyboard is fully stopped.
+    // This prevents race conditions when quickly exiting and re-entering menus.
+    xSemaphoreTake(stopSemaphore_, pdMS_TO_TICKS(2000));
 }
 
 BleKeyboard* BleManager::getKeyboard() {
@@ -85,6 +60,15 @@ BleManager::State BleManager::getState() const {
     return currentState_;
 }
 
+bool BleManager::isKeyboardConnected() const {
+    if (bleKeyboard_ && currentState_ == State::KEYBOARD_ACTIVE) {
+        return bleKeyboard_->isConnected();
+    }
+    return false;
+}
+
+// --- Task and State Machine ---
+
 void BleManager::bleTaskWrapper(void* param) {
     static_cast<BleManager*>(param)->taskLoop();
 }
@@ -92,71 +76,58 @@ void BleManager::bleTaskWrapper(void* param) {
 void BleManager::taskLoop() {
     LOG(LogLevel::INFO, "BLE_MGR", "BLE Manager task started.");
     
-    NimBLEDevice::init("Kiva");
+    // <-- FIX: Initialize with an empty name to prevent the default "Kiva" device from appearing.
+    if(!NimBLEDevice::init("")) {
+        LOG(LogLevel::ERROR, "BLE_MGR", "Failed to initialize NimBLE");
+        vTaskDelete(nullptr);
+        return;
+    }
     
-    // --- Set up the server and its callback handler ONCE ---
+    // Create the server and keyboard ONCE. They will live forever.
     NimBLEServer *pServer = NimBLEDevice::createServer();
-    pServer->setCallbacks(new BleManagerServerCallbacks(syncSemaphore_));
+    bleKeyboard_.reset(new BleKeyboard("Kiva Ducky", "Kiva Systems", 100));
 
+    // The task is now officially idle and ready for commands.
     currentState_ = State::IDLE;
-    requestedState_ = State::IDLE;
 
     for (;;) {
-        if (requestedState_ != currentState_) {
-            currentState_ = requestedState_;
+        // Check for a request to start the keyboard
+        if (startKeyboardRequested_ && currentState_ == State::IDLE) {
+            LOG(LogLevel::INFO, "BLE_MGR", "Starting Keyboard Advertising...");
+            bleKeyboard_->begin();
+            currentState_ = State::KEYBOARD_ACTIVE;
+            startKeyboardRequested_ = false;
         }
 
-        switch (currentState_) {
-            case State::IDLE:               handleStateIdle();              break;
-            case State::STARTING_KEYBOARD:  handleStateStartingKeyboard();  break;
-            case State::KEYBOARD_ACTIVE:    handleStateKeyboardActive();    break;
-            case State::STOPPING_KEYBOARD:  handleStateStoppingKeyboard();  break;
-            default: break;
+        // Check for a request to stop the keyboard
+        if (stopKeyboardRequested_ && currentState_ == State::KEYBOARD_ACTIVE) {
+            LOG(LogLevel::INFO, "BLE_MGR", "Stopping Keyboard...");
+            
+            if (pServer->getAdvertising()->isAdvertising()) {
+                pServer->getAdvertising()->stop();
+            }
+
+            if (pServer->getConnectedCount() > 0) {
+                LOG(LogLevel::INFO, "BLE_MGR", "Disconnecting %d clients.", pServer->getConnectedCount());
+                auto peerHandles = pServer->getPeerDevices();
+                for(auto handle : peerHandles) {
+                    pServer->disconnect(handle);
+                }
+                // Give a moment for the OS to process the disconnect cleanly
+                vTaskDelay(pdMS_TO_TICKS(200)); 
+            }
+
+            // <-- FIX: Call the new end() method to tear down services and the HID device.
+            bleKeyboard_->end();
+
+            currentState_ = State::IDLE;
+            stopKeyboardRequested_ = false;
+            LOG(LogLevel::INFO, "BLE_MGR", "Keyboard stopped. Task is now idle.");
+
+            // Signal the main thread that the stop operation is complete.
+            xSemaphoreGive(stopSemaphore_);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(100)); // Task loop delay
     }
-}
-
-void BleManager::handleStateIdle() {
-    // Task waits for a request.
-}
-
-void BleManager::handleStateStartingKeyboard() {
-    LOG(LogLevel::INFO, "BLE_MGR", "State: STARTING KEYBOARD");
-    bleKeyboard_.reset(new BleKeyboard("Kiva Ducky", "Kiva Systems", 100));
-    bleKeyboard_->begin();
-    
-    requestedState_ = State::KEYBOARD_ACTIVE;
-    xSemaphoreGive(syncSemaphore_);
-}
-
-void BleManager::handleStateKeyboardActive() {
-    // Task waits for a stop command.
-}
-
-void BleManager::handleStateStoppingKeyboard() {
-    LOG(LogLevel::INFO, "BLE_MGR", "State: STOPPING KEYBOARD");
-    NimBLEServer *pServer = NimBLEDevice::getServer();
-
-    // --- NEW GRACEFUL SHUTDOWN LOGIC ---
-    if (pServer && pServer->getConnectedCount() > 0) {
-        LOG(LogLevel::INFO, "BLE_MGR", "Client is connected. Requesting disconnect.");
-        pServer->disconnect(pServer->getConnectedCount());
-        // Now we wait. The onDisconnect callback will give the semaphore.
-        if (xSemaphoreTake(syncSemaphore_, pdMS_TO_TICKS(1500)) != pdTRUE) {
-            LOG(LogLevel::WARN, "BLE_MGR", "Timed out waiting for client to disconnect.");
-        }
-    }
-
-    if (bleKeyboard_) {
-        bleKeyboard_->end();
-        bleKeyboard_.reset();
-    }
-    
-    requestedState_ = State::IDLE;
-    LOG(LogLevel::INFO, "BLE_MGR", "BLE keyboard stopped. Returning to IDLE.");
-    
-    // Signal the main thread that the full shutdown is complete.
-    xSemaphoreGive(syncSemaphore_);
 }

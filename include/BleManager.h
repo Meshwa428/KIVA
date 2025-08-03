@@ -10,16 +10,12 @@
 
 class App;
 class BleKeyboard;
-class BleManagerServerCallbacks; // Forward declare
 
 class BleManager {
 public:
     enum class State {
-        OFF,
-        IDLE,
-        STARTING_KEYBOARD,
-        KEYBOARD_ACTIVE,
-        STOPPING_KEYBOARD
+        IDLE,           // Stack is on, but keyboard is not advertising
+        KEYBOARD_ACTIVE // Keyboard is advertising and/or connected
     };
 
     BleManager();
@@ -27,34 +23,28 @@ public:
 
     void setup(App* app);
 
-    bool requestKeyboard();
-    void releaseKeyboard();
+    // --- Public API for DuckyScriptRunner ---
+    void startKeyboard();
+    void stopKeyboard();
     BleKeyboard* getKeyboard();
-    State getState() const;
     
-    // Public method for the callback to access the semaphore
-    void signalDisconnect();
+    // --- Getters for UI ---
+    State getState() const;
+    bool isKeyboardConnected() const;
 
 private:
     static void bleTaskWrapper(void* param);
     void taskLoop();
 
-    void handleStateIdle();
-    void handleStateStartingKeyboard();
-    void handleStateKeyboardActive();
-    void handleStateStoppingKeyboard();
-
     App* app_;
     TaskHandle_t bleTaskHandle_;
-    SemaphoreHandle_t syncSemaphore_;
+    SemaphoreHandle_t stopSemaphore_; // Used to confirm graceful shutdown
 
     volatile State currentState_;
-    volatile State requestedState_;
+    volatile bool startKeyboardRequested_;
+    volatile bool stopKeyboardRequested_;
     
     std::unique_ptr<BleKeyboard> bleKeyboard_;
-    
-    // --- The Fix: Callback handler is now a member ---
-    std::unique_ptr<BleManagerServerCallbacks> serverCallbacks_; 
 };
 
 #endif // BLE_MANAGER_H

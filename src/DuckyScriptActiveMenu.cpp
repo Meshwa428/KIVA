@@ -6,19 +6,19 @@ DuckyScriptActiveMenu::DuckyScriptActiveMenu() : entryTime_(0) {}
 
 void DuckyScriptActiveMenu::onEnter(App* app, bool isForwardNav) {
     entryTime_ = millis();
+    app->getHardwareManager().setPerformanceMode(true);
 }
 
 void DuckyScriptActiveMenu::onExit(App* app) {
     if(app->getDuckyRunner().isActive()) {
         app->getDuckyRunner().stopScript();
     }
+    app->getHardwareManager().setPerformanceMode(false);
 }
 
 void DuckyScriptActiveMenu::onUpdate(App* app) {
     auto& ducky = app->getDuckyRunner();
-    // Use a short delay after finishing before automatically exiting
-    if (ducky.getState() == DuckyScriptRunner::State::FINISHED && millis() - entryTime_ > 2000) {
-        // stopScript() is called automatically in onExit
+    if (ducky.getState() == DuckyScriptRunner::State::FINISHED && millis() - entryTime_ > 1500) {
         app->returnToMenu(MenuType::DUCKY_SCRIPT_LIST);
     }
 }
@@ -31,7 +31,6 @@ void DuckyScriptActiveMenu::handleInput(App* app, InputEvent event) {
 
 void DuckyScriptActiveMenu::draw(App* app, U8G2& display) {
     auto& ducky = app->getDuckyRunner();
-    // This draw logic is now correct again
     const char* scriptName = ducky.getScriptName().c_str();
     const char* status = "";
     

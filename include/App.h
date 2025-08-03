@@ -8,7 +8,7 @@
 #include "GridMenu.h"
 #include <vector>
 #include <map>
-#include <functional> // For std::function
+#include <functional>
 #include "WifiManager.h"
 #include "TextInputMenu.h"
 #include "ConnectionStatusMenu.h"
@@ -36,11 +36,11 @@
 #include "KarmaActiveMenu.h"
 #include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
-#include "BleManager.h" // ADD
 #include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
 #include "Logger.h"
+#include "BleManager.h" // Add this
 
 class App
 {
@@ -64,8 +64,8 @@ public:
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
-    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; } // RESTORE THIS
-    BleManager &getBleManager() { return bleManager_; } // KEEP THIS
+    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
+    BleManager &getBleManager() { return bleManager_; } // Add this
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -98,7 +98,7 @@ private:
     KarmaAttacker karmaAttacker_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_;
+    BleManager bleManager_; // Add this
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -119,18 +119,16 @@ private:
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
     GridMenu deauthToolsMenu_;
-    
+
     SplitSelectionMenu beaconModeMenu_;
 
-    // WifiListMenu wifiListMenu_;
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
     PopUpMenu popUpMenu_;
 
-    // FirmwareListMenu firmwareListMenu_;
     OtaStatusMenu otaStatusMenu_;
     ChannelSelectionMenu channelSelectionMenu_;
-    
+
     JammingActiveMenu jammingActiveMenu_;
     BeaconSpamActiveMenu beaconSpamActiveMenu_;
     DeauthActiveMenu deauthActiveMenu_;
@@ -138,9 +136,8 @@ private:
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
-    DuckyScriptActiveMenu duckyScriptActiveMenu_; // RENAMED
+    DuckyScriptActiveMenu duckyScriptActiveMenu_;
 
-    // --- NEW GENERIC LIST MENU SYSTEM ---
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;

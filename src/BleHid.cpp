@@ -1,24 +1,23 @@
 #include "DuckyScriptRunner.h"
 #include <BleKeyboard.h>
 
-// This class now acts as a wrapper around the BleKeyboard object
-// managed by the BleManager.
-
-BleHid::BleHid(BleKeyboard* keyboard) : bleKeyboard_(keyboard) {}
+BleHid::BleHid(BleKeyboard* keyboard) : bleKeyboard_(keyboard) {
+    // No more reset(), just assign the raw pointer
+}
 
 BleHid::~BleHid() {
-    // Do not delete bleKeyboard_, it is owned and managed by BleManager
+    // Nothing to do, as we don't own the pointer
 }
 
 bool BleHid::begin() {
-    // The BleKeyboard object is already "begun" by the BleManager task.
-    // This method is just for interface compatibility.
+    // The BleManager handles the lifecycle of the keyboard object now.
+    // This begin() is part of the HIDInterface but may not be needed
+    // for BLE in this new model. We'll leave it as a no-op for safety.
     return bleKeyboard_ != nullptr;
 }
 
 void BleHid::end() {
-    // The BleKeyboard object will be "ended" by the BleManager task.
-    // This method is just for interface compatibility.
+    // BleManager handles this.
 }
 
 size_t BleHid::press(uint8_t k) {

@@ -3,7 +3,7 @@
 #include "UI_Utils.h"
 #include "Jammer.h"
 #include "BleSpammer.h"
-#include "DuckyScriptRunner.h" // UPDATED
+#include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
 #include <algorithm>
 #include <cmath>
@@ -27,7 +27,6 @@ App::App() :
     settingsMenu_("Settings", {
         MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE, 
             [](App *app) {
-                // --- MODIFIED: Use the data source now ---
                 app->getWifiListDataSource().setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
@@ -54,7 +53,7 @@ App::App() :
         MenuItem{"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_TOOLS_GRID},
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
         MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
-        MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE}, // <-- MODIFIED
+        MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", {
@@ -93,20 +92,17 @@ App::App() :
     hostToolsMenu_("Host Tools", {
         MenuItem{"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
-                // Configure the data source for USB mode before showing the list
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
         MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
             [](App* app){
-                // Configure the data source for BLE mode before showing the list
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
-        // --- PLACEHOLDERS FOR FUTURE FEATURES ---
-        MenuItem{"BLE Keyboard", IconType::NONE, MenuType::NONE}, // TODO: Link to BLE_KEYBOARD_MAPPER_ACTIVE
-        MenuItem{"BLE Media", IconType::NONE, MenuType::NONE},    // TODO: Link to BLE_MEDIA_CONTROLLER_ACTIVE
-        MenuItem{"BLE Scroller", IconType::NONE, MenuType::NONE}, // TODO: Link to BLE_SCROLL_HELPER_ACTIVE
+        MenuItem{"BLE Keyboard", IconType::NONE, MenuType::NONE},
+        MenuItem{"BLE Media", IconType::NONE, MenuType::NONE},
+        MenuItem{"BLE Scroller", IconType::NONE, MenuType::NONE},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
@@ -136,7 +132,7 @@ App::App() :
                 {
                     jammerMenu->setJammingModeToStart(JammingMode::BLE);
                     JammerConfig cfg;
-                    cfg.technique = JammingTechnique::NOISE_INJECTION; // Correct for BLE
+                    cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
@@ -147,7 +143,7 @@ App::App() :
                 if (jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
                     JammerConfig cfg;
-                    cfg.technique = JammingTechnique::CONSTANT_CARRIER; // Correct for BT
+                    cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
@@ -158,7 +154,7 @@ App::App() :
                 if (jammerMenu) {
                     jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
                     JammerConfig cfg;
-                    cfg.technique = JammingTechnique::NOISE_INJECTION; // --- REVERTED FOR FAST SWEEP ---
+                    cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
@@ -170,7 +166,7 @@ App::App() :
                 {
                     jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
                     JammerConfig cfg;
-                    cfg.technique = JammingTechnique::CONSTANT_CARRIER; // Correct for wide sweep
+                    cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
@@ -182,7 +178,6 @@ App::App() :
                     {
                         jammerMenu->setJammingModeToStart(JammingMode::ZIGBEE);
                         JammerConfig cfg;
-                        // The sample code uses noise injection (sending junk packets).
                         cfg.technique = JammingTechnique::NOISE_INJECTION;
                         jammerMenu->setJammingConfig(cfg);
                         app->changeMenu(MenuType::JAMMING_ACTIVE);
@@ -269,7 +264,6 @@ void App::setup()
     delay(100);
     Wire.begin();
 
-    // Initialize displays early for boot screen
     hardware_.getMainDisplay().begin();
     hardware_.getMainDisplay().enableUTF8Print();
     hardware_.getSmallDisplay().begin();
@@ -277,8 +271,6 @@ void App::setup()
 
     logToSmallDisplay("Kiva Boot Agent v1.0", nullptr);
 
-    // --- NEW TASK-DRIVEN BOOT SEQUENCE ---
-    // This structure links visual progress to actual initialization tasks.
     struct BootTask {
         const char* name;
         std::function<void()> action;
@@ -296,51 +288,39 @@ void App::setup()
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
-        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
-        {"BLE Manager",     [&](){ bleManager_.setup(this); }}
+        {"BLE Manager",     [&](){ bleManager_.setup(this); }}, // <-- MOVED UP
+        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }}, // <-- MOVED DOWN
+        {"BadUSB",          [&](){ duckyRunner_.setup(this); }} // <-- MOVED DOWN
     };
 
     int totalTasks = bootTasks.size();
-    U8G2 &mainDisplay = hardware_.getMainDisplay(); // Get main display once
+    U8G2 &mainDisplay = hardware_.getMainDisplay();
     int progressBarDrawableWidth = mainDisplay.getDisplayWidth() - 40 - 2;
 
     for (int i = 0; i < totalTasks; ++i) {
-        // Log task start on small display
         logToSmallDisplay(bootTasks[i].name, "INIT");
-
-        // Execute the actual initialization task
         bootTasks[i].action();
         
-        // Animate the progress bar on the main display to show completion
         float targetFillPx = (float)(i + 1) / totalTasks * progressBarDrawableWidth;
         while (currentProgressBarFillPx_ < targetFillPx - 0.5f) {
             float diff = targetFillPx - currentProgressBarFillPx_;
-            currentProgressBarFillPx_ += diff * 0.2f; // simple ease-out
+            currentProgressBarFillPx_ += diff * 0.2f;
             if (currentProgressBarFillPx_ > targetFillPx) currentProgressBarFillPx_ = targetFillPx;
-
-            // This function now correctly draws ONLY to the main display
-            updateAndDrawBootScreen(0, 0); // Pass dummy values, as progress is now external
+            updateAndDrawBootScreen(0, 0);
             delay(10); 
         }
-        currentProgressBarFillPx_ = targetFillPx; // Snap to final position for this step
-
-        // Log task completion on small display
+        currentProgressBarFillPx_ = targetFillPx;
         logToSmallDisplay(bootTasks[i].name, "OK");
-        delay(30); // Small pause so the "OK" is readable
+        delay(30);
     }
     
-    // Final draw at 100%
     currentProgressBarFillPx_ = progressBarDrawableWidth;
     updateAndDrawBootScreen(0, 0);
-
     logToSmallDisplay("KivaOS Loading...");
     delay(500);
 
-    // --- Boot Sequence End. Register menus ---
     LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing menus.");
     
-    // Register all menus
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
@@ -398,7 +378,6 @@ void App::loop()
     bleSpammer_.loop();
     duckyRunner_.loop();
 
-    // --- FINAL, CORRECTED POWER MANAGEMENT LOGIC ---
     bool wifiIsRequired = false; 
     if (currentMenu_)
     {
@@ -415,7 +394,6 @@ void App::loop()
         }
     }
     
-    // Also keep the radio on if any BACKGROUND WIFI task is active.
     if (wifiManager_.getState() == WifiState::CONNECTED || 
         beaconSpammer_.isActive() ||
         deauther_.isActive() || 
@@ -426,22 +404,13 @@ void App::loop()
         wifiIsRequired = true;
     }
 
-    // --- THIS IS THE CRITICAL FIX ---
-    // Check if any HOST peripheral (BLE/USB) is active before touching the radio.
-    // The HardwareManager is the single source of truth for this.
-    // NOTE: This check doesn't exist in HardwareManager, so we need to add a getter.
-    // For now, we can check the DuckyScriptRunner directly. Let's add the getter later.
-    bool hostIsActive = duckyRunner_.isActive(); // We'll improve this in Step 2
+    bool hostIsActive = duckyRunner_.isActive();
 
-    // Auto-disable radio ONLY if it's enabled for WiFi, AND no WiFi task needs it,
-    // AND no Host peripheral (BLE) needs it.
     if (!wifiIsRequired && !hostIsActive && wifiManager_.isHardwareEnabled())
     {
         LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
         wifiManager_.setHardwareState(false);
     }
-    // --- END CRITICAL FIX ---
-
 
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
@@ -456,7 +425,6 @@ void App::loop()
         currentMenu_->onUpdate(this);
     }
 
-    // --- PERFORMANCE MODE RENDERING THROTTLE ---
     bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
                     evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive() ||
                     duckyRunner_.isActive();
@@ -471,7 +439,6 @@ void App::loop()
     U8G2 &mainDisplay = hardware_.getMainDisplay();
     mainDisplay.clearBuffer();
 
-    // --- NEW MODULAR STATUS BAR DRAWING LOGIC ---
     IMenu *menuForUI = currentMenu_;
     IMenu *underlyingMenu = nullptr;
 

@@ -1,7 +1,6 @@
 #ifndef DUCKY_SCRIPT_RUNNER_H
 #define DUCKY_SCRIPT_RUNNER_H
 
-#include "HardwareManager.h"
 #include "SdCardManager.h"
 #include <string>
 #include <memory>
@@ -12,7 +11,7 @@ class USBHIDKeyboard;
 class BleKeyboard;
 class App;
 
-// --- HID Interface (Restored) ---
+// --- HID Interface ---
 class HIDInterface {
 public:
     enum class Type { USB, BLE };
@@ -30,7 +29,7 @@ public:
 // --- Concrete BLE HID Implementation ---
 class BleHid : public HIDInterface {
 public:
-    BleHid(BleKeyboard* keyboard); // Constructor takes a pointer
+    BleHid(BleKeyboard* keyboard);
     ~BleHid();
     bool begin() override;
     void end() override;
@@ -41,7 +40,7 @@ public:
     bool isConnected() override;
     Type getType() const override { return Type::BLE; }
 private:
-    BleKeyboard* bleKeyboard_; // Stores a pointer, doesn't own it
+    BleKeyboard* bleKeyboard_; // Does NOT own the keyboard object
 };
 
 // --- Concrete USB HID Implementation ---
@@ -84,7 +83,6 @@ public:
     void setup(App* app);
     void loop();
 
-    // --- Back to original, powerful startScript ---
     bool startScript(const std::string& scriptPath, Mode mode);
     void stopScript();
 
@@ -101,7 +99,7 @@ private:
     App* app_;
     SdCardManager::LineReader scriptReader_;
     
-    std::unique_ptr<HIDInterface> activeHid_; // Manages the active interface
+    std::unique_ptr<HIDInterface> activeHid_;
     
     State state_;
     Mode currentMode_;

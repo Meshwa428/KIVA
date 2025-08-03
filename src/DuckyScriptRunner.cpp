@@ -66,7 +66,6 @@ static const DuckyCombination duckyCombos[] = {
     {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT, 0}
 };
 
-
 DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
 
 void DuckyScriptRunner::setup(App* app) { app_ = app; }
@@ -78,33 +77,18 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     currentMode_ = mode;
 
     if (mode == Mode::BLE) {
-        if (!app_->getBleManager().requestKeyboard()) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "BLE Manager denied or timed out keyboard request.");
-            return false;
-        }
-        
-        BleKeyboard* kb = app_->getBleManager().getKeyboard();
-        if (!kb) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "Manager reported success but keyboard is null.");
-            app_->getBleManager().releaseKeyboard();
-            return false;
-        }
-        activeHid_.reset(new BleHid(kb));
+        // <-- FIX: The call to startKeyboard() is now void. 
+        // It just initiates the process.
+        app_->getBleManager().startKeyboard();
+        activeHid_.reset(new BleHid(app_->getBleManager().getKeyboard()));
     } else { // USB Mode
-        // --- RESTORED: USB needs to request control from HardwareManager ---
-        if (!app_->getHardwareManager().requestHostControl(HostClient::USB_HID)) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "Failed to acquire USB host control.");
-            return false;
-        }
         activeHid_.reset(new UsbHid());
     }
     
     if (!activeHid_ || !activeHid_->begin()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
         if (mode == Mode::BLE) {
-            app_->getBleManager().releaseKeyboard();
-        } else if (mode == Mode::USB) {
-            app_->getHardwareManager().releaseHostControl();
+            app_->getBleManager().stopKeyboard();
         }
         activeHid_.reset();
         return false;
@@ -125,22 +109,21 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     defaultDelay_ = 100;
     lastLine_ = "";
     
-    app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
 void DuckyScriptRunner::stopScript() {
     if (!isActive()) return;
     
+    LOG(LogLevel::INFO, "DuckyRunner", "Stopping script...");
+
     if (activeHid_) {
         activeHid_->releaseAll();
         activeHid_->end();
     }
     
     if (currentMode_ == Mode::BLE) {
-        app_->getBleManager().releaseKeyboard();
-    } else if (currentMode_ == Mode::USB) {
-        app_->getHardwareManager().releaseHostControl();
+        app_->getBleManager().stopKeyboard();
     }
 
     activeHid_.reset();
@@ -148,7 +131,7 @@ void DuckyScriptRunner::stopScript() {
     state_ = State::IDLE;
     currentLine_ = "";
     scriptName_ = "";
-    app_->getHardwareManager().setPerformanceMode(false);
+    LOG(LogLevel::INFO, "DuckyRunner", "Script stopped and resources released.");
 }
 
 void DuckyScriptRunner::loop() {
@@ -183,7 +166,6 @@ void DuckyScriptRunner::loop() {
 
 void DuckyScriptRunner::parseAndExecute(const std::string& line) {
     if (!activeHid_) return;
-
     std::string command;
     std::string arg;
     size_t firstSpace = line.find(' ');
@@ -195,7 +177,6 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
     }
     if (command == "REM") return;
     if (command != "REPEAT") lastLine_ = line;
-    
     for (const auto& cmd : duckyCmds) {
         if (command == cmd.command) {
             switch (cmd.type) {

@@ -11,7 +11,7 @@ UsbHid::~UsbHid() {
 }
 
 bool UsbHid::begin() {
-    USB.begin(); // USB stack is simple and can be started here
+    USB.begin();
     usb_keyboard_->begin();
     return true;
 }
