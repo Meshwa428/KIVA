@@ -12,7 +12,7 @@ CarouselMenu::CarouselMenu(std::string title, std::vector<MenuItem> items) :
 {
     if (title == "Tools") menuType_ = MenuType::TOOLS_CAROUSEL;
     else if (title == "Games") menuType_ = MenuType::GAMES_CAROUSEL;
-    else if (title == "Settings") menuType_ = MenuType::SETTINGS_CAROUSEL;
+    else if (title == "Settings") menuType_ = MenuType::SETTINGS;
     else if (title == "Utilities") menuType_ = MenuType::UTILITIES_CAROUSEL;
     else menuType_ = MenuType::NONE;
 }

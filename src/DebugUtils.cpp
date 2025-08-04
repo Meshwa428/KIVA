@@ -10,7 +10,7 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::POPUP: return "POPUP";
         case MenuType::TOOLS_CAROUSEL: return "TOOLS_CAROUSEL";
         case MenuType::GAMES_CAROUSEL: return "GAMES_CAROUSEL";
-        case MenuType::SETTINGS_CAROUSEL: return "SETTINGS_CAROUSEL";
+        case MenuType::SETTINGS: return "SETTINGS";
         case MenuType::UTILITIES_CAROUSEL: return "UTILITIES_CAROUSEL";
         case MenuType::WIFI_TOOLS_GRID: return "WIFI_TOOLS_GRID";
         case MenuType::JAMMING_TOOLS_GRID: return "JAMMING_TOOLS_GRID";

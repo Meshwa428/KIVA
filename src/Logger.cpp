@@ -92,36 +92,5 @@ void Logger::manageLogFiles() {
     }
 }
 
-void Logger::log(LogLevel level, const char* component, const char* format, ...) {
-    char buffer[256];
-    char levelChar;
-
-    switch(level) {
-        case LogLevel::DEBUG: levelChar = 'D'; break;
-        case LogLevel::INFO:  levelChar = 'I'; break;
-        case LogLevel::WARN:  levelChar = 'W'; break;
-        case LogLevel::ERROR: levelChar = 'E'; break;
-        default:              levelChar = '?'; break;
-    }
-
-    // Format the log message with timestamp, level, component, etc.
-    int prefixLen = snprintf(buffer, sizeof(buffer), "%lu [%c] [%s] ", millis(), levelChar, component);
-
-    // Format the user's message
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, format, args);
-    va_end(args);
-
-    // Print to Serial monitor
-    Serial.println(buffer);
-
-    // Print to SD card file
-    if (isInitialized_ && !currentLogFile_.isEmpty()) {
-        File logFile = SdCardManager::openFile(currentLogFile_.c_str(), FILE_APPEND);
-        if (logFile) {
-            logFile.println(buffer);
-            logFile.close();
-        }
-    }
-}
+// The log function implementation is now in the header file because it's a template.
+// This .cpp file now only contains setup, manageLogFiles, and the constructor.

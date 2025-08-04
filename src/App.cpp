@@ -24,15 +24,15 @@ App::App() :
         MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::NONE},
         MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::NONE},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
-    settingsMenu_("Settings", {
-        MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE, 
-            [](App *app) {
-                app->getWifiListDataSource().setScanOnEnter(true);
-                app->changeMenu(MenuType::WIFI_LIST);
-            }},
-        MenuItem{"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
-        MenuItem{"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
+    // settingsMenu_("Settings", {
+    //     MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE, 
+    //         [](App *app) {
+    //             app->getWifiListDataSource().setScanOnEnter(true);
+    //             app->changeMenu(MenuType::WIFI_LIST);
+    //         }},
+    //     MenuItem{"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
+    //     MenuItem{"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
+    //     MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     utilitiesMenu_("Utilities", {
         MenuItem{"Vibration", IconType::UI_VIBRATION, MenuType::NONE,
             [](App *app) {
@@ -48,6 +48,8 @@ App::App() :
                 }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
+    settingsMenu_(),
+    brightnessMenu_(),
     wifiToolsMenu_("WiFi Tools", {
         MenuItem{"Beacon Spam", IconType::TOOL_JAMMING, MenuType::BEACON_MODE_SELECTION},
         MenuItem{"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_TOOLS_GRID},
@@ -279,6 +281,7 @@ void App::setup()
     std::vector<BootTask> bootTasks = {
         {"SD Card",         [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
         {"Hardware Manager",[&](){ hardware_.setup(); }},
+        {"Config Manager",  [&](){ configManager_.setup(this); }},
         {"Logger",          [&](){ Logger::getInstance().setup(); }},
         {"WiFi System",     [&](){ wifiManager_.setup(this); }},
         {"OTA System",      [&](){ otaManager_.setup(this, &wifiManager_); }},
@@ -324,7 +327,9 @@ void App::setup()
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
-    menuRegistry_[MenuType::SETTINGS_CAROUSEL] = &settingsMenu_;
+    // menuRegistry_[MenuType::SETTINGS_CAROUSEL] = &settingsMenu_;
+    menuRegistry_[MenuType::SETTINGS] = &settingsMenu_;
+    menuRegistry_[MenuType::BRIGHTNESS_MENU] = &brightnessMenu_;
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
 
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
@@ -414,7 +419,8 @@ void App::loop()
 
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
-        LOG(LogLevel::DEBUG, "Input", "Event: %s", DebugUtils::inputEventToString(event));
+        LOG(LogLevel::DEBUG, "Input", false, "Event: %s", DebugUtils::inputEventToString(event));
+        // Serial.printf("Event: %s\n", DebugUtils::inputEventToString(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
         }

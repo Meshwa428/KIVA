@@ -1,0 +1,180 @@
+#include "SettingsMenu.h"
+#include "App.h"
+#include "UI_Utils.h"
+#include "ConfigManager.h"
+#include "Firmware.h"
+
+SettingsMenu::SettingsMenu() : 
+    selectedIndex_(0)
+{
+    menuItems_ = {
+        // The 'isSlider' flag is now used to identify this item for special input handling
+        {"Brightness", MenuType::NONE, nullptr, true}, 
+        {"KB Layout", MenuType::NONE, nullptr, false},
+        {"OTA Password", MenuType::NONE, nullptr, false},
+        {"WiFi Settings", MenuType::WIFI_LIST, nullptr, false},
+        {"Firmware Update", MenuType::FIRMWARE_UPDATE_GRID, nullptr, false},
+        {"System Info", MenuType::NONE, nullptr, false},
+        {"Back", MenuType::BACK, nullptr, false}
+    };
+}
+
+void SettingsMenu::onEnter(App* app, bool isForwardNav) {
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+    }
+    animation_.init();
+    animation_.startIntro(selectedIndex_, menuItems_.size());
+}
+
+void SettingsMenu::onUpdate(App* app) {
+    animation_.update();
+}
+
+void SettingsMenu::onExit(App* app) {}
+
+void SettingsMenu::handleInput(App* app, InputEvent event) {
+    const auto& selectedItem = menuItems_[selectedIndex_];
+
+    // Unified input handling for items with < > selectors
+    if (selectedItem.isSlider || selectedItem.label == "KB Layout") {
+        if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
+            if (selectedItem.label == "Brightness") changeBrightness(app, -13, "Unified");
+            else if (selectedItem.label == "KB Layout") changeKeyboardLayout(app, -1);
+            return;
+        }
+        if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
+            if (selectedItem.label == "Brightness") changeBrightness(app, 13, "Unified");
+            else if (selectedItem.label == "KB Layout") changeKeyboardLayout(app, 1);
+            return;
+        }
+    }
+
+    switch(event) {
+        case InputEvent::BTN_DOWN_PRESS: scroll(1); break;
+        case InputEvent::BTN_UP_PRESS: scroll(-1); break;
+        
+        // --- THIS IS THE FIX ---
+        // BTN_A_PRESS is now grouped with OK/Encoder Press for specific actions
+        case InputEvent::BTN_A_PRESS:
+        case InputEvent::BTN_OK_PRESS:
+        case InputEvent::BTN_ENCODER_PRESS:
+            if (selectedItem.label == "Brightness") {
+                // This is the action for A, OK, and Encoder press on the Brightness item
+                app->changeMenu(MenuType::BRIGHTNESS_MENU);
+            }
+            else if (selectedItem.label == "OTA Password") {
+                TextInputMenu& textMenu = app->getTextInputMenu();
+                textMenu.configure("New OTA Password", 
+                    [](App* cb_app, const char* new_password) {
+                        if (strlen(new_password) > 0 && strlen(new_password) < Firmware::MIN_AP_PASSWORD_LEN) {
+                            cb_app->showPopUp("Error", "Password must be at least 8 characters.", nullptr, "OK", "", true);
+                        } else {
+                            auto& settings = cb_app->getConfigManager().getSettings();
+                            strlcpy(settings.otaPassword, new_password, sizeof(settings.otaPassword));
+                            cb_app->getConfigManager().saveSettings();
+                            cb_app->showPopUp("Success", "OTA Password Saved.", nullptr, "OK", "", true);
+                        }
+                    }, 
+                    false,
+                    app->getConfigManager().getSettings().otaPassword
+                );
+                app->changeMenu(MenuType::TEXT_INPUT);
+            } 
+            else if (selectedItem.action) {
+                selectedItem.action(app);
+            } else if (selectedItem.targetMenu != MenuType::NONE) {
+                app->changeMenu(selectedItem.targetMenu);
+            }
+            break;
+        case InputEvent::BTN_BACK_PRESS: app->changeMenu(MenuType::MAIN); break;
+        default: break;
+    }
+}
+
+void SettingsMenu::scroll(int direction) {
+    if (menuItems_.empty()) return;
+    selectedIndex_ = (selectedIndex_ + direction + menuItems_.size()) % menuItems_.size();
+    animation_.setTargets(selectedIndex_, menuItems_.size());
+}
+
+void SettingsMenu::changeBrightness(App* app, int delta, const std::string& target) {
+    auto& settings = app->getConfigManager().getSettings();
+    
+    if (target == "Unified") {
+        int newVal = settings.mainDisplayBrightness + delta;
+        if (newVal < 0) newVal = 0;
+        if (newVal > 255) newVal = 255;
+        
+        settings.mainDisplayBrightness = newVal;
+        settings.auxDisplayBrightness = newVal;
+    } 
+    
+    app->getConfigManager().saveSettings();
+}
+
+void SettingsMenu::changeKeyboardLayout(App* app, int direction) {
+    auto& configManager = app->getConfigManager();
+    auto& settings = configManager.getSettings();
+    int numLayouts = configManager.getKeyboardLayouts().size();
+    
+    settings.keyboardLayoutIndex = (settings.keyboardLayoutIndex + direction + numLayouts) % numLayouts;
+    configManager.saveSettings();
+}
+
+void SettingsMenu::draw(App* app, U8G2& display) {
+    const int list_start_y = STATUS_BAR_H + 1;
+    const int item_h = 18;
+
+    display.setClipWindow(0, list_start_y, 127, 63);
+    display.setFont(u8g2_font_6x10_tf);
+
+    for (size_t i = 0; i < menuItems_.size(); ++i) {
+        int item_center_y_rel = (int)animation_.itemOffsetY[i];
+        float scale = animation_.itemScale[i];
+        if (scale <= 0.01f) continue;
+        
+        int item_center_y_abs = (list_start_y + (63 - list_start_y) / 2) + item_center_y_rel;
+        int item_top_y = item_center_y_abs - item_h / 2;
+
+        if (item_top_y > 63 || item_top_y + item_h < list_start_y) continue;
+        
+        bool isSelected = (i == selectedIndex_);
+        const auto& item = menuItems_[i];
+
+        if (isSelected) {
+            drawRndBox(display, 2, item_top_y, 124, item_h, 2, true);
+            display.setDrawColor(0);
+        } else {
+            display.setDrawColor(1);
+        }
+
+        auto& configManager = app->getConfigManager();
+        auto& settings = configManager.getSettings();
+        
+        // --- Draw the left-aligned label ---
+        display.drawStr(8, item_center_y_abs + 4, item.label.c_str());
+
+        // --- Draw the right-aligned value selector ---
+        std::string valueText;
+        if (item.label == "Brightness") {
+            int percent = map(settings.mainDisplayBrightness, 0, 255, 0, 100);
+            char buf[16];
+            snprintf(buf, sizeof(buf), "< %d%% >", percent);
+            valueText = buf;
+        } 
+        else if (item.label == "KB Layout") {
+            const auto& layouts = configManager.getKeyboardLayouts();
+            const std::string& layoutName = layouts[settings.keyboardLayoutIndex].first;
+            valueText = "< " + layoutName + " >";
+        }
+
+        if (!valueText.empty()) {
+            int text_w = display.getStrWidth(valueText.c_str());
+            display.drawStr(128 - text_w - 8, item_center_y_abs + 4, valueText.c_str());
+        }
+    }
+    
+    display.setDrawColor(1);
+    display.setMaxClipWindow();
+}

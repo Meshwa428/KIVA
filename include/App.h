@@ -39,8 +39,11 @@
 #include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
+#include "BleManager.h" 
+#include "SettingsMenu.h"
+#include "BrightnessMenu.h"
+#include "ConfigManager.h"
 #include "Logger.h"
-#include "BleManager.h" // Add this
 
 class App
 {
@@ -65,7 +68,8 @@ public:
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
-    BleManager &getBleManager() { return bleManager_; } // Add this
+    BleManager &getBleManager() { return bleManager_; }
+    ConfigManager &getConfigManager() { return configManager_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -98,7 +102,8 @@ private:
     KarmaAttacker karmaAttacker_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_; // Add this
+    BleManager bleManager_;
+    ConfigManager configManager_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -110,7 +115,7 @@ private:
 
     CarouselMenu toolsMenu_;
     CarouselMenu gamesMenu_;
-    CarouselMenu settingsMenu_;
+    // CarouselMenu settingsMenu_;
     CarouselMenu utilitiesMenu_;
 
     GridMenu wifiToolsMenu_;
@@ -119,6 +124,9 @@ private:
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
     GridMenu deauthToolsMenu_;
+
+    SettingsMenu settingsMenu_;
+    BrightnessMenu brightnessMenu_;
 
     SplitSelectionMenu beaconModeMenu_;
 
