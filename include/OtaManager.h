@@ -63,6 +63,8 @@ private:
     void onUpdateEnd(AsyncWebServerRequest *request);
     void onRoot(AsyncWebServerRequest *request);
 
+    const char* getEffectiveOtaPassword();
+
     App* app_;
     WifiManager* wifiManager_;
     AsyncWebServer webServer_;

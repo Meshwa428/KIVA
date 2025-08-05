@@ -19,8 +19,11 @@ void TextInputMenu::configure(std::string title, OnSubmitCallback callback, bool
     title_ = title;
     onSubmit_ = callback;
     maskInput_ = maskInput;
-    strncpy(inputBuffer_, initial_text, sizeof(inputBuffer_) - 1);
-    inputBuffer_[sizeof(inputBuffer_) - 1] = '\0';
+    
+    memset(inputBuffer_, 0, sizeof(inputBuffer_));
+    if (initial_text) {
+        strncpy(inputBuffer_, initial_text, sizeof(inputBuffer_) - 1);
+    }
     cursorPosition_ = strlen(inputBuffer_);
 }
 
@@ -34,7 +37,7 @@ void TextInputMenu::onEnter(App* app, bool isForwardNav) {
 void TextInputMenu::onUpdate(App* app) {}
 
 void TextInputMenu::onExit(App* app) {
-    inputBuffer_[0] = '\0';
+    memset(inputBuffer_, 0, sizeof(inputBuffer_));
     onSubmit_ = nullptr;
 }
 
@@ -54,22 +57,21 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_DOWN_PRESS:
             moveFocus(1, 0);
             break;
-        case InputEvent::BTN_A_PRESS: // NAV_A is now SHIFT
+        case InputEvent::BTN_A_PRESS: 
             processKeyPress(KB_KEY_SHIFT);
             break;
-        case InputEvent::BTN_B_PRESS: // NAV_B is now CYCLE
+        case InputEvent::BTN_B_PRESS: 
             processKeyPress(KB_KEY_CYCLE_LAYOUT);
             break;
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
                 const KeyboardKey& key = KeyboardLayout::getKey(KeyboardLayout::getLayout(currentLayer_), focusRow_, focusCol_);
+                
                 if (key.value == KB_KEY_ENTER) {
                     if (onSubmit_) {
-                        // 1. Execute the callback to start the connection
-                        onSubmit_(app, inputBuffer_); 
-                        // 2. Immediately change to the status screen
-                        app->changeMenu(MenuType::WIFI_CONNECTION_STATUS); 
+                        OnSubmitCallback callback_copy = onSubmit_;
+                        callback_copy(app, inputBuffer_);
                     }
                 } else {
                     processKeyPress(key.value);
@@ -78,8 +80,6 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_BACK_PRESS:
             {
-                // --- MODIFIED ---
-                app->getWifiListDataSource().setScanOnEnter(false);
                 app->changeMenu(MenuType::BACK);
             }
             break;
@@ -113,11 +113,10 @@ void TextInputMenu::processKeyPress(int keyValue) {
                  }
                 break;
             case KB_KEY_SHIFT:
-                // This now handles both the virtual shift key and NAV_A
                 if (currentLayer_ == KeyboardLayer::LOWERCASE) currentLayer_ = KeyboardLayer::UPPERCASE;
                 else if (currentLayer_ == KeyboardLayer::UPPERCASE) currentLayer_ = KeyboardLayer::LOWERCASE;
                 break;
-            case KB_KEY_CYCLE_LAYOUT: // This now handles NAV_B
+            case KB_KEY_CYCLE_LAYOUT: 
                 if (currentLayer_ == KeyboardLayer::LOWERCASE || currentLayer_ == KeyboardLayer::UPPERCASE) {
                     currentLayer_ = KeyboardLayer::NUMBERS;
                 } else if (currentLayer_ == KeyboardLayer::NUMBERS) {
@@ -125,7 +124,7 @@ void TextInputMenu::processKeyPress(int keyValue) {
                 } else if (currentLayer_ == KeyboardLayer::SYMBOLS) {
                     currentLayer_ = KeyboardLayer::LOWERCASE;
                 }
-                capsLock_ = false; // Always turn off caps lock when cycling
+                capsLock_ = false;
                 focusRow_ = 0;
                 focusCol_ = 0;
                 break;
@@ -143,19 +142,15 @@ void TextInputMenu::moveFocus(int dRow, int dCol) {
     int oldCol = focusCol_;
 
     int newRow = focusRow_ + dRow;
-    newRow = (newRow + KB_ROWS) % KB_ROWS; // Wrap around rows
+    newRow = (newRow + KB_ROWS) % KB_ROWS; 
 
     int newCol = focusCol_ + dCol;
     
-    // --- INTELLIGENT NAVIGATION LOGIC ---
-
-    // Handle Left/Right movement
     if (dCol != 0) {
         int direction = (dCol > 0) ? 1 : -1;
         int attempts = 0;
         do {
             newCol = (focusCol_ + direction + KB_LOGICAL_COLS) % KB_LOGICAL_COLS;
-            // When moving right from a wide key, jump to the key after it
             if (direction > 0) {
                 const KeyboardKey& currentKey = KeyboardLayout::getKey(layout, focusRow_, focusCol_);
                 if(currentKey.colSpan > 1) {
@@ -168,13 +163,10 @@ void TextInputMenu::moveFocus(int dRow, int dCol) {
         } while (attempts < KB_LOGICAL_COLS);
     }
     
-    // Handle Up/Down movement
     if (dRow != 0) {
         focusRow_ = newRow;
-        // After moving up/down, find the key that occupies the same horizontal space
         const KeyboardKey& sourceKey = KeyboardLayout::getKey(layout, oldRow, oldCol);
-        int sourceKeyCenter = oldCol * 12 + (sourceKey.colSpan * 12) / 2; // Approximate center
-
+        int sourceKeyCenter = oldCol * 12 + (sourceKey.colSpan * 12) / 2;
         int bestMatchCol = 0;
         int smallestDist = 1000;
 
@@ -246,8 +238,7 @@ void TextInputMenu::drawKeyboard(U8G2& display) {
         for (int c = 0; c < KB_LOGICAL_COLS;) {
             const KeyboardKey& key = KeyboardLayout::getKey(layout, r, c);
             if (key.colSpan == 0) { c++; continue; }
-
-            // Use the exact drawing logic from your reference code
+            
             int keyW = key.colSpan * keyWidthBase + (key.colSpan - 1) * interKeySpacingX;
             if (currentX + keyW > display.getDisplayWidth()) {
                 keyW = display.getDisplayWidth() - currentX;

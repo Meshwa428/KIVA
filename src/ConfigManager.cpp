@@ -74,6 +74,7 @@ void ConfigManager::loadFromEEPROM() {
     }
 
     EEPROM.get(sizeof(uint32_t), settings_);
+    settings_.otaPassword[sizeof(settings_.otaPassword) - 1] = '\0';
     isEepromValid_ = true;
 }
 
@@ -133,6 +134,24 @@ void ConfigManager::useDefaultSettings() {
     strcpy(settings_.otaPassword, "KIVA_PASS");
 }
 
+bool ConfigManager::reloadFromSdCard() {
+    // Attempt to load settings from the SD card.
+    // The private loadFromSdCard() function sets the isEepromValid_ flag on success.
+    loadFromSdCard();
+    
+    if (isEepromValid_) {
+        // If the load was successful, sync the newly loaded settings to the EEPROM.
+        LOG(LogLevel::INFO, "CONFIG", "Manually reloaded from SD. Syncing to EEPROM.");
+        saveToEEPROM();
+        // And apply them immediately to the hardware (e.g., brightness).
+        applySettings();
+        return true; // Report success
+    } else {
+        // If the load failed (e.g., file not found or corrupt), report failure.
+        LOG(LogLevel::WARN, "CONFIG", "Manual reload from SD failed. File might be invalid.");
+        return false;
+    }
+}
 
 DeviceSettings& ConfigManager::getSettings() {
     return settings_;

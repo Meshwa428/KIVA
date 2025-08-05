@@ -45,11 +45,8 @@ HardwareManager::HardwareManager() :
 
 void HardwareManager::setup()
 {
-    // Correctly initialize PCF0 outputs (laser/vibration motor off)
-    pcf0_output_state_ = 0xFF;
-    pcf0_output_state_ &= ~((1 << Pins::LASER_PIN_PCF0) | (1 << Pins::MOTOR_PIN_PCF0));
-    selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
-    writePCF(Pins::PCF0_ADDR, pcf0_output_state_);
+    setLaser(false);
+    setVibration(false);
 
     // Initialize PCF1 for inputs
     selectMux(Pins::MUX_CHANNEL_PCF1_NAV);

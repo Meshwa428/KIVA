@@ -557,6 +557,31 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
     }
 }
 
+void App::replaceMenu(MenuType type) {
+    LOG(LogLevel::INFO, "NAV", "Replace: From '%s' -> To '%s'", 
+        (currentMenu_ ? DebugUtils::menuTypeToString(currentMenu_->getMenuType()) : "NULL"), 
+        DebugUtils::menuTypeToString(type));
+
+    if (currentMenu_) {
+        currentMenu_->onExit(this);
+    }
+    
+    // Pop the current menu from the stack
+    if (!navigationStack_.empty()) {
+        navigationStack_.pop_back();
+    }
+    
+    // Find and set the new menu
+    auto it = menuRegistry_.find(type);
+    if (it != menuRegistry_.end()) {
+        currentMenu_ = it->second;
+        // Push the new menu onto the stack
+        navigationStack_.push_back(type);
+        // Enter the new menu as if it were a forward navigation
+        currentMenu_->onEnter(this, true); 
+    }
+}
+
 void App::returnToMenu(MenuType type)
 {
     while (!navigationStack_.empty() && navigationStack_.back() != type)

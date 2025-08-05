@@ -8,13 +8,22 @@ SettingsMenu::SettingsMenu() :
     selectedIndex_(0)
 {
     menuItems_ = {
-        // The 'isSlider' flag is now used to identify this item for special input handling
-        {"Brightness", MenuType::NONE, nullptr, true}, 
+        {"Brightness", MenuType::NONE, nullptr, true},
         {"KB Layout", MenuType::NONE, nullptr, false},
         {"OTA Password", MenuType::NONE, nullptr, false},
         {"WiFi Settings", MenuType::WIFI_LIST, nullptr, false},
         {"Firmware Update", MenuType::FIRMWARE_UPDATE_GRID, nullptr, false},
         {"System Info", MenuType::NONE, nullptr, false},
+        // --- START OF FIX ---
+        // Add the new menu item with an action lambda.
+        {"Reload from SD", MenuType::NONE, [](App* app) {
+            if (app->getConfigManager().reloadFromSdCard()) {
+                app->showPopUp("Success", "Settings reloaded from SD card.", nullptr, "OK", "", true);
+            } else {
+                app->showPopUp("Error", "Failed to load settings from SD card.", nullptr, "OK", "", true);
+            }
+        }, false},
+        // --- END OF FIX ---
         {"Back", MenuType::BACK, nullptr, false}
     };
 }
@@ -36,16 +45,22 @@ void SettingsMenu::onExit(App* app) {}
 void SettingsMenu::handleInput(App* app, InputEvent event) {
     const auto& selectedItem = menuItems_[selectedIndex_];
 
-    // Unified input handling for items with < > selectors
-    if (selectedItem.isSlider || selectedItem.label == "KB Layout") {
+    if (selectedItem.isSlider) { 
         if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
-            if (selectedItem.label == "Brightness") changeBrightness(app, -13, "Unified");
-            else if (selectedItem.label == "KB Layout") changeKeyboardLayout(app, -1);
+            changeBrightness(app, -13, "Unified");
             return;
         }
         if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
-            if (selectedItem.label == "Brightness") changeBrightness(app, 13, "Unified");
-            else if (selectedItem.label == "KB Layout") changeKeyboardLayout(app, 1);
+            changeBrightness(app, 13, "Unified");
+            return;
+        }
+    } else if (selectedItem.label == "KB Layout") {
+        if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
+            changeKeyboardLayout(app, -1);
+            return;
+        }
+        if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
+            changeKeyboardLayout(app, 1);
             return;
         }
     }
@@ -53,19 +68,17 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
     switch(event) {
         case InputEvent::BTN_DOWN_PRESS: scroll(1); break;
         case InputEvent::BTN_UP_PRESS: scroll(-1); break;
-        
-        // --- THIS IS THE FIX ---
-        // BTN_A_PRESS is now grouped with OK/Encoder Press for specific actions
         case InputEvent::BTN_A_PRESS:
         case InputEvent::BTN_OK_PRESS:
         case InputEvent::BTN_ENCODER_PRESS:
             if (selectedItem.label == "Brightness") {
-                // This is the action for A, OK, and Encoder press on the Brightness item
                 app->changeMenu(MenuType::BRIGHTNESS_MENU);
             }
             else if (selectedItem.label == "OTA Password") {
                 TextInputMenu& textMenu = app->getTextInputMenu();
                 textMenu.configure("New OTA Password", 
+                    // --- THIS IS THE FIX ---
+                    // The callback now handles the complete logic flow.
                     [](App* cb_app, const char* new_password) {
                         if (strlen(new_password) > 0 && strlen(new_password) < Firmware::MIN_AP_PASSWORD_LEN) {
                             cb_app->showPopUp("Error", "Password must be at least 8 characters.", nullptr, "OK", "", true);
@@ -73,6 +86,7 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
                             auto& settings = cb_app->getConfigManager().getSettings();
                             strlcpy(settings.otaPassword, new_password, sizeof(settings.otaPassword));
                             cb_app->getConfigManager().saveSettings();
+                            cb_app->replaceMenu(MenuType::SETTINGS);
                             cb_app->showPopUp("Success", "OTA Password Saved.", nullptr, "OK", "", true);
                         }
                     }, 
@@ -87,7 +101,7 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
                 app->changeMenu(selectedItem.targetMenu);
             }
             break;
-        case InputEvent::BTN_BACK_PRESS: app->changeMenu(MenuType::MAIN, false); break;
+        case InputEvent::BTN_BACK_PRESS: app->changeMenu(MenuType::MAIN); break;
         default: break;
     }
 }
@@ -152,10 +166,8 @@ void SettingsMenu::draw(App* app, U8G2& display) {
         auto& configManager = app->getConfigManager();
         auto& settings = configManager.getSettings();
         
-        // --- Draw the left-aligned label ---
         display.drawStr(8, item_center_y_abs + 4, item.label.c_str());
 
-        // --- Draw the right-aligned value selector ---
         std::string valueText;
         if (item.label == "Brightness") {
             int percent = map(settings.mainDisplayBrightness, 0, 255, 0, 100);

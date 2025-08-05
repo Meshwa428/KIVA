@@ -172,18 +172,23 @@ void OtaManager::scanSdForFirmware() {
     root.close();
 }
 
+const char* OtaManager::getEffectiveOtaPassword() {
+    // This function centralizes the password logic.
+    const char* configured_password = app_->getConfigManager().getSettings().otaPassword;
+    
+    // If the configured password is valid (long enough), use it.
+    if (strlen(configured_password) >= Firmware::MIN_AP_PASSWORD_LEN) {
+        return configured_password;
+    }
+    
+    // Otherwise, fall back to the secure default.
+    return "KIVA_PASS";
+}
+
 void OtaManager::setupArduinoOta() {
     ArduinoOTA.setHostname(Firmware::OTA_HOSTNAME);
 
-    if (!SdCardManager::exists(SD_ROOT::WIFI_OTA_PASSWORD)) {
-        SdCardManager::writeFile(SD_ROOT::WIFI_OTA_PASSWORD, "KIVA_PASS");
-    }
-    
-    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
-    password.trim();
-    if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {
-        ArduinoOTA.setPassword(password.c_str());
-    }
+    ArduinoOTA.setPassword(getEffectiveOtaPassword());
 
     ArduinoOTA.onStart([this]() {
         state_ = OtaState::BASIC_ACTIVE;
@@ -232,13 +237,7 @@ void OtaManager::startBasicOta() {
     resetState();
     state_ = OtaState::BASIC_ACTIVE;
 
-    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
-    password.trim();
-    if (password.length() >= Firmware::MIN_AP_PASSWORD_LEN) {
-        statusMessage_ = "P: " + password;
-    } else {
-        statusMessage_ = "P: (none)";
-    }
+    statusMessage_ = "P: " + String(getEffectiveOtaPassword());
     
     displayIpAddress_ = WiFi.localIP().toString();
     ArduinoOTA.begin();
@@ -292,16 +291,15 @@ void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {
 bool OtaManager::startWebUpdate() {
     if (state_ != OtaState::IDLE) return false;
     resetState();
-    String password = SdCardManager::readFile(SD_ROOT::WIFI_OTA_PASSWORD);
-    password.trim();
-    if (password.length() < Firmware::MIN_AP_PASSWORD_LEN) {
-        password = "";
-    }
+
+    // --- START OF FIX ---
+    // NEW: Get the effective password to create the secure AP.
+    const char* ap_password = getEffectiveOtaPassword();
     
     char ssid[32];
     snprintf(ssid, sizeof(ssid), "%s-OTA", Firmware::OTA_HOSTNAME);
     
-    wifiManager_->setHardwareState(true, WifiMode::AP, ssid, password.c_str());
+    wifiManager_->setHardwareState(true, WifiMode::AP, ssid, ap_password);
     if(!wifiManager_->isHardwareEnabled()) {
         statusMessage_ = "Failed to start AP";
         state_ = OtaState::ERROR;
@@ -310,11 +308,8 @@ bool OtaManager::startWebUpdate() {
 
     state_ = OtaState::WEB_ACTIVE;
     displayIpAddress_ = WiFi.softAPIP().toString();
-    if (!password.isEmpty()) {
-        statusMessage_ = password;
-    } else {
-        statusMessage_ = "(none)";
-    }
+    statusMessage_ = ap_password; // Display the effective password.
+    // --- END OF FIX ---
 
     setupWebServer();
     webServer_.begin();

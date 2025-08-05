@@ -129,7 +129,7 @@ namespace SD_ROOT
 
     // Second-level and specific file paths
     static constexpr const char *WIFI_KNOWN_NETWORKS = "/config/wifi_known_networks.txt";
-    static constexpr const char *WIFI_OTA_PASSWORD = "/config/wifi_ota_password.txt";
+    // static constexpr const char *WIFI_OTA_PASSWORD = "/config/wifi_ota_password.txt";
     static constexpr const char *CONFIG_CURRENT_FIRMWARE = "/config/current_firmware.json";
 
     static constexpr const char *DATA_LOGS = "/data/logs";

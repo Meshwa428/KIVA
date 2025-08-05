@@ -22,14 +22,12 @@ void WifiListDataSource::forceReload(App* app, ListMenu* menu) {
 
 void WifiListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     WifiManager& wifi = app->getWifiManager();
-    // Only start a new scan if navigating forward AND scan is enabled for this entry.
     if (isForwardNav && scanOnEnter_) {
         wifi.startScan();
         isScanning_ = true;
         lastKnownScanCount_ = wifi.getScanCompletionCount();
-        displayItems_.clear(); // Clear items to show "Scanning..."
+        displayItems_.clear();
     } else {
-        // If not forward nav, or scan is disabled, just rebuild from current data.
         rebuildDisplayItems(app);
         isScanning_ = false;
     }
@@ -48,7 +46,7 @@ void WifiListDataSource::onUpdate(App* app, ListMenu* menu) {
         isScanning_ = false;
         lastKnownScanCount_ = currentScanCount;
         rebuildDisplayItems(app);
-        menu->reloadData(app); // Tell the menu to fetch new data and restart animation
+        menu->reloadData(app);
     }
 }
 
@@ -87,7 +85,7 @@ void WifiListDataSource::rebuildDisplayItems(App* app) {
 }
 
 int WifiListDataSource::getNumberOfItems(App* app) {
-    if (isScanning_) return 0; // Show "No items" which defaults to a message in ListMenu
+    if (isScanning_) return 0;
     return displayItems_.size();
 }
 
@@ -107,7 +105,6 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
             app->changeMenu(MenuType::BACK);
             break;
         case ListItemType::NETWORK: {
-            // --- NEW LOGIC: CHECK IF WE ARE SELECTING A DEAUTH TARGET ---
             auto& deauther = app->getDeauther();
             auto& evilTwin = app->getEvilTwin();
 
@@ -118,17 +115,17 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                 } else {
                     app->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 }
-                return; // Exit here, do not proceed to connection logic
+                return;
             }
 
             if (evilTwin.isAttackPending()) {
                 const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
                 if (evilTwin.start(netInfo)) {
-                    app->changeMenu(MenuType::EVIL_TWIN_ACTIVE); // Navigate to our new active menu
+                    app->changeMenu(MenuType::EVIL_TWIN_ACTIVE);
                 } else {
                     app->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
                 }
-                return; // Exit here
+                return;
             }
             
             if (selectedItem.label.rfind("* ", 0) == 0) {
@@ -147,8 +144,11 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                     } else {
                         TextInputMenu& textMenu = app->getTextInputMenu();
                         textMenu.configure("Enter Password",
+                            // --- THIS IS THE FIX ---
+                            // Use replaceMenu to swap TEXT_INPUT with the status screen in the navigation history.
                             [](App* cb_app, const char* password) {
                                 cb_app->getWifiManager().connectWithPassword(password);
+                                cb_app->replaceMenu(MenuType::WIFI_CONNECTION_STATUS); // <-- CHANGE THIS LINE
                             }, true);
                         app->changeMenu(MenuType::TEXT_INPUT);
                     }
@@ -167,9 +167,9 @@ bool WifiListDataSource::drawCustomEmptyMessage(App* app, U8G2& display) {
         const char *msg = "Scanning...";
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
-        return true; // We handled the drawing
+        return true;
     }
-    return false; // We didn't handle it, let ListMenu draw "No items"
+    return false;
 }
 
 void WifiListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
@@ -196,7 +196,6 @@ void WifiListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int i
     int lock_icon_width = 8;
     int text_w_avail = (x + w) - text_x - 4 - (drawLock ? lock_icon_width : 0);
 
-    // --- FIX: Use the helper function from ListMenu for text drawing ---
     menu->updateAndDrawText(display, text, text_x, text_y_base, text_w_avail, isSelected);
 
     if (drawLock) {

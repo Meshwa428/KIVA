@@ -24,6 +24,7 @@ public:
     // Load/Save operations
     void loadSettings();
     void saveSettings();
+    bool reloadFromSdCard();
 
     // Accessors
     DeviceSettings& getSettings();

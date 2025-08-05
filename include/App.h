@@ -53,6 +53,7 @@ public:
     void loop();
 
     void changeMenu(MenuType type, bool isForwardNav = true);
+    void replaceMenu(MenuType type);
     void returnToMenu(MenuType type);
 
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
