@@ -87,7 +87,7 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
                 app->changeMenu(selectedItem.targetMenu);
             }
             break;
-        case InputEvent::BTN_BACK_PRESS: app->changeMenu(MenuType::MAIN); break;
+        case InputEvent::BTN_BACK_PRESS: app->changeMenu(MenuType::MAIN, false); break;
         default: break;
     }
 }
