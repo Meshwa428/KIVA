@@ -44,6 +44,9 @@
 #include "BrightnessMenu.h"
 #include "ConfigManager.h"
 #include "UsbDriveMenu.h"
+#include "MusicPlayer.h"
+#include "MusicPlayListDataSource.h"
+#include "NowPlayingMenu.h"
 #include "Logger.h"
 
 class App
@@ -72,6 +75,7 @@ public:
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
     BleManager &getBleManager() { return bleManager_; }
     ConfigManager &getConfigManager() { return configManager_; }
+    MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -106,6 +110,7 @@ private:
     DuckyScriptRunner duckyRunner_;
     BleManager bleManager_;
     ConfigManager configManager_;
+    MusicPlayer musicPlayer_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -159,6 +164,11 @@ private:
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
     ListMenu duckyScriptListMenu_;
+
+    ListMenu musicPlayerListMenu_;
+    NowPlayingMenu nowPlayingMenu_;
+
+    MusicPlayListDataSource musicPlayListDataSource_;
 };
 
 #endif

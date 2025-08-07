@@ -246,7 +246,9 @@ App::App() :
     duckyRunner_(),
     bleManager_(),
     duckyScriptListDataSource_(),
-    duckyScriptActiveMenu_()
+    duckyScriptActiveMenu_(),
+    musicPlayerListMenu_("Music Player", MenuType::MUSIC_PLAYER_LIST, &musicPlayListDataSource_),
+    nowPlayingMenu_() 
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -285,9 +287,10 @@ void App::setup()
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
-        {"BLE Manager",     [&](){ bleManager_.setup(this); }}, // <-- MOVED UP
-        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }}, // <-- MOVED DOWN
-        {"BadUSB",          [&](){ duckyRunner_.setup(this); }} // <-- MOVED DOWN
+        {"BLE Manager",     [&](){ bleManager_.setup(this); }},
+        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
+        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
+        {"Music Player",    [&](){ musicPlayer_.setup(this); }}
     };
 
     int totalTasks = bootTasks.size();
@@ -357,6 +360,9 @@ void App::setup()
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
+    // --- NEW MUSIC MENUS ---
+    menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
+    menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
 
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -377,6 +383,7 @@ void App::loop()
     karmaAttacker_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
+    musicPlayer_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)

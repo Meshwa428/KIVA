@@ -144,6 +144,36 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::USB:
             xbm_data = icon_usb_large_bits;
             break;
+        case IconType::MUSIC_PLAYER:
+            xbm_data = icon_music_player_large_bits;
+            break;
+        case IconType::PLAYLIST:
+            xbm_data = icon_playlist_large_bits;
+            break;
+        case IconType::MUSIC_NOTE:
+            xbm_data = icon_music_note_large_bits;
+            break;
+        case IconType::PLAY:
+            xbm_data = icon_play_large_bits;
+            break;
+        case IconType::PAUSE:
+            xbm_data = icon_pause_large_bits;
+            break;
+        case IconType::NEXT_TRACK:
+            xbm_data = icon_next_track_large_bits;
+            break;
+        case IconType::PREV_TRACK:
+            xbm_data = icon_prev_track_large_bits;
+            break;
+        case IconType::SHUFFLE:
+            xbm_data = icon_shuffle_large_bits;
+            break;
+        case IconType::REPEAT:
+            xbm_data = icon_repeat_large_bits;
+            break;
+        case IconType::REPEAT_ONE:
+            xbm_data = icon_repeat_one_large_bits;
+            break;
         case IconType::NONE:
             xbm_data = icon_none_large_bits;
             break;

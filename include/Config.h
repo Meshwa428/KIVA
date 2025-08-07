@@ -38,13 +38,15 @@ enum class MenuType
     BLE_TOOLS_GRID,
     HOST_TOOLS_GRID,
     BLE_SPAM_ACTIVE,
-    // --- REFACTORED AND NEW MENU TYPES ---
     DUCKY_SCRIPT_LIST,
     DUCKY_SCRIPT_ACTIVE,
     BLE_KEYBOARD_MAPPER_ACTIVE,
     BLE_MEDIA_CONTROLLER_ACTIVE,
     BLE_SCROLL_HELPER_ACTIVE,
-    USB_DRIVE_MODE
+    USB_DRIVE_MODE,
+    // --- NEW MUSIC PLAYER MENU TYPES ---
+    MUSIC_PLAYER_LIST,
+    NOW_PLAYING
 };
 
 // Input Event System
@@ -130,7 +132,6 @@ namespace SD_ROOT
 
     // Second-level and specific file paths
     static constexpr const char *WIFI_KNOWN_NETWORKS = "/config/wifi_known_networks.txt";
-    // static constexpr const char *WIFI_OTA_PASSWORD = "/config/wifi_ota_password.txt";
     static constexpr const char *CONFIG_CURRENT_FIRMWARE = "/config/current_firmware.json";
 
     static constexpr const char *DATA_LOGS = "/data/logs";
@@ -141,6 +142,7 @@ namespace SD_ROOT
     static constexpr const char *USER_BEACON_LISTS = "/user/beacon_lists";
     static constexpr const char *USER_PORTALS = "/user/portals";
     static constexpr const char *USER_DUCKY = "/user/ducky_scripts";
+    static constexpr const char *USER_MUSIC = "/user/music";
 
     static constexpr const char *WEB_OTA_PAGE = "/web/ota_page.html";
 

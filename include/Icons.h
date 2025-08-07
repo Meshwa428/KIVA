@@ -49,6 +49,17 @@ enum class IconType
     FIRMWARE_UPDATE,
     DISCONNECT,
     USB,
+    // --- NEW MUSIC ICONS ---
+    MUSIC_PLAYER,
+    PLAYLIST,
+    MUSIC_NOTE,
+    PLAY,
+    PAUSE,
+    NEXT_TRACK,
+    PREV_TRACK,
+    SHUFFLE,
+    REPEAT,
+    REPEAT_ONE,
     NONE,
     NUM_ICON_TYPES
 };
@@ -87,6 +98,17 @@ extern const unsigned char icon_basic_ota_large_bits[];
 extern const unsigned char icon_firmware_update_large_bits[];
 extern const unsigned char icon_disconnect_large_bits[];
 extern const unsigned char icon_usb_large_bits[];
+// --- NEW MUSIC ICONS ---
+extern const unsigned char icon_music_player_large_bits[];
+extern const unsigned char icon_playlist_large_bits[];
+extern const unsigned char icon_music_note_large_bits[];
+extern const unsigned char icon_play_large_bits[];
+extern const unsigned char icon_pause_large_bits[];
+extern const unsigned char icon_next_track_large_bits[];
+extern const unsigned char icon_prev_track_large_bits[];
+extern const unsigned char icon_shuffle_large_bits[];
+extern const unsigned char icon_repeat_large_bits[];
+extern const unsigned char icon_repeat_one_large_bits[];
 
 // Small Icons
 extern const unsigned char icon_ui_charging_bolt_small_bits[];

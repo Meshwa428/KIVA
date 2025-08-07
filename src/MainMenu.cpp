@@ -5,6 +5,7 @@
 
 MainMenu::MainMenu() : selectedIndex_(0) {
     menuItems_.push_back(MenuItem{"Tools",     IconType::TOOLS,    MenuType::TOOLS_CAROUSEL});
+    menuItems_.push_back(MenuItem{"Music",     IconType::MUSIC_PLAYER, MenuType::MUSIC_PLAYER_LIST});
     menuItems_.push_back(MenuItem{"Games",     IconType::GAMES,    MenuType::GAMES_CAROUSEL});
     menuItems_.push_back(MenuItem{"Settings",  IconType::SETTINGS, MenuType::SETTINGS});
     menuItems_.push_back(MenuItem{"Utilities", IconType::UTILITIES_CATEGORY, MenuType::UTILITIES_CAROUSEL});
