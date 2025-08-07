@@ -43,6 +43,7 @@
 #include "SettingsMenu.h"
 #include "BrightnessMenu.h"
 #include "ConfigManager.h"
+#include "UsbDriveMenu.h"
 #include "Logger.h"
 
 class App
@@ -116,8 +117,8 @@ private:
 
     CarouselMenu toolsMenu_;
     CarouselMenu gamesMenu_;
-    // CarouselMenu settingsMenu_;
     CarouselMenu utilitiesMenu_;
+    UsbDriveMenu usbDriveMenu_;
 
     GridMenu wifiToolsMenu_;
     GridMenu bleToolsMenu_;

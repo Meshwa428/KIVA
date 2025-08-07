@@ -24,15 +24,6 @@ App::App() :
         MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::NONE},
         MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::NONE},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
-    // settingsMenu_("Settings", {
-    //     MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE, 
-    //         [](App *app) {
-    //             app->getWifiListDataSource().setScanOnEnter(true);
-    //             app->changeMenu(MenuType::WIFI_LIST);
-    //         }},
-    //     MenuItem{"Firmware", IconType::SETTING_SYSTEM, MenuType::FIRMWARE_UPDATE_GRID},
-    //     MenuItem{"Display", IconType::SETTING_DISPLAY, MenuType::NONE},
-    //     MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     utilitiesMenu_("Utilities", {
         MenuItem{"Vibration", IconType::UI_VIBRATION, MenuType::NONE,
             [](App *app) {
@@ -46,6 +37,9 @@ App::App() :
                     HardwareManager &hw = app->getHardwareManager();
                     hw.setLaser(!hw.isLaserOn());
                 }},
+        // --- START OF FIX ---
+        MenuItem{"USB Drive Mode", IconType::SD_CARD, MenuType::USB_DRIVE_MODE},
+        // --- END OF FIX ---
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     settingsMenu_(),
@@ -331,6 +325,7 @@ void App::setup()
     menuRegistry_[MenuType::SETTINGS] = &settingsMenu_;
     menuRegistry_[MenuType::BRIGHTNESS_MENU] = &brightnessMenu_;
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
+    menuRegistry_[MenuType::USB_DRIVE_MODE] = &usbDriveMenu_;
 
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::BLE_TOOLS_GRID] = &bleToolsMenu_;
