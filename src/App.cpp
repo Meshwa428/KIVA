@@ -290,7 +290,8 @@ void App::setup()
         {"BLE Manager",     [&](){ bleManager_.setup(this); }},
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
-        {"Music Player",    [&](){ musicPlayer_.setup(this); }}
+        {"Music Player",    [&](){ musicPlayer_.setup(this); }},
+        {"Music Library",   [&](){ musicLibraryManager_.setup(this); musicLibraryManager_.buildIndex(); }}
     };
 
     int totalTasks = bootTasks.size();
@@ -383,7 +384,7 @@ void App::loop()
     karmaAttacker_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
-    musicPlayer_.loop();
+    // musicPlayer_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)

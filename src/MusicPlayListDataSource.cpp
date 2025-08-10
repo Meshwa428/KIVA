@@ -1,39 +1,56 @@
 #include "MusicPlayListDataSource.h"
 #include "App.h"
 #include "SdCardManager.h"
+#include "MusicLibraryManager.h" // For INDEX_FILENAME
 #include "ListMenu.h"
 #include "UI_Utils.h"
+#include "Config.h" // For SD_ROOT
+
+MusicPlayListDataSource::MusicPlayListDataSource() :
+    currentPath_(SD_ROOT::USER_MUSIC)
+{}
 
 void MusicPlayListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
-    items_.clear();
-    const char* dirPath = SD_ROOT::USER_MUSIC;
-
-    if (!SdCardManager::exists(dirPath)) {
-        SdCardManager::createDir(dirPath);
+    // When entering for the first time or navigating back to the root,
+    // ensure we are at the top-level directory.
+    if (isForwardNav) {
+        currentPath_ = SD_ROOT::USER_MUSIC;
     }
-    
-    File root = SdCardManager::openFile(dirPath);
-    if (!root || !root.isDirectory()) return;
-
-    File file = root.openNextFile();
-    while(file) {
-        std::string fileName = file.name();
-        if (fileName == "." || fileName == "..") {
-            file.close(); file = root.openNextFile(); continue;
-        }
-
-        if (file.isDirectory()) {
-            items_.push_back({fileName, file.path(), true});
-        } else if (String(file.name()).endsWith(".mp3")) {
-            items_.push_back({fileName, file.path(), false});
-        }
-        file.close();
-        file = root.openNextFile();
-    }
-    root.close();
+    loadItemsFromPath(currentPath_.c_str());
 }
 
-void MusicPlayListDataSource::onExit(App* app, ListMenu* menu) {}
+void MusicPlayListDataSource::onExit(App* app, ListMenu* menu) {
+    items_.clear();
+}
+
+void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
+    items_.clear();
+    currentPath_ = directoryPath;
+    
+    std::string indexPath = std::string(directoryPath) + "/" + MusicLibraryManager::INDEX_FILENAME;
+    auto reader = SdCardManager::openLineReader(indexPath.c_str());
+    if (!reader.isOpen()) {
+        // Optional: Could trigger a re-index or show an error.
+        // For now, the list will just appear empty.
+        return;
+    }
+
+    while(true) {
+        String line = reader.readLine();
+        if (line.isEmpty()) break;
+        
+        int firstSep = line.indexOf(';');
+        int secondSep = line.indexOf(';', firstSep + 1);
+        if (firstSep != -1 && secondSep != -1) {
+            items_.push_back({
+                line.substring(firstSep + 1, secondSep).c_str(),
+                line.substring(secondSep + 1).c_str(),
+                (line.charAt(0) == 'P')
+            });
+        }
+    }
+    reader.close();
+}
 
 int MusicPlayListDataSource::getNumberOfItems(App* app) {
     return items_.size();
@@ -42,32 +59,42 @@ int MusicPlayListDataSource::getNumberOfItems(App* app) {
 void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     if (index >= items_.size()) return;
     const auto& item = items_[index];
-    auto& player = app->getMusicPlayer();
-
+    
     if (item.isPlaylist) {
-        std::vector<std::string> tracks;
-        File playlistDir = SdCardManager::openFile(item.path.c_str());
-        if(playlistDir && playlistDir.isDirectory()) {
-            File trackFile = playlistDir.openNextFile();
-            while(trackFile) {
-                if (!trackFile.isDirectory() && String(trackFile.name()).endsWith(".mp3")) {
-                    tracks.push_back(trackFile.path());
-                }
-                trackFile.close();
-                trackFile = playlistDir.openNextFile();
+        // --- NAVIGATE INTO A PLAYLIST ---
+        // Load the items from the subdirectory's index and reload the menu.
+        loadItemsFromPath(item.path.c_str());
+        menu->reloadData(app, true); // true = reset selection to the top
+    } else {
+        // --- PLAY A SINGLE TRACK ---
+        // --- THIS IS THE CORRECTED, SAFE LOGIC ---
+
+        // 1. Build a temporary playlist of all tracks in the current view.
+        std::vector<std::string> playlistTracks;
+        for (const auto& trackItem : items_) {
+            if (!trackItem.isPlaylist) {
+                playlistTracks.push_back(trackItem.path);
             }
         }
-        playlistDir.close();
         
-        if (!tracks.empty()) {
-            player.playPlaylist(item.name, tracks);
-            app->changeMenu(MenuType::NOW_PLAYING);
-        } else {
-            app->showPopUp("Empty Playlist", "No .mp3 files found in this folder.", nullptr, "OK", "", true);
+        // 2. Find the index of the selected track within our temporary playlist.
+        int currentTrackIndexInPlaylist = 0;
+        for(size_t i=0; i < playlistTracks.size(); ++i) {
+            if (playlistTracks[i] == item.path) {
+                currentTrackIndexInPlaylist = i;
+                break;
+            }
         }
 
-    } else { // Is a single track
-        player.play(item.path);
+        // 3. Get the playlist name from the current directory path.
+        std::string parentPath = currentPath_;
+        size_t lastSlash = parentPath.find_last_of('/');
+        std::string playlistName = (lastSlash != std::string::npos) ? parentPath.substr(lastSlash + 1) : "Music";
+
+        // 4. Call the new, safe, asynchronous method.
+        app->getMusicPlayer().playPlaylistAtIndex(playlistName, playlistTracks, currentTrackIndexInPlaylist);
+
+        // 5. Change the menu immediately. This is now safe.
         app->changeMenu(MenuType::NOW_PLAYING);
     }
 }

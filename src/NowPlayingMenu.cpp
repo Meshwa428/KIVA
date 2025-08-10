@@ -56,6 +56,7 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
 
 void NowPlayingMenu::draw(App* app, U8G2& display) {
     auto& player = app->getMusicPlayer();
+    auto state = player.getState(); // Get state once
 
     // 1. Playlist Name
     display.setFont(u8g2_font_5x7_tf);
@@ -65,15 +66,33 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
 
     // 2. Track Name (Marquee)
     display.setFont(u8g2_font_6x10_tf);
-    std::string trackName = player.getCurrentTrackName();
-    if (trackName.empty()) trackName = "Stopped";
+    std::string trackName;
+
+    // --- NEW LOGIC TO HANDLE LOADING STATE ---
+    if (state == MusicPlayer::State::LOADING) {
+        trackName = "Loading...";
+        marqueeActive_ = false; // Don't scroll "Loading..."
+    } else {
+        trackName = player.getCurrentTrackName();
+        if (trackName.empty()) trackName = "Stopped";
+    }
+
     int text_w = 120;
-    updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
-                  marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                  marqueeText_, marqueeTextLenPx_, trackName.c_str(), text_w, display);
+    // Only update marquee if not loading
+    if (state != MusicPlayer::State::LOADING) {
+        updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
+                      marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
+                      marqueeText_, marqueeTextLenPx_, trackName.c_str(), text_w, display);
+    }
     
     display.setClipWindow(4, STATUS_BAR_H + 8, 124, STATUS_BAR_H + 22);
-    display.drawStr(4 + (int)marqueeOffset_, STATUS_BAR_H + 18, marqueeText_);
+    if (marqueeActive_) {
+        display.drawStr(4 + (int)marqueeOffset_, STATUS_BAR_H + 18, marqueeText_);
+    } else {
+        // Center "Loading..." or short titles
+        int text_width = display.getStrWidth(trackName.c_str());
+        display.drawStr((display.getDisplayWidth() - text_width) / 2, STATUS_BAR_H + 18, trackName.c_str());
+    }
     display.setMaxClipWindow();
 
     // 3. Progress Bar
@@ -89,7 +108,7 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
     int controlsY = 50;
     drawCustomIcon(display, 30, controlsY - 8, IconType::PREV_TRACK);
     
-    IconType playPauseIcon = (player.getState() == MusicPlayer::State::PLAYING) ? IconType::PAUSE : IconType::PLAY;
+    IconType playPauseIcon = (state == MusicPlayer::State::PLAYING) ? IconType::PAUSE : IconType::PLAY;
     drawCustomIcon(display, 57, controlsY - 8, playPauseIcon);
     
     drawCustomIcon(display, 84, controlsY - 8, IconType::NEXT_TRACK);

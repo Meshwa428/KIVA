@@ -10,43 +10,93 @@
 
 MusicPlayer::MusicPlayer() : 
     app_(nullptr), mp3_(nullptr), file_(nullptr), out_(nullptr),
-    mp3_preAlloc_(nullptr), // Initialize the new pointer
+    mp3_preAlloc_(nullptr),
     currentState_(State::STOPPED), repeatMode_(RepeatMode::REPEAT_OFF), isShuffle_(false),
-    playlistTrackIndex_(-1)
+    playlistTrackIndex_(-1),
+    audioTaskHandle_(nullptr),
+    playRequestPending_(false),
+    nextPlaylistStartIndex_(0)
 {
-    // --- THIS IS THE FIX ---
-    // Pre-allocate the memory needed for the MP3 decoder.
     mp3_preAlloc_ = malloc(AudioGeneratorMP3::preAllocSize());
     if (!mp3_preAlloc_) {
         LOG(LogLevel::ERROR, "PLAYER", "FATAL: Could not pre-allocate memory for MP3 decoder!");
     }
-    // --- END OF FIX ---
 }
 
 MusicPlayer::~MusicPlayer() {
+    if (audioTaskHandle_ != nullptr) {
+        vTaskDelete(audioTaskHandle_);
+        audioTaskHandle_ = nullptr;
+    }
     cleanup();
-    // --- THIS IS THE FIX ---
-    // Free the pre-allocated memory.
     if (mp3_preAlloc_) {
         free(mp3_preAlloc_);
         mp3_preAlloc_ = nullptr;
     }
-    // --- END OF FIX ---
 }
 
 void MusicPlayer::setup(App* app) {
     app_ = app;
     pinMode(Pins::AMPLIFIER_PIN, OUTPUT);
     digitalWrite(Pins::AMPLIFIER_PIN, LOW);
+
+    xTaskCreatePinnedToCore(
+        audioTaskWrapper,     
+        "AudioPlayerTask",    
+        4096,                 
+        this,                 
+        5,                    
+        &audioTaskHandle_,    
+        1                     // Pin to Core 1
+    );
+    if (audioTaskHandle_ == nullptr) {
+        LOG(LogLevel::ERROR, "PLAYER", "FATAL: Failed to create audio task!");
+    } else {
+        LOG(LogLevel::INFO, "PLAYER", "Audio task created and pinned to Core 1.");
+    }
 }
 
-void MusicPlayer::loop() {
-    if (currentState_ == State::PLAYING && mp3_ && mp3_->isRunning()) {
-        if (!mp3_->loop()) {
-            // Song has finished, decide what to do next.
-            // This call now correctly uses the default value of 'true'.
-            playNextInPlaylist(); 
+void MusicPlayer::audioTaskWrapper(void* param) {
+    static_cast<MusicPlayer*>(param)->audioTaskLoop();
+}
+
+void MusicPlayer::audioTaskLoop() {
+    LOG(LogLevel::INFO, "PLAYER", "Audio task loop started.");
+    for (;;) {
+        if (playRequestPending_) {
+            playRequestPending_ = false; 
+            if (!nextPlaylistTracks_.empty()) {
+                currentPlaylist_ = nextPlaylistTracks_;
+                playlistName_ = nextPlaylistName_;
+                // --- USE THE START INDEX ---
+                playlistTrackIndex_ = nextPlaylistStartIndex_; 
+                
+                if (isShuffle_) {
+                    generateShuffledIndices();
+                    // If shuffle is on, we need to find where our target track ended up
+                    std::string targetPath = currentPlaylist_[playlistTrackIndex_];
+                    for(size_t i = 0; i < shuffledIndices_.size(); ++i) {
+                        if (currentPlaylist_[shuffledIndices_[i]] == targetPath) {
+                            playlistTrackIndex_ = i;
+                            break;
+                        }
+                    }
+                    startPlayback(currentPlaylist_[shuffledIndices_[playlistTrackIndex_]]);
+                } else {
+                    startPlayback(currentPlaylist_[playlistTrackIndex_]);
+                }
+            } else {
+                startPlayback(nextTrackToPlay_);
+            }
         }
+
+        if (currentState_ == State::PLAYING && mp3_ && mp3_->isRunning()) {
+            if (!mp3_->loop()) {
+                playNextInPlaylist();
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2));
     }
 }
 
@@ -54,22 +104,30 @@ void MusicPlayer::play(const std::string& path) {
     stop();
     currentPlaylist_.clear();
     playlistName_ = "Single Track";
-    startPlayback(path);
+    
+    nextTrackToPlay_ = path;
+    nextPlaylistTracks_.clear();
+    nextPlaylistStartIndex_ = 0; // Not used for single track
+    currentState_ = State::LOADING;
+    playRequestPending_ = true;
 }
 
+// Keep the old method for convenience, it will just start at index 0
 void MusicPlayer::playPlaylist(const std::string& name, const std::vector<std::string>& tracks) {
-    if (tracks.empty()) return;
+    playPlaylistAtIndex(name, tracks, 0);
+}
+
+// --- IMPLEMENT THE NEW METHOD ---
+void MusicPlayer::playPlaylistAtIndex(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
+    if (tracks.empty() || startIndex >= tracks.size()) return;
     stop();
-    playlistName_ = name;
-    currentPlaylist_ = tracks;
-    playlistTrackIndex_ = 0;
-    
-    if (isShuffle_) {
-        generateShuffledIndices();
-        startPlayback(currentPlaylist_[shuffledIndices_[0]]);
-    } else {
-        startPlayback(currentPlaylist_[0]);
-    }
+
+    nextPlaylistName_ = name;
+    nextPlaylistTracks_ = tracks;
+    nextTrackToPlay_ = "";
+    nextPlaylistStartIndex_ = startIndex; // Store the requested index
+    currentState_ = State::LOADING;
+    playRequestPending_ = true;
 }
 
 void MusicPlayer::pause() {
@@ -89,6 +147,9 @@ void MusicPlayer::resume() {
 void MusicPlayer::stop() {
     if (currentState_ != State::STOPPED) {
         LOG(LogLevel::INFO, "PLAYER", "Stopping playback.");
+        playRequestPending_ = false; // Cancel any pending request
+        currentState_ = State::PAUSED;
+        vTaskDelay(pdMS_TO_TICKS(10));
         cleanup();
         currentState_ = State::STOPPED;
         currentTrackPath_ = "";
@@ -99,10 +160,46 @@ void MusicPlayer::stop() {
     }
 }
 
+void MusicPlayer::startPlayback(const std::string& path) {
+    cleanup();
+    if (!mp3_preAlloc_) {
+        LOG(LogLevel::ERROR, "PLAYER", "Playback failed, no memory for decoder.");
+        currentState_ = State::STOPPED;
+        return;
+    }
+
+    LOG(LogLevel::INFO, "PLAYER", "Starting playback for: %s", path.c_str());
+
+    file_ = new AudioFileSourceSD(path.c_str());
+    if (!file_->isOpen()) {
+        LOG(LogLevel::ERROR, "PLAYER", "Failed to open audio file.");
+        delete file_; file_ = nullptr;
+        currentState_ = State::STOPPED;
+        return;
+    }
+
+    enableAmplifier(true);
+    out_ = new AudioOutputPDM(Pins::AMPLIFIER_PIN);
+    out_->SetGain(2.0f);
+    
+    mp3_ = new AudioGeneratorMP3(mp3_preAlloc_, AudioGeneratorMP3::preAllocSize());
+    
+    // THIS BLOCKING CALL IS NOW SAFELY ON CORE 1
+    if (mp3_->begin(file_, out_)) {
+        currentState_ = State::PLAYING; // Update state on success
+        currentTrackPath_ = path;
+        size_t last_slash = path.find_last_of('/');
+        currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
+    } else {
+        LOG(LogLevel::ERROR, "PLAYER", "Failed to start MP3 generator.");
+        cleanup();
+        currentState_ = State::STOPPED; // Update state on failure
+    }
+}
+
 void MusicPlayer::nextTrack() {
     if (currentPlaylist_.empty()) return;
-    // This call is now valid.
-    playNextInPlaylist(false); // Force next, don't check repeat mode
+    playNextInPlaylist(false);
 }
 
 void MusicPlayer::prevTrack() {
@@ -122,7 +219,6 @@ void MusicPlayer::toggleShuffle() {
     isShuffle_ = !isShuffle_;
     if (isShuffle_ && !currentPlaylist_.empty()) {
         generateShuffledIndices();
-        // To avoid repeating the current song, find it in the new shuffled list
         for(size_t i = 0; i < shuffledIndices_.size(); ++i) {
             if (currentPlaylist_[shuffledIndices_[i]] == currentTrackPath_) {
                 playlistTrackIndex_ = i;
@@ -136,51 +232,12 @@ void MusicPlayer::cycleRepeatMode() {
     repeatMode_ = static_cast<RepeatMode>((static_cast<int>(repeatMode_) + 1) % 3);
 }
 
-// --- Private Methods ---
-
-void MusicPlayer::startPlayback(const std::string& path) {
-    cleanup();
-    if (!mp3_preAlloc_) {
-        LOG(LogLevel::ERROR, "PLAYER", "Playback failed, no memory for decoder.");
-        return; // Can't play if memory allocation failed in the constructor
-    }
-
-    LOG(LogLevel::INFO, "PLAYER", "Starting playback for: %s", path.c_str());
-
-    file_ = new AudioFileSourceSD(path.c_str());
-    if (!file_->isOpen()) {
-        LOG(LogLevel::ERROR, "PLAYER", "Failed to open audio file.");
-        delete file_; file_ = nullptr;
-        return;
-    }
-
-    enableAmplifier(true);
-    out_ = new AudioOutputPDM(Pins::AMPLIFIER_PIN);
-    out_->SetGain(2.0f);
-    
-    // --- THIS IS THE FIX ---
-    // Use the constructor that accepts our pre-allocated memory buffer.
-    mp3_ = new AudioGeneratorMP3(mp3_preAlloc_, AudioGeneratorMP3::preAllocSize());
-    // --- END OF FIX ---
-    
-    if (mp3_->begin(file_, out_)) {
-        currentState_ = State::PLAYING;
-        currentTrackPath_ = path;
-        size_t last_slash = path.find_last_of('/');
-        currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
-    } else {
-        LOG(LogLevel::ERROR, "PLAYER", "Failed to start MP3 generator. Check MP3 format and memory.");
-        cleanup();
-    }
-}
-
 void MusicPlayer::cleanup() {
     enableAmplifier(false);
     if (mp3_) {
         if (mp3_->isRunning()) mp3_->stop();
         delete mp3_; mp3_ = nullptr;
     }
-    // The MP3 generator deletes the file and out objects, so we just null them
     file_ = nullptr;
     out_ = nullptr;
 }
@@ -192,7 +249,6 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     }
 
     if (songFinishedNaturally && repeatMode_ == RepeatMode::REPEAT_ONE) {
-        // Repeat the same song
         stop();
         startPlayback(currentTrackPath_);
         return;
@@ -201,17 +257,15 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     playlistTrackIndex_++;
     
     if (playlistTrackIndex_ >= (int)currentPlaylist_.size()) {
-        // Reached end of playlist
         if (repeatMode_ == RepeatMode::REPEAT_ALL) {
             playlistTrackIndex_ = 0;
-            if(isShuffle_) generateShuffledIndices(); // Re-shuffle for the next loop
+            if(isShuffle_) generateShuffledIndices();
         } else {
             stop();
-            return; // End of playlist, no repeat
+            return;
         }
     }
     
-    // Stop cleans up old resources before starting the new track
     stop(); 
     const std::string& path = isShuffle_ ? currentPlaylist_[shuffledIndices_[playlistTrackIndex_]] : currentPlaylist_[playlistTrackIndex_];
     startPlayback(path);
@@ -230,7 +284,6 @@ void MusicPlayer::enableAmplifier(bool enable) {
     digitalWrite(Pins::AMPLIFIER_PIN, enable ? HIGH : LOW);
 }
 
-// --- UI Getters ---
 MusicPlayer::State MusicPlayer::getState() const { return currentState_; }
 MusicPlayer::RepeatMode MusicPlayer::getRepeatMode() const { return repeatMode_; }
 bool MusicPlayer::isShuffle() const { return isShuffle_; }

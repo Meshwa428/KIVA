@@ -47,6 +47,7 @@
 #include "MusicPlayer.h"
 #include "MusicPlayListDataSource.h"
 #include "NowPlayingMenu.h"
+#include "MusicLibraryManager.h"
 #include "Logger.h"
 
 class App
@@ -76,6 +77,7 @@ public:
     BleManager &getBleManager() { return bleManager_; }
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
+    MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -111,6 +113,7 @@ private:
     BleManager bleManager_;
     ConfigManager configManager_;
     MusicPlayer musicPlayer_;
+    MusicLibraryManager musicLibraryManager_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
