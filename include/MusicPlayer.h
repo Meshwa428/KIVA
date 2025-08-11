@@ -25,8 +25,8 @@ public:
     void setup(App* app);
 
     void play(const std::string& path);
-    void playPlaylist(const std::string& name, const std::vector<std::string>& tracks);
-    void playPlaylistAtIndex(const std::string& name, const std::vector<std::string>& tracks, int startIndex);
+    void queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex);
+    void startQueuedPlayback();
     void pause();
     void resume();
     void stop();

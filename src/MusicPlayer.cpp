@@ -107,27 +107,32 @@ void MusicPlayer::play(const std::string& path) {
     
     nextTrackToPlay_ = path;
     nextPlaylistTracks_.clear();
-    nextPlaylistStartIndex_ = 0; // Not used for single track
+    nextPlaylistStartIndex_ = 0;
     currentState_ = State::LOADING;
     playRequestPending_ = true;
 }
 
-// Keep the old method for convenience, it will just start at index 0
-void MusicPlayer::playPlaylist(const std::string& name, const std::vector<std::string>& tracks) {
-    playPlaylistAtIndex(name, tracks, 0);
-}
-
-// --- IMPLEMENT THE NEW METHOD ---
-void MusicPlayer::playPlaylistAtIndex(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
-    if (tracks.empty() || startIndex >= tracks.size()) return;
+// THIS METHOD IS RENAMED AND MODIFIED
+void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
+    if (tracks.empty() || startIndex >= (int)tracks.size()) return;
     stop();
 
     nextPlaylistName_ = name;
     nextPlaylistTracks_ = tracks;
     nextTrackToPlay_ = "";
-    nextPlaylistStartIndex_ = startIndex; // Store the requested index
-    currentState_ = State::LOADING;
-    playRequestPending_ = true;
+    nextPlaylistStartIndex_ = startIndex;
+    
+    // Set the state to LOADING so the UI can show the correct message immediately,
+    // but DO NOT set playRequestPending_ here.
+    currentState_ = State::LOADING; 
+}
+
+// THIS IS THE NEW METHOD
+void MusicPlayer::startQueuedPlayback() {
+    // This is the only place we trigger the audio task to start a playlist.
+    if (currentState_ == State::LOADING) {
+        playRequestPending_ = true;
+    }
 }
 
 void MusicPlayer::pause() {

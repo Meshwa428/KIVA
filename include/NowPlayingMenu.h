@@ -1,3 +1,4 @@
+// KIVA/include/NowPlayingMenu.h
 #ifndef NOW_PLAYING_MENU_H
 #define NOW_PLAYING_MENU_H
 
@@ -17,6 +18,7 @@ public:
     MenuType getMenuType() const override { return MenuType::NOW_PLAYING; }
 
 private:
+    // Marquee state
     char marqueeText_[64];
     int marqueeTextLenPx_;
     float marqueeOffset_;
@@ -25,6 +27,10 @@ private:
     bool marqueePaused_;
     unsigned long marqueePauseStartTime_;
     bool marqueeScrollLeft_;
+
+    // --- NEW MEMBERS FOR DELAYED PLAYBACK TRIGGER ---
+    unsigned long entryTime_;
+    bool playbackTriggered_;
 };
 
 #endif // NOW_PLAYING_MENU_H

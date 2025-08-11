@@ -1,3 +1,4 @@
+// KIVA/src/NowPlayingMenu.cpp
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "MusicPlayer.h"
@@ -5,22 +6,37 @@
 
 NowPlayingMenu::NowPlayingMenu() :
     marqueeActive_(false),
-    marqueeScrollLeft_(true)
+    marqueeScrollLeft_(true),
+    entryTime_(0),
+    playbackTriggered_(false)
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
+
+    // --- NEW LOGIC ---
+    // 1. Reset the state when entering the menu.
+    entryTime_ = millis();
+    playbackTriggered_ = false;
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
-    // UI is driven by MusicPlayer state, no specific updates needed here
+    // --- NEW LOGIC ---
+    // 2. Trigger playback only AFTER a short delay.
+    // This gives the main App::loop() enough time to call draw() at least once.
+    if (!playbackTriggered_ && (millis() - entryTime_ > 50)) {
+        app->getMusicPlayer().startQueuedPlayback();
+        playbackTriggered_ = true;
+    }
 }
 
 void NowPlayingMenu::onExit(App* app) {
     // Stop music when leaving the player UI
     app->getMusicPlayer().stop();
 }
+
+// ... handleInput and draw methods remain unchanged ...
 
 void NowPlayingMenu::handleInput(App* app, InputEvent event) {
     auto& player = app->getMusicPlayer();
@@ -37,7 +53,7 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::ENCODER_CW:
             player.nextTrack();
             break;
-        case InputEvent::ENCODER_CCW: // Overload encoder CCW for previous track too
+        case InputEvent::ENCODER_CCW:
             player.prevTrack();
             break;
         case InputEvent::BTN_UP_PRESS:
@@ -56,7 +72,7 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
 
 void NowPlayingMenu::draw(App* app, U8G2& display) {
     auto& player = app->getMusicPlayer();
-    auto state = player.getState(); // Get state once
+    auto state = player.getState();
 
     // 1. Playlist Name
     display.setFont(u8g2_font_5x7_tf);
@@ -68,17 +84,15 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
     display.setFont(u8g2_font_6x10_tf);
     std::string trackName;
 
-    // --- NEW LOGIC TO HANDLE LOADING STATE ---
     if (state == MusicPlayer::State::LOADING) {
         trackName = "Loading...";
-        marqueeActive_ = false; // Don't scroll "Loading..."
+        marqueeActive_ = false; 
     } else {
         trackName = player.getCurrentTrackName();
         if (trackName.empty()) trackName = "Stopped";
     }
 
     int text_w = 120;
-    // Only update marquee if not loading
     if (state != MusicPlayer::State::LOADING) {
         updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                       marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
@@ -89,7 +103,6 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
     if (marqueeActive_) {
         display.drawStr(4 + (int)marqueeOffset_, STATUS_BAR_H + 18, marqueeText_);
     } else {
-        // Center "Loading..." or short titles
         int text_width = display.getStrWidth(trackName.c_str());
         display.drawStr((display.getDisplayWidth() - text_width) / 2, STATUS_BAR_H + 18, trackName.c_str());
     }

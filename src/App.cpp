@@ -291,7 +291,7 @@ void App::setup()
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
-        {"Music Library",   [&](){ musicLibraryManager_.setup(this); musicLibraryManager_.buildIndex(); }}
+        {"Music Library",   [&](){ musicLibraryManager_.setup(this); }}
     };
 
     int totalTasks = bootTasks.size();

@@ -40,6 +40,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::BLE_MEDIA_CONTROLLER_ACTIVE: return "BLE_MEDIA_CONTROLLER_ACTIVE";
         case MenuType::BLE_SCROLL_HELPER_ACTIVE: return "BLE_SCROLL_HELPER_ACTIVE";
         case MenuType::USB_DRIVE_MODE: return "USB_DRIVE_MODE";
+        case MenuType::MUSIC_PLAYER_LIST: return "MUSIC_PLAYER_LIST";
+        case MenuType::NOW_PLAYING: return "NOW_PLAYING";
         default: return "UNKNOWN_MENU";
     }
 }
