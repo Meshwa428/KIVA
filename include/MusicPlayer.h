@@ -8,14 +8,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-// Forward declarations from ESP8266Audio library
+// Forward declarations
 class AudioGeneratorMP3;
 class AudioFileSourceSD;
 class App;
 
 class MusicPlayer {
 public:
-    // --- ADD LOADING STATE ---
     enum class State { STOPPED, LOADING, PLAYING, PAUSED };
     enum class RepeatMode { REPEAT_OFF, REPEAT_ALL, REPEAT_ONE };
 
@@ -24,7 +23,6 @@ public:
 
     void setup(App* app);
 
-    void play(const std::string& path);
     void queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex);
     void startQueuedPlayback();
     void pause();
@@ -35,20 +33,19 @@ public:
     void toggleShuffle();
     void cycleRepeatMode();
 
-    // UI Getters
     State getState() const;
     RepeatMode getRepeatMode() const;
     bool isShuffle() const;
     std::string getCurrentTrackName() const;
     std::string getPlaylistName() const;
-    float getPlaybackProgress() const; // Returns 0.0f to 1.0f
+    float getPlaybackProgress() const;
 
 private:
     static void audioTaskWrapper(void* param);
     void audioTaskLoop();
 
     void startPlayback(const std::string& path);
-    void cleanup();
+    void cleanupCurrentTrack();
     void playNextInPlaylist(bool songFinishedNaturally = true);
     void generateShuffledIndices();
     void enableAmplifier(bool enable);
@@ -57,10 +54,15 @@ private:
     AudioGeneratorMP3* mp3_;
     AudioFileSourceSD* file_;
     AudioOutputPDM* out_;
-
     void* mp3_preAlloc_; 
 
+    // --- START OF FIX ---
+    // These variables are shared between the UI task (Core 0) and the audio task (Core 1).
+    // They MUST be declared volatile to prevent compiler optimizations that would
+    // cause one core to read a stale value from a CPU register.
     volatile State currentState_;
+    // --- END OF FIX ---
+    
     RepeatMode repeatMode_;
     bool isShuffle_;
     
@@ -74,9 +76,11 @@ private:
 
     TaskHandle_t audioTaskHandle_;
 
-    // --- ADD THREAD-SAFE REQUEST VARIABLES ---
-    volatile bool playRequestPending_;
-    std::string nextTrackToPlay_;
+    enum class AudioCommand { NONE, PLAY_QUEUED, STOP, NEXT, PREV };
+    // --- START OF FIX ---
+    volatile AudioCommand pendingCommand_;
+    // --- END OF FIX ---
+
     std::string nextPlaylistName_;
     std::vector<std::string> nextPlaylistTracks_;
     int nextPlaylistStartIndex_;

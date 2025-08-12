@@ -1,6 +1,7 @@
 #include "UI_Utils.h"
 #include <Arduino.h>
 #include <vector>
+#include <string>
 
 // Buffer for truncateText. It's static, so it's private to this file.
 static char SBUF[32];

@@ -3,6 +3,7 @@
 #include "App.h"
 #include "MusicPlayer.h"
 #include "UI_Utils.h"
+#include "Logger.h" // <-- ADD THIS
 
 NowPlayingMenu::NowPlayingMenu() :
     marqueeActive_(false),
@@ -14,17 +15,11 @@ NowPlayingMenu::NowPlayingMenu() :
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
-
-    // --- NEW LOGIC ---
-    // 1. Reset the state when entering the menu.
     entryTime_ = millis();
     playbackTriggered_ = false;
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
-    // --- NEW LOGIC ---
-    // 2. Trigger playback only AFTER a short delay.
-    // This gives the main App::loop() enough time to call draw() at least once.
     if (!playbackTriggered_ && (millis() - entryTime_ > 50)) {
         app->getMusicPlayer().startQueuedPlayback();
         playbackTriggered_ = true;
@@ -32,11 +27,8 @@ void NowPlayingMenu::onUpdate(App* app) {
 }
 
 void NowPlayingMenu::onExit(App* app) {
-    // Stop music when leaving the player UI
     app->getMusicPlayer().stop();
 }
-
-// ... handleInput and draw methods remain unchanged ...
 
 void NowPlayingMenu::handleInput(App* app, InputEvent event) {
     auto& player = app->getMusicPlayer();
@@ -47,14 +39,14 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
             else player.resume();
             break;
         case InputEvent::BTN_LEFT_PRESS:
+        case InputEvent::ENCODER_CCW:
+            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); // <-- ADDED LOG
             player.prevTrack();
             break;
         case InputEvent::BTN_RIGHT_PRESS:
         case InputEvent::ENCODER_CW:
+            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()"); // <-- ADDED LOG
             player.nextTrack();
-            break;
-        case InputEvent::ENCODER_CCW:
-            player.prevTrack();
             break;
         case InputEvent::BTN_UP_PRESS:
             player.cycleRepeatMode();
