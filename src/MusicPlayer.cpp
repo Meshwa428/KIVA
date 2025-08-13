@@ -8,16 +8,15 @@
 #include "AudioFileSourceSD.h"
 #include "AudioGeneratorMP3.h"
 
-// --- IMPLEMENTATION OF THE NEW MIXER-BASED MODEL ---
-
+// ... (Constructor and other setup methods are unchanged) ...
 MusicPlayer::MusicPlayer() : 
     app_(nullptr), resourcesAllocated_(false),
     out_(nullptr), mixer_(nullptr), currentSlot_(-1),
     currentState_(State::STOPPED), repeatMode_(RepeatMode::REPEAT_OFF), isShuffle_(false),
+    currentGain_(1.75f),
     playlistTrackIndex_(-1),
     mixerTaskHandle_(nullptr)
 {
-    // Initialize all slot pointers to null
     for (int i = 0; i < 2; ++i) {
         file_[i] = nullptr;
         mp3_[i] = nullptr;
@@ -34,23 +33,18 @@ void MusicPlayer::setup(App* app) {
 }
 
 bool MusicPlayer::isServiceRunning() const {
-    // Service is running if the mixer task is active
     return mixerTaskHandle_ != nullptr;
 }
 
 bool MusicPlayer::allocateResources() {
     if (resourcesAllocated_) return true;
     LOG(LogLevel::INFO, "PLAYER", "Allocating audio resources (Mixer)...");
-    
     app_->getHardwareManager().setAmplifier(true);
-
     out_ = new AudioOutputPDM(Pins::AMPLIFIER_PIN);
     mixer_ = new AudioOutputMixer(32, out_);
-
     BaseType_t result = xTaskCreatePinnedToCore(
         mixerTaskWrapper, "AudioMixerTask", 4096, this, 5, &mixerTaskHandle_, 1
     );
-
     if (result != pdPASS) {
         LOG(LogLevel::ERROR, "PLAYER", "FATAL: Failed to create mixer task!");
         delete mixer_; mixer_ = nullptr;
@@ -58,7 +52,6 @@ bool MusicPlayer::allocateResources() {
         app_->getHardwareManager().setAmplifier(false);
         return false;
     }
-    
     resourcesAllocated_ = true;
     LOG(LogLevel::INFO, "PLAYER", "Audio resources allocated successfully.");
     return true;
@@ -67,17 +60,14 @@ bool MusicPlayer::allocateResources() {
 void MusicPlayer::releaseResources() {
     if (!resourcesAllocated_) return;
     LOG(LogLevel::INFO, "PLAYER", "Releasing audio resources (Mixer)...");
-
     if (mixerTaskHandle_ != nullptr) {
         vTaskDelete(mixerTaskHandle_);
         mixerTaskHandle_ = nullptr;
     }
-
-    stopPlayback(); // Clean up any active generators/stubs
-
+    stopPlayback();
+    // Destructor of out_ will handle driver uninstall
     delete mixer_; mixer_ = nullptr;
     delete out_; out_ = nullptr;
-    
     app_->getHardwareManager().setAmplifier(false);
     resourcesAllocated_ = false;
     LOG(LogLevel::INFO, "PLAYER", "Audio resources released.");
@@ -90,30 +80,59 @@ void MusicPlayer::mixerTaskWrapper(void* param) {
 void MusicPlayer::mixerTaskLoop() {
     LOG(LogLevel::INFO, "PLAYER_TASK", "Mixer task started.");
     while (true) {
-        // --- START OF FIX: Correct mixer loop logic ---
         bool any_running = false;
-        for (int i = 0; i < 2; i++) {
-            if (mp3_[i] && mp3_[i]->isRunning()) {
-                if (!mp3_[i]->loop()) {
-                    // This song finished, stop it
-                    mp3_[i]->stop();
-                    // Let the main thread know it's time for the next song
-                    if (i == currentSlot_) {
-                        currentState_ = State::STOPPED;
+        
+        // This logic now correctly mirrors your reference code:
+        // if (!paused) { mp3->loop(); }
+        if (currentState_ == State::PLAYING) {
+            for (int i = 0; i < 2; i++) {
+                if (mp3_[i] && mp3_[i]->isRunning()) {
+                    if (!mp3_[i]->loop()) {
+                        mp3_[i]->stop();
+                        if (i == currentSlot_) {
+                            currentState_ = State::STOPPED;
+                        }
                     }
+                    any_running = true;
                 }
-                any_running = true;
             }
         }
 
         if (!any_running) {
-            // If no generators are running, yield to prevent busy-waiting
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        // --- END OF FIX ---
     }
 }
 
+void MusicPlayer::pause() {
+    if (currentState_ == State::PLAYING) {
+        currentState_ = State::PAUSED;
+        if (out_) out_->stop(); // Use the lightweight stop, as you requested.
+        LOG(LogLevel::INFO, "PLAYER", "Playback paused.");
+    }
+}
+
+void MusicPlayer::resume() {
+    if (currentState_ == State::PAUSED) {
+        currentState_ = State::PLAYING;
+        if (out_) out_->begin(); // Use the lightweight begin/resume, as you requested.
+        LOG(LogLevel::INFO, "PLAYER", "Playback resumed.");
+    }
+}
+
+void MusicPlayer::stop() {
+    if (currentState_ == State::PAUSED && out_) {
+        // If we stop from a paused state, we must resume the hardware stream
+        // so it's ready for the next song.
+        out_->begin();
+    }
+    stopPlayback();
+    currentState_ = State::STOPPED;
+    currentTrackPath_ = "";
+    currentTrackName_ = "";
+}
+
+// ... the rest of MusicPlayer.cpp remains unchanged ...
 void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
     currentState_ = State::LOADING;
@@ -139,31 +158,6 @@ void MusicPlayer::startQueuedPlayback() {
     }
 }
 
-void MusicPlayer::pause() {
-    if (currentState_ == State::PLAYING) {
-        currentState_ = State::PAUSED;
-        if (currentSlot_ != -1 && stub_[currentSlot_]) {
-            stub_[currentSlot_]->SetGain(0.0); // Mute by setting gain to 0
-        }
-    }
-}
-
-void MusicPlayer::resume() {
-    if (currentState_ == State::PAUSED) {
-        currentState_ = State::PLAYING;
-        if (currentSlot_ != -1 && stub_[currentSlot_]) {
-            stub_[currentSlot_]->SetGain(1.0); // Unmute
-        }
-    }
-}
-
-void MusicPlayer::stop() {
-    stopPlayback();
-    currentState_ = State::STOPPED;
-    currentTrackPath_ = "";
-    currentTrackName_ = "";
-}
-
 void MusicPlayer::nextTrack() {
     if (!currentPlaylist_.empty()) {
         playNextInPlaylist(false);
@@ -177,6 +171,22 @@ void MusicPlayer::prevTrack() {
             playlistTrackIndex_ = currentPlaylist_.size() - 2;
         }
         playNextInPlaylist(false);
+    }
+}
+
+void MusicPlayer::setVolume(uint8_t volumePercent) {
+    if (volumePercent > 200) volumePercent = 200;
+
+    if (volumePercent <= 100) {
+        currentGain_ = (float)volumePercent / 100.0f * 1.75f;
+    } else {
+        currentGain_ = 1.75f + ((float)(volumePercent - 100) / 100.0f) * (2.5f - 1.75f);
+    }
+
+    LOG(LogLevel::INFO, "PLAYER", "Volume set to %u%%, gain is now %.2f", volumePercent, currentGain_);
+    
+    if (currentState_ == State::PLAYING && currentSlot_ != -1 && stub_[currentSlot_]) {
+        stub_[currentSlot_]->SetGain(currentGain_);
     }
 }
 
@@ -196,7 +206,7 @@ void MusicPlayer::stopPlayback() {
 void MusicPlayer::startPlayback(const std::string& path) {
     stopPlayback(); // Stop whatever was playing before
 
-    int nextSlot = 0; // Always use slot 0 for simplicity now
+    int nextSlot = 0;
     currentSlot_ = nextSlot;
 
     LOG(LogLevel::INFO, "PLAYER", "Starting playback for '%s' in slot %d.", path.c_str(), currentSlot_);
@@ -210,7 +220,7 @@ void MusicPlayer::startPlayback(const std::string& path) {
     }
 
     stub_[currentSlot_] = mixer_->NewInput();
-    stub_[currentSlot_]->SetGain(1.0);
+    stub_[currentSlot_]->SetGain(currentGain_); // Apply the current volume
     mp3_[currentSlot_] = new AudioGeneratorMP3();
     mp3_[currentSlot_]->begin(file_[currentSlot_], stub_[currentSlot_]);
 
@@ -246,8 +256,6 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     startPlayback(path);
 }
 
-// ... other functions (toggleShuffle, cycleRepeatMode, getters) are mostly the same ...
-// Small change to getPlaybackProgress is needed.
 float MusicPlayer::getPlaybackProgress() const {
     if (currentSlot_ != -1 && file_[currentSlot_] && file_[currentSlot_]->isOpen()) {
         uint32_t pos = file_[currentSlot_]->getPos();
@@ -258,8 +266,6 @@ float MusicPlayer::getPlaybackProgress() const {
     }
     return 0.0f;
 }
-
-// --- The rest are identical to the previous version ---
 
 void MusicPlayer::toggleShuffle() {
     isShuffle_ = !isShuffle_;

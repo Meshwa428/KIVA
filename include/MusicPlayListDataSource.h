@@ -16,6 +16,7 @@ public:
     void onItemSelected(App* app, ListMenu* menu, int index) override;
     void onEnter(App* app, ListMenu* menu, bool isForwardNav) override;
     void onExit(App* app, ListMenu* menu) override;
+    void onUpdate(App* app, ListMenu* menu) override; // Add override specifier
 
 private:
     enum class ItemType { TRACK, PLAYLIST, REINDEX, BACK };
@@ -30,7 +31,8 @@ private:
 
     std::vector<PlaylistItem> items_;
     std::string currentPath_; 
-    bool isReindexing_ = false; // <-- ADD THIS FLAG
+    bool isReindexing_ = false;
+    bool needsReload_ = false; // Flag to fix loading bug
 };
 
 #endif // MUSIC_PLAYLIST_DATA_SOURCE_H

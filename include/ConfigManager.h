@@ -12,6 +12,7 @@ struct DeviceSettings {
     // REMOVED: uint8_t unifiedBrightness;
     uint8_t mainDisplayBrightness; // 0-255
     uint8_t auxDisplayBrightness;  // 0-255
+    uint8_t volume;                // 0-200, representing 0-200%
     int keyboardLayoutIndex;
     char otaPassword[33]; // Max 32 chars + null terminator
 };

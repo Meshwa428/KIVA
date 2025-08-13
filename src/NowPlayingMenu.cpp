@@ -8,7 +8,8 @@ NowPlayingMenu::NowPlayingMenu() :
     marqueeActive_(false),
     marqueeScrollLeft_(true),
     entryTime_(0),
-    playbackTriggered_(false)
+    playbackTriggered_(false),
+    volumeDisplayUntil_(0)
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
@@ -24,6 +25,7 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     marqueeScrollLeft_ = true;
     entryTime_ = millis();
     playbackTriggered_ = false;
+    volumeDisplayUntil_ = 0;
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
@@ -32,10 +34,6 @@ void NowPlayingMenu::onUpdate(App* app) {
         app->getMusicPlayer().startQueuedPlayback();
         playbackTriggered_ = true;
     }
-    
-    // --- THIS BLOCK IS NOW REMOVED ---
-    // The MusicPlayer's own task handles auto-play now.
-    // ---
 }
 
 void NowPlayingMenu::onExit(App* app) {
@@ -57,18 +55,37 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::ENCODER_CCW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); 
             player.prevTrack();
-            app->clearInputQueue(); // This now correctly resets the input driver's state
+            app->clearInputQueue();
             break;
         case InputEvent::BTN_RIGHT_PRESS:
         case InputEvent::ENCODER_CW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()");
             player.nextTrack();
-            app->clearInputQueue(); // This now correctly resets the input driver's state
+            app->clearInputQueue();
             break;
         case InputEvent::BTN_UP_PRESS:
+        case InputEvent::BTN_DOWN_PRESS:
+            {
+                auto& settings = app->getConfigManager().getSettings();
+                int newVolume = settings.volume;
+                if (event == InputEvent::BTN_UP_PRESS) newVolume += 5;
+                else {
+                    if (newVolume <= 10) newVolume -= 2;
+                    else newVolume -= 5;
+                }
+                
+                if (newVolume < 0) newVolume = 0;
+                if (newVolume > 200) newVolume = 200;
+                
+                settings.volume = newVolume;
+                app->getConfigManager().saveSettings(); // This also calls applySettings() which calls player.setVolume()
+                volumeDisplayUntil_ = millis() + 2000; // Show volume for 2 seconds
+            }
+            break;
+        case InputEvent::BTN_A_PRESS:
             player.cycleRepeatMode();
             break;
-        case InputEvent::BTN_DOWN_PRESS:
+        case InputEvent::BTN_B_PRESS:
             player.toggleShuffle();
             break;
         case InputEvent::BTN_BACK_PRESS:
@@ -146,5 +163,19 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
         drawCustomIcon(display, 118, statusY, IconType::REPEAT, IconRenderSize::SMALL);
     } else if (repeatMode == MusicPlayer::RepeatMode::REPEAT_ONE) {
         drawCustomIcon(display, 118, statusY, IconType::REPEAT_ONE, IconRenderSize::SMALL);
+    }
+    
+    // 6. Volume Overlay
+    if (millis() < volumeDisplayUntil_) {
+        uint8_t volume = app->getConfigManager().getSettings().volume;
+        int volBarX = 24, volBarY = 25, volBarW = 80, volBarH = 12;
+        
+        drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 2, true);
+        display.setDrawColor(0);
+        
+        char volStr[8];
+        snprintf(volStr, sizeof(volStr), "%d%%", volume);
+        display.setFont(u8g2_font_6x10_tf);
+        display.drawStr(volBarX + (volBarW - display.getStrWidth(volStr)) / 2, volBarY + 10, volStr);
     }
 }

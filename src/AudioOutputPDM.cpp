@@ -10,15 +10,25 @@ AudioOutputPDM::AudioOutputPDM(int pdm_pin, i2s_port_t i2s_port)
 }
 
 AudioOutputPDM::~AudioOutputPDM() {
-    stop();
+    // The destructor is now the only place that does a full, destructive stop.
+    if (m_driver_installed) {
+        i2s_driver_uninstall(m_i2s_port);
+    }
     if (m_buffer) {
         free(m_buffer);
         m_buffer = nullptr;
     }
 }
 
-// begin() will now install the driver with a default rate to satisfy the MP3 decoder.
 bool AudioOutputPDM::begin() {
+    if (m_driver_installed) {
+        // If driver is already installed, 'begin' means RESUME.
+        i2s_start(m_i2s_port);
+        LOG(LogLevel::DEBUG, "PDM", "I2S stream resumed via begin().");
+        return true;
+    }
+
+    // First-time initialization
     if (m_buffer == nullptr) {
         m_buffer = (int16_t*)malloc(BUFFER_FRAMES * sizeof(int16_t) * 2);
     }
@@ -31,37 +41,26 @@ bool AudioOutputPDM::begin() {
     // Install with a default rate. This will be immediately corrected by SetRate.
     this->hertz = 44100;
     install_i2s_driver();
-    return true;
+    return m_driver_installed;
 }
 
 bool AudioOutputPDM::stop() {
+    // 'stop()' is now a lightweight PAUSE, as per your reference code.
     if (m_driver_installed) {
-        // --- START OF FIX: More robust shutdown sequence ---
-        // 1. Immediately stop the I2S hardware from processing its DMA buffer.
         i2s_stop(m_i2s_port);
-        // 2. Clear any data that might be lingering in the DMA buffer.
-        i2s_zero_dma_buffer(m_i2s_port);
-        // 3. Now that the hardware is quiet, it's safe to uninstall the driver without blocking.
-        i2s_driver_uninstall(m_i2s_port);
-        // --- END OF FIX ---
-        m_driver_installed = false;
-        LOG(LogLevel::INFO, "PDM", "PDM Output driver stopped and uninstalled");
+        LOG(LogLevel::DEBUG, "PDM", "I2S stream paused via stop().");
     }
-    // Also clear our software buffer pointer
-    m_buffer_ptr = 0;
     return true;
 }
 
-// SetRate() will now reinstall the driver with the correct sample rate.
 bool AudioOutputPDM::SetRate(int hz) {
     if (this->hertz != hz) {
         LOG(LogLevel::INFO, "PDM", "Sample rate changed to %d Hz. Re-installing I2S driver.", hz);
         this->hertz = hz;
-        // Uninstall the old driver
         if (m_driver_installed) {
             i2s_driver_uninstall(m_i2s_port);
+            m_driver_installed = false;
         }
-        // Install the new driver with the correct rate
         install_i2s_driver();
     }
     return true;
@@ -81,7 +80,11 @@ void AudioOutputPDM::install_i2s_driver() {
         .tx_desc_auto_clear = true,
         .fixed_mclk = 0
     };
-    i2s_driver_install(m_i2s_port, &i2s_config, 0, NULL);
+    if (i2s_driver_install(m_i2s_port, &i2s_config, 0, NULL) != ESP_OK) {
+        LOG(LogLevel::ERROR, "PDM", "Failed to install I2S driver!");
+        m_driver_installed = false;
+        return;
+    }
 
     i2s_pin_config_t i2s_pdm_pins = {
         .bck_io_num = I2S_PIN_NO_CHANGE,
@@ -96,12 +99,8 @@ void AudioOutputPDM::install_i2s_driver() {
 
 bool AudioOutputPDM::ConsumeSample(int16_t sample[2]) {
     if (!m_buffer || !m_driver_installed) return false;
-
     int32_t mono_sample32 = (int32_t)sample[0] + (int32_t)sample[1];
     int16_t mono_sample = mono_sample32 / 2;
-
-    // --- THIS IS THE FIX for Volume Control ---
-    // Use the library's built-in gain mechanism.
     int16_t final_sample = Amplify(mono_sample);
 
     m_buffer[m_buffer_ptr * 2] = final_sample;

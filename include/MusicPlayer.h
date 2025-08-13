@@ -38,6 +38,7 @@ public:
     void prevTrack();
     void toggleShuffle();
     void cycleRepeatMode();
+    void setVolume(uint8_t volumePercent); // New public method
 
     State getState() const;
     RepeatMode getRepeatMode() const;
@@ -74,6 +75,7 @@ private:
     volatile State currentState_;
     RepeatMode repeatMode_;
     bool isShuffle_;
+    float currentGain_; // Current gain level (0.0 to 2.5)
     
     std::vector<std::string> currentPlaylist_;
     std::vector<int> shuffledIndices_;

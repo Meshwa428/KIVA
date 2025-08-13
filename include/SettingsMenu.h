@@ -22,8 +22,8 @@ public:
 
 private:
     void scroll(int direction);
-    // --- THIS DECLARATION IS NOW CORRECTED ---
     void changeBrightness(App* app, int delta, const std::string& target);
+    void changeVolume(App* app, int delta); // New helper for volume
     void changeKeyboardLayout(App* app, int direction);
 
     struct SettingItem {

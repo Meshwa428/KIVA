@@ -31,6 +31,9 @@ private:
     // --- NEW MEMBERS FOR DELAYED PLAYBACK TRIGGER ---
     unsigned long entryTime_;
     bool playbackTriggered_;
+
+    // --- NEW MEMBER FOR VOLUME DISPLAY ---
+    unsigned long volumeDisplayUntil_;
 };
 
 #endif // NOW_PLAYING_MENU_H

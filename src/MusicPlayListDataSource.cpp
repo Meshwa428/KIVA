@@ -8,27 +8,30 @@
 
 MusicPlayListDataSource::MusicPlayListDataSource() :
     currentPath_(SD_ROOT::USER_MUSIC),
-    isReindexing_(false)
+    isReindexing_(false),
+    needsReload_(false)
 {}
 
 void MusicPlayListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
-    // --- START OF FIX: Resource allocation is REMOVED from here ---
-    // if (!app->getMusicPlayer().allocateResources()) { ... } // This block is deleted.
-    // --- END OF FIX ---
-
     if (isForwardNav) {
         currentPath_ = SD_ROOT::USER_MUSIC;
     }
     isReindexing_ = false;
+    needsReload_ = false;
     loadItemsFromPath(currentPath_.c_str());
 }
 
 void MusicPlayListDataSource::onExit(App* app, ListMenu* menu) {
     items_.clear();
     isReindexing_ = false;
-    // --- START OF FIX: Resource release is REMOVED from here ---
-    // app->getMusicPlayer().releaseResources(); // This line is deleted.
-    // --- END OF FIX ---
+    needsReload_ = false;
+}
+
+void MusicPlayListDataSource::onUpdate(App* app, ListMenu* menu) {
+    if (needsReload_) {
+        needsReload_ = false;
+        menu->reloadData(app, true);
+    }
 }
 
 void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
@@ -86,9 +89,14 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
     
     switch(item.type) {
         case ItemType::PLAYLIST: {
-            loadItemsFromPath(item.path.c_str());
-            menu->reloadData(app, true);
+            // --- THIS IS THE FIX ---
+            // Copy the path to a local variable BEFORE calling loadItemsFromPath,
+            // which clears the vector that 'item' refers to.
+            std::string path_copy = item.path;
+            loadItemsFromPath(path_copy.c_str());
+            needsReload_ = true; 
             break;
+            // --- END OF FIX ---
         }
         case ItemType::TRACK: {
             std::vector<std::string> playlistTracks;
@@ -122,7 +130,7 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
                 currentPath_ = SD_ROOT::USER_MUSIC;
             }
             loadItemsFromPath(currentPath_.c_str());
-            menu->reloadData(app, true);
+            needsReload_ = true; 
             break;
         }
         case ItemType::REINDEX: {
@@ -138,7 +146,7 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
             app->showPopUp("Success", "Music library has been re-indexed.", 
                 [this, menu](App* cb_app) {
                     this->loadItemsFromPath(this->currentPath_.c_str());
-                    menu->reloadData(cb_app, true);
+                    this->needsReload_ = true;
                 }, 
                 "OK", "", true);
             break;

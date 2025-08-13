@@ -59,9 +59,9 @@ void ConfigManager::saveSettings() {
 
 void ConfigManager::applySettings() {
     // Apply settings that need to be pushed to hardware
-    // --- UPDATE THIS LOGIC ---
     app_->getHardwareManager().setMainBrightness(settings_.mainDisplayBrightness);
     app_->getHardwareManager().setAuxBrightness(settings_.auxDisplayBrightness);
+    app_->getMusicPlayer().setVolume(settings_.volume);
 }
 
 void ConfigManager::loadFromEEPROM() {
@@ -99,9 +99,9 @@ void ConfigManager::loadFromSdCard() {
         return;
     }
 
-    // REMOVED: settings.unifiedBrightness = doc["unified_brightness"] | 255;
     settings_.mainDisplayBrightness = doc["main_brightness"] | 255;
     settings_.auxDisplayBrightness = doc["aux_brightness"] | 255;
+    settings_.volume = doc["volume"] | 100; // Load volume, default to 100%
     settings_.keyboardLayoutIndex = doc["kb_layout_idx"] | 0;
     strlcpy(settings_.otaPassword, doc["ota_password"] | "KIVA_PASS", sizeof(settings_.otaPassword));
     
@@ -115,9 +115,9 @@ void ConfigManager::loadFromSdCard() {
 void ConfigManager::saveToSdCard() {
     const char* path = "/config/settings.json";
     JsonDocument doc;
-    // REMOVED: doc["unified_brightness"] = settings.unifiedBrightness;
     doc["main_brightness"] = settings_.mainDisplayBrightness;
     doc["aux_brightness"] = settings_.auxDisplayBrightness;
+    doc["volume"] = settings_.volume; // Save volume
     doc["kb_layout_idx"] = settings_.keyboardLayoutIndex;
     doc["ota_password"] = settings_.otaPassword;
 
@@ -127,9 +127,9 @@ void ConfigManager::saveToSdCard() {
 }
 
 void ConfigManager::useDefaultSettings() {
-    // REMOVED: settings.unifiedBrightness = 255;
     settings_.mainDisplayBrightness = 255;
     settings_.auxDisplayBrightness = 255;
+    settings_.volume = 100; // Default volume to 100%
     settings_.keyboardLayoutIndex = 0; 
     strcpy(settings_.otaPassword, "KIVA_PASS");
 }

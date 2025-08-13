@@ -9,13 +9,12 @@ SettingsMenu::SettingsMenu() :
 {
     menuItems_ = {
         {"Brightness", MenuType::NONE, nullptr, true},
+        {"Volume", MenuType::NONE, nullptr, true}, // New volume slider
         {"KB Layout", MenuType::NONE, nullptr, false},
         {"OTA Password", MenuType::NONE, nullptr, false},
         {"WiFi Settings", MenuType::WIFI_LIST, nullptr, false},
         {"Firmware Update", MenuType::FIRMWARE_UPDATE_GRID, nullptr, false},
         {"System Info", MenuType::NONE, nullptr, false},
-        // --- START OF FIX ---
-        // Add the new menu item with an action lambda.
         {"Reload from SD", MenuType::NONE, [](App* app) {
             if (app->getConfigManager().reloadFromSdCard()) {
                 app->showPopUp("Success", "Settings reloaded from SD card.", nullptr, "OK", "", true);
@@ -23,7 +22,6 @@ SettingsMenu::SettingsMenu() :
                 app->showPopUp("Error", "Failed to load settings from SD card.", nullptr, "OK", "", true);
             }
         }, false},
-        // --- END OF FIX ---
         {"Back", MenuType::BACK, nullptr, false}
     };
 }
@@ -32,9 +30,6 @@ void SettingsMenu::onEnter(App* app, bool isForwardNav) {
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
-    // --- THIS IS THE FIX ---
-    // The animation vectors must be resized to the number of menu items
-    // BEFORE init() or startIntro() are called.
     animation_.resize(menuItems_.size());
     animation_.init();
     animation_.startIntro(selectedIndex_, menuItems_.size());
@@ -49,13 +44,22 @@ void SettingsMenu::onExit(App* app) {}
 void SettingsMenu::handleInput(App* app, InputEvent event) {
     const auto& selectedItem = menuItems_[selectedIndex_];
 
-    if (selectedItem.isSlider) { 
+    if (selectedItem.label == "Brightness") { 
         if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
             changeBrightness(app, -13, "Unified");
             return;
         }
         if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
             changeBrightness(app, 13, "Unified");
+            return;
+        }
+    } else if (selectedItem.label == "Volume") {
+        if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
+            changeVolume(app, -5);
+            return;
+        }
+        if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
+            changeVolume(app, 5);
             return;
         }
     } else if (selectedItem.label == "KB Layout") {
@@ -81,8 +85,6 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
             else if (selectedItem.label == "OTA Password") {
                 TextInputMenu& textMenu = app->getTextInputMenu();
                 textMenu.configure("New OTA Password", 
-                    // --- THIS IS THE FIX ---
-                    // The callback now handles the complete logic flow.
                     [](App* cb_app, const char* new_password) {
                         if (strlen(new_password) > 0 && strlen(new_password) < Firmware::MIN_AP_PASSWORD_LEN) {
                             cb_app->showPopUp("Error", "Password must be at least 8 characters.", nullptr, "OK", "", true);
@@ -128,6 +130,15 @@ void SettingsMenu::changeBrightness(App* app, int delta, const std::string& targ
         settings.auxDisplayBrightness = newVal;
     } 
     
+    app->getConfigManager().saveSettings();
+}
+
+void SettingsMenu::changeVolume(App* app, int delta) {
+    auto& settings = app->getConfigManager().getSettings();
+    int newVolume = settings.volume + delta;
+    if (newVolume < 0) newVolume = 0;
+    if (newVolume > 200) newVolume = 200;
+    settings.volume = newVolume;
     app->getConfigManager().saveSettings();
 }
 
@@ -177,6 +188,11 @@ void SettingsMenu::draw(App* app, U8G2& display) {
             int percent = map(settings.mainDisplayBrightness, 0, 255, 0, 100);
             char buf[16];
             snprintf(buf, sizeof(buf), "< %d%% >", percent);
+            valueText = buf;
+        }
+        else if (item.label == "Volume") {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "< %d%% >", settings.volume);
             valueText = buf;
         } 
         else if (item.label == "KB Layout") {
