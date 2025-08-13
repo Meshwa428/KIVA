@@ -167,8 +167,6 @@ static constexpr unsigned long REPEAT_INTERVAL_MS = 150;   // Time between subse
 
 // UI Layout Constants
 static constexpr int STATUS_BAR_H = 11;
-static constexpr int MAX_GRID_ITEMS = 20;
-static constexpr int MAX_ANIM_ITEMS = 20;
 static constexpr float GRID_ANIM_STAGGER_DELAY = 40.0f;
 static constexpr float GRID_ANIM_SPEED = 20.0f;
 

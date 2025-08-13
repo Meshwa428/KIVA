@@ -84,6 +84,7 @@ public:
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
 
     MenuType getPreviousMenuType() const;
+    void clearInputQueue() { hardware_.clearInputQueue(); }
 
     void drawStatusBar();
 

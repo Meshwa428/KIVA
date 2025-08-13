@@ -262,6 +262,7 @@ void App::setup()
     delay(100);
     Wire.begin();
 
+    hardware_.setAmplifier(false);
     hardware_.getMainDisplay().begin();
     hardware_.getMainDisplay().enableUTF8Print();
     hardware_.getSmallDisplay().begin();
@@ -384,7 +385,6 @@ void App::loop()
     karmaAttacker_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
-    // musicPlayer_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)

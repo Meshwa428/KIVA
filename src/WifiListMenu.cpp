@@ -34,6 +34,7 @@ void WifiListMenu::onEnter(App* app, bool isForwardNav) {
     } else {
         rebuildDisplayItems(app);
         isScanning_ = false;
+        animation_.resize(displayItems_.size());
         animation_.init();
         animation_.startIntro(selectedIndex_, displayItems_.size());
     }
@@ -44,6 +45,7 @@ void WifiListMenu::onUpdate(App* app) {
 
     if (isScanning_ && currentScanCount > lastKnownScanCount_) {
         rebuildDisplayItems(app);
+        animation_.resize(displayItems_.size());
         animation_.init();
         animation_.startIntro(selectedIndex_, displayItems_.size());
         isScanning_ = false;
@@ -67,8 +69,6 @@ void WifiListMenu::rebuildDisplayItems(App* app) {
     const auto& scannedNetworks = wifi.getScannedNetworks();
     String connectedSsid = wifi.getCurrentSsid();
     
-    const int MAX_TOTAL_ITEMS = MAX_ANIM_ITEMS; 
-    
     if (!connectedSsid.isEmpty()) {
         bool foundInScan = false;
         for (size_t i = 0; i < scannedNetworks.size(); ++i) {
@@ -88,7 +88,6 @@ void WifiListMenu::rebuildDisplayItems(App* app) {
     }
 
     for (size_t i = 0; i < scannedNetworks.size(); ++i) {
-        if (displayItems_.size() >= MAX_TOTAL_ITEMS - 2) { break; }
         if (String(scannedNetworks[i].ssid) != connectedSsid) {
             DisplayItem item = {scannedNetworks[i].ssid, ListItemType::NETWORK, scannedNetworks[i].rssi, scannedNetworks[i].isSecure, (int)i};
             displayItems_.push_back(item);
@@ -142,6 +141,7 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
                             app_cb->getWifiManager().disconnect();
                             this->setScanOnEnter(false); 
                             this->rebuildDisplayItems(app_cb);
+                            this->animation_.resize(this->displayItems_.size());
                             this->animation_.init();
                             this->animation_.startIntro(this->selectedIndex_, this->displayItems_.size());
                         }, "OK", "Cancel", true);
@@ -218,7 +218,6 @@ void WifiListMenu::draw(App* app, U8G2& display)
     display.setFont(u8g2_font_6x10_tf);
 
     for (size_t i = 0; i < displayItems_.size(); ++i) {
-        if (i >= MAX_ANIM_ITEMS) break;
         int item_center_y_rel = (int)animation_.itemOffsetY[i];
         float scale = animation_.itemScale[i];
         if (scale <= 0.01f) continue;

@@ -74,7 +74,8 @@ void WifiListDataSource::rebuildDisplayItems(App* app) {
     }
 
     for (size_t i = 0; i < scannedNetworks.size(); ++i) {
-        if (displayItems_.size() >= MAX_ANIM_ITEMS - 2) break;
+        // This was the line with the error. It's no longer needed because the vectors are dynamic.
+        // if (displayItems_.size() >= MAX_ANIM_ITEMS - 2) break; 
         if (String(scannedNetworks[i].ssid) != connectedSsid) {
             displayItems_.push_back({scannedNetworks[i].ssid, ListItemType::NETWORK, scannedNetworks[i].rssi, scannedNetworks[i].isSecure, (int)i});
         }

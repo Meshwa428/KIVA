@@ -7,20 +7,28 @@
 #include "Config.h"
 
 MusicPlayListDataSource::MusicPlayListDataSource() :
-    currentPath_(SD_ROOT::USER_MUSIC)
+    currentPath_(SD_ROOT::USER_MUSIC),
+    isReindexing_(false)
 {}
 
 void MusicPlayListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
+    // --- START OF FIX: Resource allocation is REMOVED from here ---
+    // if (!app->getMusicPlayer().allocateResources()) { ... } // This block is deleted.
+    // --- END OF FIX ---
+
     if (isForwardNav) {
         currentPath_ = SD_ROOT::USER_MUSIC;
     }
-    isReindexing_ = false; // Ensure flag is reset on enter
+    isReindexing_ = false;
     loadItemsFromPath(currentPath_.c_str());
 }
 
 void MusicPlayListDataSource::onExit(App* app, ListMenu* menu) {
     items_.clear();
-    isReindexing_ = false; // Ensure flag is reset on exit
+    isReindexing_ = false;
+    // --- START OF FIX: Resource release is REMOVED from here ---
+    // app->getMusicPlayer().releaseResources(); // This line is deleted.
+    // --- END OF FIX ---
 }
 
 void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
@@ -30,7 +38,6 @@ void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
     std::string indexPath = std::string(directoryPath) + "/" + MusicLibraryManager::INDEX_FILENAME;
     auto reader = SdCardManager::openLineReader(indexPath.c_str());
     if (!reader.isOpen()) {
-        // Index doesn't exist.
     } else {
         while(true) {
             String line = reader.readLine();
@@ -57,22 +64,20 @@ void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
 }
 
 int MusicPlayListDataSource::getNumberOfItems(App* app) {
-    // If we are re-indexing, report 0 items to trigger the custom message.
     if (isReindexing_) {
         return 0;
     }
     return items_.size();
 }
 
-// --- ADD THIS NEW FUNCTION ---
 bool MusicPlayListDataSource::drawCustomEmptyMessage(App* app, U8G2& display) {
     if (isReindexing_) {
         const char* msg = "Re-indexing Library...";
         display.setFont(u8g2_font_6x10_tf);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
-        return true; // We handled the drawing
+        return true;
     }
-    return false; // Let the ListMenu draw its default "No items" message
+    return false;
 }
 
 void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
@@ -80,16 +85,12 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
     const auto& item = items_[index];
     
     switch(item.type) {
-        // (Cases for PLAYLIST, TRACK, and BACK remain unchanged)
         case ItemType::PLAYLIST: {
             loadItemsFromPath(item.path.c_str());
             menu->reloadData(app, true);
             break;
         }
         case ItemType::TRACK: {
-            // --- THIS IS THE FINAL, CORRECTED LOGIC ---
-            
-            // 1. Prepare the playlist data (fast)
             std::vector<std::string> playlistTracks;
             for (const auto& trackItem : items_) {
                 if (trackItem.type == ItemType::TRACK) {
@@ -109,12 +110,7 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
             size_t lastSlash = parentPath.find_last_of('/');
             std::string playlistName = (lastSlash != std::string::npos) ? parentPath.substr(lastSlash + 1) : "Music";
 
-            // 2. Queue the playlist for playback. This is non-blocking.
             app->getMusicPlayer().queuePlaylist(playlistName, playlistTracks, currentTrackIndexInPlaylist);
-            
-            // 3. Change the menu. This is also non-blocking.
-            // The UI will now instantly switch to the NowPlayingMenu, which will
-            // see the "LOADING" state and display the correct message.
             app->changeMenu(MenuType::NOW_PLAYING);
             break;
         }
@@ -129,7 +125,6 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
             menu->reloadData(app, true);
             break;
         }
-        // --- THIS IS THE MODIFIED CASE ---
         case ItemType::REINDEX: {
             isReindexing_ = true;
             menu->reloadData(app, true);
@@ -151,7 +146,6 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
     }
 }
 
-// The drawItem function remains unchanged
 void MusicPlayListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
     if (index >= items_.size()) return;
     const auto& item = items_[index];

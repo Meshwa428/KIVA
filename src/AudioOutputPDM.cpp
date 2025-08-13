@@ -36,12 +36,19 @@ bool AudioOutputPDM::begin() {
 
 bool AudioOutputPDM::stop() {
     if (m_driver_installed) {
-        flushBuffer();
+        // --- START OF FIX: More robust shutdown sequence ---
+        // 1. Immediately stop the I2S hardware from processing its DMA buffer.
         i2s_stop(m_i2s_port);
+        // 2. Clear any data that might be lingering in the DMA buffer.
+        i2s_zero_dma_buffer(m_i2s_port);
+        // 3. Now that the hardware is quiet, it's safe to uninstall the driver without blocking.
         i2s_driver_uninstall(m_i2s_port);
+        // --- END OF FIX ---
         m_driver_installed = false;
         LOG(LogLevel::INFO, "PDM", "PDM Output driver stopped and uninstalled");
     }
+    // Also clear our software buffer pointer
+    m_buffer_ptr = 0;
     return true;
 }
 

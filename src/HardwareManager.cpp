@@ -15,7 +15,7 @@ HardwareManager::HardwareManager() :
                                      currentHostClient_(HostClient::NONE),
                                      bleStackInitialized_(false),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
-                                     pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false),
+                                     pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false), amplifierOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
                                      isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.5f),
                                      trendBufferIndex_(0), trendBufferFilled_(false), highPerformanceMode_(false)
@@ -47,6 +47,7 @@ void HardwareManager::setup()
 {
     setLaser(false);
     setVibration(false);
+    setAmplifier(false);
 
     // Initialize PCF1 for inputs
     selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
@@ -408,6 +409,19 @@ void HardwareManager::setVibration(bool on)
     writePCF(Pins::PCF0_ADDR, pcf0_output_state_);
 }
 
+void HardwareManager::setAmplifier(bool on) {
+    pinMode(Pins::AMPLIFIER_PIN, OUTPUT);
+    if (on) {
+        amplifierOn_ = true;
+        gpio_hold_dis((gpio_num_t)Pins::AMPLIFIER_PIN);
+    }
+    else {
+        amplifierOn_ = false;
+        digitalWrite(Pins::AMPLIFIER_PIN, LOW);
+        gpio_hold_en((gpio_num_t)Pins::AMPLIFIER_PIN);
+    }
+}
+
 float HardwareManager::readRawBatteryVoltage()
 {
     int rawValue = analogRead(Pins::ADC_PIN);
@@ -465,6 +479,10 @@ bool HardwareManager::isVibrationOn() const
     return vibrationOn_;
 }
 
+bool HardwareManager::isAmplifierOn() const {
+    return amplifierOn_;
+}
+
 U8G2 &HardwareManager::getMainDisplay()
 {
     selectMux(Pins::MUX_CHANNEL_MAIN_DISPLAY);
@@ -486,6 +504,24 @@ InputEvent HardwareManager::getNextInputEvent()
     InputEvent event = inputQueue_.front();
     inputQueue_.erase(inputQueue_.begin());
     return event;
+}
+
+void HardwareManager::clearInputQueue() {
+    inputQueue_.clear();
+    
+    // --- START OF FIX: Reset the internal state of the input poller ---
+    unsigned long currentTime = millis();
+    for (int i = 0; i < 8; ++i) {
+        // Reset state for PCF0 (Encoder Button)
+        prevDbncHState0_[i] = true; // true = released state
+        lastDbncT0_[i] = currentTime;
+
+        // Reset state for PCF1 (Nav Buttons)
+        prevDbncHState1_[i] = true; // true = released state
+        lastDbncT1_[i] = currentTime;
+        isBtnHeld1_[i] = false; // No button is considered held
+    }
+    // --- END OF FIX ---
 }
 
 void HardwareManager::selectMux(uint8_t channel)

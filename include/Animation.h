@@ -1,20 +1,21 @@
 #ifndef ANIMATION_H
 #define ANIMATION_H
 
-#include "Config.h"
+#include <vector>
 
 struct VerticalListAnimation {
-    float itemOffsetY[MAX_ANIM_ITEMS], itemScale[MAX_ANIM_ITEMS];
-    float targetOffsetY[MAX_ANIM_ITEMS], targetScale[MAX_ANIM_ITEMS];
-    float introStartSourceOffsetY[MAX_ANIM_ITEMS];
-    float introStartSourceScale[MAX_ANIM_ITEMS];
+    std::vector<float> itemOffsetY, itemScale;
+    std::vector<float> targetOffsetY, targetScale;
+    std::vector<float> introStartSourceOffsetY;
+    std::vector<float> introStartSourceScale;
     bool isIntroPhase;
     unsigned long introStartTime;
     static constexpr float animSpd = 12.f;
     static constexpr float frmTime = 0.016f;
     static constexpr float itmSpc = 18.f;
     static constexpr float introDuration = 500.0f;
-
+    
+    void resize(size_t size);
     void init();
     void startIntro(int selIdx, int total);
     void setTargets(int selIdx, int total);
@@ -22,11 +23,12 @@ struct VerticalListAnimation {
 };
 
 struct CarouselAnimation {
-    float itemOffsetX[MAX_ANIM_ITEMS], itemScale[MAX_ANIM_ITEMS];
-    float targetOffsetX[MAX_ANIM_ITEMS], targetScale[MAX_ANIM_ITEMS];
+    std::vector<float> itemOffsetX, itemScale;
+    std::vector<float> targetOffsetX, targetScale;
     const float animSpd = 12.f, frmTime = 0.016f;
     const float cardBaseW = 58.f, cardBaseH = 42.f, cardGap = 6.f;
 
+    void resize(size_t size);
     void init();
     void setTargets(int selIdx, int total);
     bool update();

@@ -32,6 +32,10 @@ void SettingsMenu::onEnter(App* app, bool isForwardNav) {
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
+    // --- THIS IS THE FIX ---
+    // The animation vectors must be resized to the number of menu items
+    // BEFORE init() or startIntro() are called.
+    animation_.resize(menuItems_.size());
     animation_.init();
     animation_.startIntro(selectedIndex_, menuItems_.size());
 }

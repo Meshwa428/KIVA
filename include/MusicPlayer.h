@@ -8,7 +8,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-// Forward declarations
+// --- ADD MIXER HEADERS ---
+#include "AudioOutputMixer.h"
+
 class AudioGeneratorMP3;
 class AudioFileSourceSD;
 class App;
@@ -22,6 +24,10 @@ public:
     ~MusicPlayer();
 
     void setup(App* app);
+    
+    // --- Resource management is now for the MIXER ---
+    bool allocateResources();
+    void releaseResources();
 
     void queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex);
     void startQueuedPlayback();
@@ -39,30 +45,33 @@ public:
     std::string getCurrentTrackName() const;
     std::string getPlaylistName() const;
     float getPlaybackProgress() const;
+    bool isServiceRunning() const;
 
 private:
-    static void audioTaskWrapper(void* param);
-    void audioTaskLoop();
+    // --- NEW: Mixer task and loop ---
+    static void mixerTaskWrapper(void* param);
+    void mixerTaskLoop();
 
+    // --- REVISED: Internal playback management ---
     void startPlayback(const std::string& path);
-    void cleanupCurrentTrack();
+    void stopPlayback();
     void playNextInPlaylist(bool songFinishedNaturally = true);
     void generateShuffledIndices();
-    void enableAmplifier(bool enable);
 
     App* app_;
-    AudioGeneratorMP3* mp3_;
-    AudioFileSourceSD* file_;
-    AudioOutputPDM* out_;
-    void* mp3_preAlloc_; 
+    bool resourcesAllocated_;
 
-    // --- START OF FIX ---
-    // These variables are shared between the UI task (Core 0) and the audio task (Core 1).
-    // They MUST be declared volatile to prevent compiler optimizations that would
-    // cause one core to read a stale value from a CPU register.
-    volatile State currentState_;
-    // --- END OF FIX ---
+    // --- NEW: Mixer and I/O components ---
+    AudioOutputPDM* out_;
+    AudioOutputMixer* mixer_;
     
+    // --- NEW: Two slots for seamless track changes ---
+    AudioFileSourceSD* file_[2];
+    AudioGeneratorMP3* mp3_[2];
+    AudioOutputMixerStub* stub_[2];
+    int currentSlot_; // 0 or 1
+
+    volatile State currentState_;
     RepeatMode repeatMode_;
     bool isShuffle_;
     
@@ -74,16 +83,7 @@ private:
     std::string currentTrackName_;
     std::string playlistName_;
 
-    TaskHandle_t audioTaskHandle_;
-
-    enum class AudioCommand { NONE, PLAY_QUEUED, STOP, NEXT, PREV };
-    // --- START OF FIX ---
-    volatile AudioCommand pendingCommand_;
-    // --- END OF FIX ---
-
-    std::string nextPlaylistName_;
-    std::vector<std::string> nextPlaylistTracks_;
-    int nextPlaylistStartIndex_;
+    TaskHandle_t mixerTaskHandle_; // Handle to the persistent mixer task
 };
 
 #endif // MUSIC_PLAYER_H

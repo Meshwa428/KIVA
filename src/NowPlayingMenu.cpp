@@ -1,9 +1,8 @@
-// KIVA/src/NowPlayingMenu.cpp
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "MusicPlayer.h"
 #include "UI_Utils.h"
-#include "Logger.h" // <-- ADD THIS
+#include "Logger.h"
 
 NowPlayingMenu::NowPlayingMenu() :
     marqueeActive_(false),
@@ -13,6 +12,14 @@ NowPlayingMenu::NowPlayingMenu() :
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
+    // Allocate resources when entering the player screen
+    if (!app->getMusicPlayer().allocateResources()) {
+        app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
+            app_cb->changeMenu(MenuType::BACK);
+        }, "OK", "", false);
+        return;
+    }
+
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
     entryTime_ = millis();
@@ -20,14 +27,22 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
+    // We give a tiny delay before starting playback to ensure the UI has drawn its first frame.
     if (!playbackTriggered_ && (millis() - entryTime_ > 50)) {
         app->getMusicPlayer().startQueuedPlayback();
         playbackTriggered_ = true;
     }
+    
+    // --- THIS BLOCK IS NOW REMOVED ---
+    // The MusicPlayer's own task handles auto-play now.
+    // ---
 }
 
 void NowPlayingMenu::onExit(App* app) {
+    // When leaving the "Now Playing" screen, stop the current song.
     app->getMusicPlayer().stop();
+    // Release resources when leaving the player screen entirely.
+    app->getMusicPlayer().releaseResources();
 }
 
 void NowPlayingMenu::handleInput(App* app, InputEvent event) {
@@ -40,13 +55,15 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_LEFT_PRESS:
         case InputEvent::ENCODER_CCW:
-            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); // <-- ADDED LOG
+            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); 
             player.prevTrack();
+            app->clearInputQueue(); // This now correctly resets the input driver's state
             break;
         case InputEvent::BTN_RIGHT_PRESS:
         case InputEvent::ENCODER_CW:
-            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()"); // <-- ADDED LOG
+            LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()");
             player.nextTrack();
+            app->clearInputQueue(); // This now correctly resets the input driver's state
             break;
         case InputEvent::BTN_UP_PRESS:
             player.cycleRepeatMode();

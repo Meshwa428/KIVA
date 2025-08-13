@@ -62,13 +62,16 @@ public:
     U8G2& getSmallDisplay();
 
     // Input accessor
-    InputEvent getNextInputEvent(); 
+    InputEvent getNextInputEvent();
+    void clearInputQueue();
 
     // Output Control Methods
     void setLaser(bool on);
     void setVibration(bool on);
+    void setAmplifier(bool on);
     bool isLaserOn() const;
     bool isVibrationOn() const;
+    bool isAmplifierOn() const;
 
     void setPerformanceMode(bool highPerf);
     void setMainBrightness(uint8_t contrast);
@@ -136,6 +139,7 @@ private:
     uint8_t pcf0_output_state_;
     bool laserOn_;
     bool vibrationOn_;
+    bool amplifierOn_;
     
     // --- Full Battery State Variables ---
     float batteryReadings_[Battery::NUM_SAMPLES];

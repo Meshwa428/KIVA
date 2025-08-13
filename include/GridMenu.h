@@ -31,8 +31,8 @@ private:
     // Animation state
     float targetGridScrollOffset_Y_;
     float currentGridScrollOffset_Y_anim_;
-    float gridItemScale_[MAX_GRID_ITEMS];
-    unsigned long gridItemAnimStartTime_[MAX_GRID_ITEMS];
+    std::vector<float> gridItemScale_;
+    std::vector<unsigned long> gridItemAnimStartTime_;
     bool gridAnimatingIn_;
 
     // Marquee state

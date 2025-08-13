@@ -16,6 +16,7 @@ void ListMenu::reloadData(App* app, bool resetSelection) {
     if (!dataSource_) return;
     
     totalItems_ = dataSource_->getNumberOfItems(app);
+    animation_.resize(totalItems_); // Resize must happen before startIntro
 
     if (resetSelection) {
         selectedIndex_ = 0;
@@ -29,7 +30,6 @@ void ListMenu::reloadData(App* app, bool resetSelection) {
 
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
-    animation_.init();
     animation_.startIntro(selectedIndex_, totalItems_);
 }
 
@@ -117,8 +117,6 @@ void ListMenu::draw(App* app, U8G2& display) {
     display.setFont(u8g2_font_6x10_tf);
 
     for (int i = 0; i < totalItems_; ++i) {
-        if (i >= MAX_ANIM_ITEMS) break;
-
         int item_center_y_rel = (int)animation_.itemOffsetY[i];
         float scale = animation_.itemScale[i];
         if (scale <= 0.01f) continue;

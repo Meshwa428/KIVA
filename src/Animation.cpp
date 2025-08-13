@@ -3,17 +3,28 @@
 #include <math.h>
 
 // --- VerticalListAnimation ---
+void VerticalListAnimation::resize(size_t size) {
+    itemOffsetY.assign(size, 0.0f);
+    itemScale.assign(size, 0.0f);
+    targetOffsetY.assign(size, 0.0f);
+    targetScale.assign(size, 0.0f);
+    introStartSourceOffsetY.assign(size, 0.0f);
+    introStartSourceScale.assign(size, 0.0f);
+}
+
 void VerticalListAnimation::init() {
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
-        itemOffsetY[i] = 0; itemScale[i] = 0.0f;
-        targetOffsetY[i] = 0; targetScale[i] = 0.0f;
-        introStartSourceOffsetY[i] = 0.0f; introStartSourceScale[i] = 0.0f;
-    }
+    std::fill(itemOffsetY.begin(), itemOffsetY.end(), 0.0f);
+    std::fill(itemScale.begin(), itemScale.end(), 0.0f);
+    std::fill(targetOffsetY.begin(), targetOffsetY.end(), 0.0f);
+    std::fill(targetScale.begin(), targetScale.end(), 0.0f);
+    std::fill(introStartSourceOffsetY.begin(), introStartSourceOffsetY.end(), 0.0f);
+    std::fill(introStartSourceScale.begin(), introStartSourceScale.end(), 0.0f);
     isIntroPhase = false; introStartTime = 0;
 }
 
 void VerticalListAnimation::setTargets(int selIdx, int total) {
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+    if (targetOffsetY.size() != total) resize(total);
+    for (int i = 0; i < total; i++) {
         if (i < total) {
             int rP = i - selIdx;
             targetOffsetY[i] = rP * itmSpc;
@@ -33,7 +44,7 @@ void VerticalListAnimation::startIntro(int selIdx, int total) {
     const float initial_scale = 0.0f;
     const float initial_y_offset_factor_from_final = 0.25f;
 
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+    for (int i = 0; i < total; i++) {
         if (i < total) {
             int rP = i - selIdx;
             float finalTargetOffsetY = rP * itmSpc;
@@ -62,17 +73,17 @@ bool VerticalListAnimation::update() {
         float progress = (introStartTime > 0 && currentTime > introStartTime && introDuration > 0) ? (float)(currentTime - introStartTime) / introDuration : 0.0f;
         if (progress >= 1.0f) {
             isIntroPhase = false;
-            for (int i = 0; i < MAX_ANIM_ITEMS; i++) { itemOffsetY[i] = targetOffsetY[i]; itemScale[i] = targetScale[i]; }
+            for (size_t i = 0; i < itemOffsetY.size(); i++) { itemOffsetY[i] = targetOffsetY[i]; itemScale[i] = targetScale[i]; }
             return false;
         }
         float easedProgress = 1.0f - pow(1.0f - progress, 3);
-        for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+        for (size_t i = 0; i < itemOffsetY.size(); i++) {
             itemOffsetY[i] = introStartSourceOffsetY[i] + (targetOffsetY[i] - introStartSourceOffsetY[i]) * easedProgress;
             itemScale[i] = introStartSourceScale[i] + (targetScale[i] - introStartSourceScale[i]) * easedProgress;
         }
         return true;
     } else {
-        for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+        for (size_t i = 0; i < itemOffsetY.size(); i++) {
             float oD = targetOffsetY[i] - itemOffsetY[i];
             if (abs(oD) > 0.01f) { itemOffsetY[i] += oD * animSpd * frmTime; animActive = true; } else { itemOffsetY[i] = targetOffsetY[i]; }
             float sD = targetScale[i] - itemScale[i];
@@ -83,15 +94,22 @@ bool VerticalListAnimation::update() {
 }
 
 // --- CarouselAnimation ---
+void CarouselAnimation::resize(size_t size) {
+    itemOffsetX.assign(size, 0.0f);
+    itemScale.assign(size, 0.0f);
+    targetOffsetX.assign(size, 0.0f);
+    targetScale.assign(size, 0.0f);
+}
+
 void CarouselAnimation::init() {
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
-        itemOffsetX[i] = 0; itemScale[i] = 0.f;
-        targetOffsetX[i] = 0; targetScale[i] = 0.f;
-    }
+    std::fill(itemOffsetX.begin(), itemOffsetX.end(), 0.0f);
+    std::fill(itemScale.begin(), itemScale.end(), 0.0f);
+    std::fill(targetOffsetX.begin(), targetOffsetX.end(), 0.0f);
+    std::fill(targetScale.begin(), targetScale.end(), 0.0f);
 }
 
 void CarouselAnimation::setTargets(int selIdx, int total) {
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+    for (int i = 0; i < total; i++) {
         if (i < total) {
             int rP = i - selIdx;
             targetOffsetX[i] = rP * (cardBaseW * 0.8f + cardGap);
@@ -108,7 +126,7 @@ void CarouselAnimation::setTargets(int selIdx, int total) {
 
 bool CarouselAnimation::update() {
     bool anim = false;
-    for (int i = 0; i < MAX_ANIM_ITEMS; i++) {
+    for (size_t i = 0; i < itemOffsetX.size(); i++) {
         float oD = targetOffsetX[i] - itemOffsetX[i];
         if (abs(oD) > 0.1f) { itemOffsetX[i] += oD * animSpd * frmTime; anim = true; } else { itemOffsetX[i] = targetOffsetX[i]; }
         float sD = targetScale[i] - itemScale[i];

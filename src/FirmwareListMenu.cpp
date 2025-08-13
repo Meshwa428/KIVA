@@ -29,6 +29,7 @@ void FirmwareListMenu::onEnter(App* app, bool isForwardNav) {
     displayItems_.push_back({"Back", true, -1});
     marqueeActive_ = false; // Reset marquee state on enter
     marqueeScrollLeft_ = true;
+    animation_.resize(displayItems_.size());
     animation_.init();
     animation_.startIntro(selectedIndex_, displayItems_.size());
 }

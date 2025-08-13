@@ -29,6 +29,10 @@ void GridMenu::onEnter(App *app, bool isForwardNav)
         currentGridScrollOffset_Y_anim_ = 0;
         marqueeScrollLeft_ = true;
     }
+    // Resize animation vectors to match the number of items
+    gridItemScale_.resize(menuItems_.size());
+    gridItemAnimStartTime_.resize(menuItems_.size());
+
     startGridAnimation();
     marqueeActive_ = false;
 }
@@ -49,7 +53,7 @@ void GridMenu::onUpdate(App *app)
     {
         bool stillAnimating = false;
         unsigned long currentTime = millis();
-        for (size_t i = 0; i < menuItems_.size() && i < MAX_GRID_ITEMS; ++i)
+        for (size_t i = 0; i < menuItems_.size(); ++i)
         {
             if (currentTime >= gridItemAnimStartTime_[i])
             {
@@ -178,19 +182,12 @@ void GridMenu::startGridAnimation()
 {
     gridAnimatingIn_ = true;
     unsigned long currentTime = millis();
-    for (size_t i = 0; i < MAX_GRID_ITEMS; ++i)
+    for (size_t i = 0; i < menuItems_.size(); ++i)
     {
-        if (i < menuItems_.size())
-        {
-            gridItemScale_[i] = 0.0f;
-            int row = i / columns_;
-            int col = i % columns_;
-            gridItemAnimStartTime_[i] = currentTime + (unsigned long)((row * 1.5f + col) * GRID_ANIM_STAGGER_DELAY);
-        }
-        else
-        {
-            gridItemScale_[i] = 0.0f;
-        }
+        gridItemScale_[i] = 0.0f;
+        int row = i / columns_;
+        int col = i % columns_;
+        gridItemAnimStartTime_[i] = currentTime + (unsigned long)((row * 1.5f + col) * GRID_ANIM_STAGGER_DELAY);
     }
 }
 

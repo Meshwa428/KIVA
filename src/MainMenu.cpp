@@ -16,6 +16,7 @@ void MainMenu::onEnter(App* app, bool isForwardNav) {
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
+    animation_.resize(menuItems_.size());
     animation_.init();
     animation_.startIntro(selectedIndex_, menuItems_.size());
 }

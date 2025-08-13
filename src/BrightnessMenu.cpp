@@ -11,6 +11,9 @@ void BrightnessMenu::onEnter(App* app, bool isForwardNav) {
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
+    // --- THIS IS THE FIX ---
+    // Resize the animation vectors to hold 2 items (Main and Aux).
+    animation_.resize(2);
     animation_.init();
     animation_.setTargets(selectedIndex_, 2); // We have 2 items: MAIN and AUX
 }

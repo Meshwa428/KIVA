@@ -22,6 +22,7 @@ void CarouselMenu::onEnter(App* app, bool isForwardNav) {
         selectedIndex_ = 0;
         marqueeScrollLeft_ = true; // Reset marquee direction
     }
+    animation_.resize(menuItems_.size());
     animation_.init();
     animation_.setTargets(selectedIndex_, menuItems_.size());
 }
