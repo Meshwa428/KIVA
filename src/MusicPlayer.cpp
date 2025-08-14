@@ -348,10 +348,12 @@ void MusicPlayer::toggleShuffle() {
             }
         }
     }
+    LOG(LogLevel::INFO, "PLAYER", "Shuffle mode %s", isShuffle_ ? "enabled" : "disabled");
 }
 
 void MusicPlayer::cycleRepeatMode() {
     repeatMode_ = static_cast<RepeatMode>((static_cast<int>(repeatMode_) + 1) % 3);
+    LOG(LogLevel::INFO, "PLAYER", "Repeat mode %s", repeatMode_ == RepeatMode::REPEAT_OFF ? "off" : repeatMode_ == RepeatMode::REPEAT_ALL ? "all" : "one");
 }
 
 void MusicPlayer::generateShuffledIndices() {
