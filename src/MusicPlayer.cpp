@@ -81,25 +81,34 @@ void MusicPlayer::mixerTaskLoop() {
     LOG(LogLevel::INFO, "PLAYER_TASK", "Mixer task started.");
     while (true) {
         bool any_running = false;
-        
-        // This logic now correctly mirrors your reference code:
-        // if (!paused) { mp3->loop(); }
-        if (currentState_ == State::PLAYING) {
-            for (int i = 0; i < 2; i++) {
-                // Defensive null check
-                if (mp3_[i] == nullptr) {
-                    continue;
-                }
-                
-                if (mp3_[i]->isRunning()) {
-                    if (!mp3_[i]->loop()) {
-                        mp3_[i]->stop();
-                        if (i == currentSlot_) {
-                            currentState_ = State::STOPPED;
-                        }
+
+        for (int i = 0; i < 2; i++) {
+            if (mp3_[i] == nullptr) {
+                continue;
+            }
+
+            bool isCurrent = (i == currentSlot_);
+
+            // Clean up the non-current, stopped slot.
+            if (!isCurrent && !mp3_[i]->isRunning()) {
+                LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up finished slot %d", i);
+                delete mp3_[i]; mp3_[i] = nullptr;
+                delete stub_[i]; stub_[i] = nullptr;
+                delete file_[i]; file_[i] = nullptr;
+                continue; // Skip to next slot
+            }
+
+            if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
+                if (!mp3_[i]->loop()) {
+                    mp3_[i]->stop();
+                    if (isCurrent) {
+                        // This is the main track finishing, advance the playlist.
+                        // We must do this from the main thread to avoid concurrency issues.
+                        // So, we just set the state and the main thread will pick it up.
+                        currentState_ = State::STOPPED;
                     }
-                    any_running = true;
                 }
+                any_running = true;
             }
         }
 
@@ -140,6 +149,7 @@ void MusicPlayer::stop() {
 // ... the rest of MusicPlayer.cpp remains unchanged ...
 void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
+    _isLoadingTrack = true; // Set loading flag immediately
     currentState_ = State::LOADING;
     playlistName_ = name;
     currentPlaylist_ = tracks;
@@ -212,6 +222,14 @@ void MusicPlayer::startPlayback(const std::string& path) {
 
     LOG(LogLevel::INFO, "PLAYER", "Attempting to start '%s' in slot %d", path.c_str(), nextSlot);
 
+    // Defensive cleanup: If the next slot is somehow not clean, force it.
+    if (mp3_[nextSlot] != nullptr) {
+        LOG(LogLevel::WARNING, "PLAYER", "Next slot %d was not clean. Forcing cleanup.", nextSlot);
+        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
+        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
+        delete file_[nextSlot]; file_[nextSlot] = nullptr;
+    }
+
     // --- Prepare the next track ---
     file_[nextSlot] = new AudioFileSourceSD(path.c_str());
     if (!file_[nextSlot]->isOpen()) {
@@ -237,15 +255,10 @@ void MusicPlayer::startPlayback(const std::string& path) {
 
     LOG(LogLevel::INFO, "PLAYER", "Playback started successfully in slot %d", nextSlot);
 
-    // --- Clean up the previous slot ---
-    if (prevSlot != -1) {
-        LOG(LogLevel::INFO, "PLAYER", "Stopping and cleaning up previous slot %d", prevSlot);
-        if (mp3_[prevSlot] && mp3_[prevSlot]->isRunning()) {
-            mp3_[prevSlot]->stop();
-        }
-        delete mp3_[prevSlot]; mp3_[prevSlot] = nullptr;
-        delete stub_[prevSlot]; stub_[prevSlot] = nullptr;
-        delete file_[prevSlot]; file_[prevSlot] = nullptr;
+    // --- Stop the previous slot ---
+    if (prevSlot != -1 && mp3_[prevSlot] && mp3_[prevSlot]->isRunning()) {
+        LOG(LogLevel::INFO, "PLAYER", "Stopping previous slot %d", prevSlot);
+        mp3_[prevSlot]->stop();
     }
 
     // --- Transition to the new slot ---
