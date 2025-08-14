@@ -1,0 +1,15 @@
+REM Simple Random Typer Script for KIVA
+REM This script will wait 3 seconds, then type several lines of text.
+
+DELAY 3000
+
+STRINGLN KIVA BadUSB is now active!
+DELAY 500
+STRINGLN Typing a sequence of mixed characters:
+STRINGLN a-B-c-D-e-F-g-H-i-J-k-L-m-N-o-P-q-R-s-T-u-V-w-X-y-Z
+STRINGLN 12345 {([])} !@#$%^&*()_+ 67890
+DELAY 1000
+STRINGLN This line will now be repeated...
+REPEAT 4
+DELAY 500
+STRINGLN Script finished.

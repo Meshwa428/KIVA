@@ -67,7 +67,7 @@ KIVA is built around the **Seeed Studio XIAO ESP32S3 Sense**, chosen for its sma
 - **I2S Microphone:** Offers better audio quality than analog mics.
 - **Small Speaker + Amplifier:** Delivers clear audio output in a compact form.
 - **Custom Scroll Wheel & Buttons:** Enable intuitive navigation and control.
-- **Touchscreen Display:** Provides a visual interface for interaction and feedback.
+- **Monochrome OLED Display:** Dual display setup, maind display and another one as passive display
 
 ## Kiva OS: Software & Conceptual Design
 
@@ -124,3 +124,7 @@ Kiva OS is envisioned as a lightweight, modular software layer designed to:
   - Surface-flush display integration.
 
 ---
+
+
+### Credits
+[Evil Portals](https://github.com/CodyTolene/Red-Portals)

@@ -1,0 +1,99 @@
+<!doctypehtml><html lang=en><meta charset=UTF-8><meta content="width=device-width,initial-scale=1"name=viewport><title>Kiva // Firmware Nexus</title><link href=/favicon.ico rel=icon sizes=any><style>@import url(https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Roboto:wght@300;400;700&display=swap);:root{--primary-color:#00aeff;--secondary-color:#00f5d4;--background-color:#0a0f18;--surface-color:#101827;--text-color:#e0e0e0;--text-secondary-color:#a0a0a0;--border-color:#2a3b4f;--success-color:#00f5d4;--error-color:#ff4d4d;--warning-color:#ffcc00;--font-primary:'Orbitron',sans-serif;--font-secondary:'Roboto',sans-serif}*{box-sizing:border-box;margin:0;padding:0}body{font-family:var(--font-secondary);background-color:var(--background-color);color:var(--text-color);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px;overflow-x:hidden}.container{background-color:var(--surface-color);padding:30px 35px;border-radius:12px;border:1px solid var(--border-color);box-shadow:0 0 30px rgba(0,174,255,.1),0 0 15px rgba(0,245,212,.05);width:100%;max-width:550px;text-align:center;position:relative;overflow:hidden}.container::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:150%;height:100px;background:radial-gradient(circle,rgba(0,174,255,.08) 0,transparent 70%);pointer-events:none;z-index:0}h2{font-family:var(--font-primary);color:var(--primary-color);margin-bottom:20px;font-size:2.2em;letter-spacing:1px;text-shadow:0 0 5px var(--primary-color),0 0 10px var(--primary-color)}p{line-height:1.7;margin-bottom:25px;font-size:1em;color:var(--text-secondary-color)}form{display:flex;flex-direction:column;align-items:center;gap:20px}.file-upload-wrapper{position:relative;width:100%;padding:3px;border-radius:8px;background:linear-gradient(135deg,var(--primary-color),var(--secondary-color));animation:border-flow 4s linear infinite;margin-bottom:10px}@keyframes border-flow{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}input[type=file]{background-color:var(--surface-color);border:none;color:var(--text-secondary-color);padding:12px 15px;border-radius:6px;width:100%;cursor:pointer;font-family:var(--font-secondary);font-size:.95em}input[type=file]::-webkit-file-upload-button{background:var(--primary-color);color:var(--background-color);border:none;padding:10px 18px;border-radius:5px;cursor:pointer;margin-right:15px;font-family:var(--font-secondary);font-weight:500;transition:background-color .3s ease,box-shadow .3s ease}input[type=file]::-webkit-file-upload-button:hover{background-color:var(--secondary-color);box-shadow:0 0 10px var(--secondary-color)}input[type=file]::file-selector-button{background:var(--primary-color);color:var(--background-color);border:none;padding:10px 18px;border-radius:5px;cursor:pointer;margin-right:15px;font-family:var(--font-secondary);font-weight:500;transition:background-color .3s ease,box-shadow .3s ease}input[type=file]::file-selector-button:hover{background-color:var(--secondary-color);box-shadow:0 0 10px var(--secondary-color)}input[type=submit]{background:linear-gradient(135deg,var(--primary-color),var(--secondary-color));color:var(--background-color);border:none;padding:14px 30px;border-radius:8px;font-family:var(--font-primary);font-size:1.1em;font-weight:500;letter-spacing:.5px;cursor:pointer;transition:transform .2s ease,box-shadow .3s ease;box-shadow:0 2px 10px rgba(0,174,255,.3)}input[type=submit]:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,174,255,.5),0 0 15px var(--secondary-color)}input[type=submit]:active{transform:translateY(0)}#prg_container{width:100%;background-color:rgba(255,255,255,.05);border:1px solid var(--border-color);border-radius:8px;overflow:hidden;margin-top:25px;height:24px;position:relative}#prg_container::after{content:'';position:absolute;top:1px;left:1px;right:1px;bottom:1px;border-radius:7px;box-shadow:inset 0 0 5px rgba(0,0,0,.3);pointer-events:none}#prg{width:0%;background:linear-gradient(90deg,var(--primary-color) 0,var(--secondary-color) 100%);color:var(--background-color);text-align:center;line-height:24px;height:100%;border-radius:7px 0 0 7px;transition:width .2s ease-out,background .3s ease;font-family:var(--font-secondary);font-weight:700;font-size:.9em;text-shadow:0 0 2px rgba(0,0,0,.3)}#prg.processing{background:linear-gradient(90deg,var(--warning-color) 0,#ffae00 100%)}#prg.success{background:linear-gradient(90deg,var(--success-color) 0,#00d4a1 100%)}#prg.error{background:linear-gradient(90deg,var(--error-color) 0,#cc3d3d 100%)}#prg.completed{border-radius:7px}#status_msg{margin-top:20px;font-size:.95em;color:var(--text-secondary-color);min-height:1.3em;font-weight:400}#status_msg.error-msg{color:var(--error-color);text-shadow:0 0 5px var(--error-color)}#status_msg.success-msg{color:var(--success-color);text-shadow:0 0 5px var(--success-color)}#status_msg.warning-msg{color:var(--warning-color);text-shadow:0 0 5px var(--warning-color)}</style><div class=container><h2>Kiva // Firmware Nexus</h2><p>Synchronize the latest system calibrations. Ensure stable power linkage during transmission.<form enctype=multipart/form-data id=upload-form method=POST><div class=file-upload-wrapper><input type=file id=file name=update accept=.bin required></div><input type=hidden id=client_timestamp name=client_timestamp> <input type=submit value="Initiate Update"></form><br><div id=prg_container><div id=prg>0%</div></div><p id=status_msg>Awaiting calibration file...</div><script>const prg = document.getElementById('prg');
+        const statusMsg = document.getElementById('status_msg');
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file');
+
+        function setProgressState(state, message = '', percentage = null) {
+            prg.classList.remove('processing', 'success', 'error', 'completed');
+            statusMsg.classList.remove('error-msg', 'success-msg', 'warning-msg');
+
+            switch(state) {
+                case 'idle':
+                    prg.style.width = '0%';
+                    prg.innerHTML = '0%';
+                    statusMsg.innerHTML = message || 'Please upload your .bin file...';
+                    break;
+                case 'uploading':
+                    prg.style.backgroundColor = ''; // Uses default gradient
+                    if (percentage !== null) {
+                        prg.style.width = percentage + '%';
+                        prg.innerHTML = percentage + '%';
+                    }
+                    statusMsg.innerHTML = message || 'Transmitting data stream...';
+                    break;
+                case 'processing':
+                    prg.classList.add('processing', 'completed');
+                    prg.style.width = '100%';
+                    prg.innerHTML = 'Processing';
+                    statusMsg.innerHTML = message || 'Upload complete.';
+                    statusMsg.classList.add('warning-msg');
+                    break;
+                case 'success':
+                    prg.classList.add('success', 'completed');
+                    prg.style.width = '100%';
+                    prg.innerHTML = 'Success';
+                    statusMsg.innerHTML = message || 'Calibration successful! System rebooting.';
+                    statusMsg.classList.add('success-msg');
+                    break;
+                case 'error':
+                    prg.classList.add('error'); // Don't make it full width on error unless specified
+                    // prg.style.width = '100%'; // Optional: make bar full red on error
+                    // prg.innerHTML = 'Error';
+                    statusMsg.innerHTML = message || 'Transmission error. Check console.';
+                    statusMsg.classList.add('error-msg');
+                    break;
+            }
+        }
+        
+        // Initialize
+        setProgressState('idle');
+
+
+        form.addEventListener('submit', el => {
+            el.preventDefault();
+            if (!fileInput.files || fileInput.files.length === 0) {
+                setProgressState('error', 'Error: No calibration file selected.');
+                return;
+            }
+            if (!fileInput.files[0].name.endsWith('.bin')) {
+                setProgressState('error', 'Error: Invalid file signature. Requires .bin package.');
+                return;
+            }
+
+            setProgressState('uploading', 'Initiating transmission...', 0);
+            
+            document.getElementById('client_timestamp').value = new Date().toISOString();
+            
+            const data = new FormData(form);
+            const req = new XMLHttpRequest();
+            const fsize = fileInput.files[0].size;
+            req.open('POST', '/update?size=' + fsize + '&ts=' + encodeURIComponent(document.getElementById('client_timestamp').value));
+            
+            req.upload.addEventListener('progress', p => {
+                if (p.lengthComputable) {
+                    let percentage = Math.round(p.loaded / p.total * 100);
+                    setProgressState('uploading', 'Transmitting: ' + percentage + '%', percentage);
+                    
+                    if (percentage === 100) {
+                       setProgressState('processing');
+                    }
+                }
+            });
+
+            req.addEventListener('load', function(e) {
+                if (req.status == 200) {
+                    setProgressState('success', 'Update successful! Device rebooting... Page will refresh.');
+                    setTimeout(function() { window.location.reload(); }, 10000);
+                } else if (req.status == 307) { // Redirect indicates success and reboot
+                    setProgressState('success', 'Update successful! Device rebooting... Page will redirect.');
+                    // Browser handles redirect
+                } else {
+                    setProgressState('error', 'Update failed: ' + req.responseText + ' (Status: ' + req.status + ')');
+                }
+            });
+
+            req.addEventListener('error', function(e) {
+                setProgressState('error', 'Network error during transmission. Check connection.');
+            });
+            req.send(data);
+        });</script>
