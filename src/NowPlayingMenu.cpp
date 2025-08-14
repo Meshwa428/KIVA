@@ -99,83 +99,91 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
 void NowPlayingMenu::draw(App* app, U8G2& display) {
     auto& player = app->getMusicPlayer();
     auto state = player.getState();
+    const int topY = STATUS_BAR_H;
+    const int DISP_W = 128;
 
-    // 1. Playlist Name
+    // --- Playlist Name ---
     display.setFont(u8g2_font_5x7_tf);
     std::string playlistName = player.getPlaylistName();
     char* truncatedPlaylist = truncateText(playlistName.c_str(), 124, display);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncatedPlaylist)) / 2, STATUS_BAR_H + 7, truncatedPlaylist);
+    display.drawStr((DISP_W - display.getStrWidth(truncatedPlaylist)) / 2, topY + 7, truncatedPlaylist);
+    display.drawHLine(0, topY + 9, DISP_W);
 
-    // 2. Track Name (Marquee)
+    // --- Track Title (Marquee) ---
     display.setFont(u8g2_font_6x10_tf);
-    std::string trackName;
+    std::string trackName = (state == MusicPlayer::State::LOADING) ? "Loading..." : player.getCurrentTrackName();
+    if (trackName.empty()) trackName = "Stopped";
 
-    if (state == MusicPlayer::State::LOADING) {
-        trackName = "Loading...";
-        marqueeActive_ = false; 
-    } else {
-        trackName = player.getCurrentTrackName();
-        if (trackName.empty()) trackName = "Stopped";
-    }
-
-    int text_w = 120;
     if (state != MusicPlayer::State::LOADING) {
-        updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
-                      marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                      marqueeText_, marqueeTextLenPx_, trackName.c_str(), text_w, display);
+        updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_,
+                      marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_,
+                      marqueeText_, marqueeTextLenPx_, trackName.c_str(), 120, display);
     }
-    
-    display.setClipWindow(4, STATUS_BAR_H + 8, 124, STATUS_BAR_H + 22);
+    display.setClipWindow(4, topY + 12, 124, topY + 26);
     if (marqueeActive_) {
-        display.drawStr(4 + (int)marqueeOffset_, STATUS_BAR_H + 18, marqueeText_);
+        display.drawStr(4 + (int)marqueeOffset_, topY + 22, marqueeText_);
     } else {
         int text_width = display.getStrWidth(trackName.c_str());
-        display.drawStr((display.getDisplayWidth() - text_width) / 2, STATUS_BAR_H + 18, trackName.c_str());
+        display.drawStr((DISP_W - text_width) / 2, topY + 22, trackName.c_str());
     }
     display.setMaxClipWindow();
 
-    // 3. Progress Bar
-    float progress = player.getPlaybackProgress();
-    int barX = 14, barW = 100, barH = 5;
-    display.drawFrame(barX, STATUS_BAR_H + 24, barW, barH);
-    int fillW = progress * (barW - 2);
+    // --- Progress Bar ---
+    int barX = 14, barW = 100, barH = 5, barY = topY + 28;
+    drawRndBox(display, barX, barY, barW, barH, 2, false);
+    int fillW = (int)(player.getPlaybackProgress() * (barW - 2));
     if (fillW > 0) {
-        display.drawBox(barX + 1, STATUS_BAR_H + 25, fillW, barH - 2);
+        drawRndBox(display, barX + 1, barY + 1, fillW, barH - 2, 2, true);
     }
 
-    // 4. Controls
-    int controlsY = 50;
-    drawCustomIcon(display, 30, controlsY - 8, IconType::PREV_TRACK);
-    
-    IconType playPauseIcon = (state == MusicPlayer::State::PLAYING) ? IconType::PAUSE : IconType::PLAY;
-    drawCustomIcon(display, 57, controlsY - 8, playPauseIcon);
-    
-    drawCustomIcon(display, 84, controlsY - 8, IconType::NEXT_TRACK);
+    // --- Playback Controls + Shuffle/Repeat on same row (no overlap) ---
+    int controlsY = topY + 38; // row dedicated to 15x15 icons
+    const int ICON_W = 15;
 
-    // 5. Status Icons (Shuffle/Repeat)
-    int statusY = 63 - IconSize::SMALL_HEIGHT;
+    // Shuffle (left-most)
     if (player.isShuffle()) {
-        drawCustomIcon(display, 4, statusY, IconType::SHUFFLE, IconRenderSize::SMALL);
+        drawCustomIcon(display, 4, controlsY, IconType::SHUFFLE);
     }
-    
+
+    // Prev / Play / Next (centered-ish)
+    drawCustomIcon(display, 20, controlsY, IconType::PREV_TRACK);
+    IconType playPauseIcon = (state == MusicPlayer::State::PLAYING) ? IconType::PAUSE : IconType::PLAY;
+    drawCustomIcon(display, 56, controlsY, playPauseIcon);
+    drawCustomIcon(display, 92, controlsY, IconType::NEXT_TRACK);
+
+    // Repeat (right-most)
     auto repeatMode = player.getRepeatMode();
     if (repeatMode == MusicPlayer::RepeatMode::REPEAT_ALL) {
-        drawCustomIcon(display, 118, statusY, IconType::REPEAT, IconRenderSize::SMALL);
+        drawCustomIcon(display, DISP_W - ICON_W - 4, controlsY, IconType::REPEAT);
     } else if (repeatMode == MusicPlayer::RepeatMode::REPEAT_ONE) {
-        drawCustomIcon(display, 118, statusY, IconType::REPEAT_ONE, IconRenderSize::SMALL);
+        drawCustomIcon(display, DISP_W - ICON_W - 4, controlsY, IconType::REPEAT_ONE);
     }
-    
-    // 6. Volume Overlay
+
+    // --- Volume Overlay (white fill + 1px black rounded border) ---
     if (millis() < volumeDisplayUntil_) {
         uint8_t volume = app->getConfigManager().getSettings().volume;
-        int volBarX = 24, volBarY = 25, volBarW = 80, volBarH = 12;
-        
-        drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 2, true);
+        int volBarW = 60, volBarH = 16;
+        int volBarX = (DISP_W - volBarW) / 2;
+        int volBarY = topY + 12; // near the marquee area like in your original aesthetic
+
+        // White filled rounded box
+        display.setDrawColor(1);
+        drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 3, true);
+
+        // Black 1px rounded border
         display.setDrawColor(0);
-        
+        drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 3, false);
+
+        // Volume text in black
         char volStr[8];
         snprintf(volStr, sizeof(volStr), "%d%%", volume);
         display.setFont(u8g2_font_6x10_tf);
-        display.drawStr(volBarX + (volBarW - display.getStrWidth(volStr)) / 2, volBarY + 10, volStr);
+        int tx = volBarX + (volBarW - display.getStrWidth(volStr)) / 2;
+        int ty = volBarY + 12; // matches previous alignment
+        display.drawStr(tx, ty, volStr);
+
+        // restore draw color
+        display.setDrawColor(1);
     }
 }
+
