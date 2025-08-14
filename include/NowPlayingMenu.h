@@ -31,6 +31,7 @@ private:
     // --- NEW MEMBERS FOR DELAYED PLAYBACK TRIGGER ---
     unsigned long entryTime_;
     bool playbackTriggered_;
+    bool _serviceRequestPending; // Flag to delay servicing track change by one update loop
 
     // --- NEW MEMBER FOR VOLUME DISPLAY ---
     unsigned long volumeDisplayUntil_;

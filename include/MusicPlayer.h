@@ -19,6 +19,7 @@ class MusicPlayer {
 public:
     enum class State { STOPPED, LOADING, PLAYING, PAUSED };
     enum class RepeatMode { REPEAT_OFF, REPEAT_ALL, REPEAT_ONE };
+    enum class PlaybackAction { NONE, NEXT, PREV };
 
     MusicPlayer();
     ~MusicPlayer();
@@ -36,12 +37,15 @@ public:
     void stop();
     void nextTrack();
     void prevTrack();
+    void serviceRequest();
     void toggleShuffle();
     void cycleRepeatMode();
     void setVolume(uint8_t volumePercent); // New public method
 
     State getState() const;
     RepeatMode getRepeatMode() const;
+    PlaybackAction getRequestedAction() const;
+    bool isLoadingTrack() const;
     bool isShuffle() const;
     std::string getCurrentTrackName() const;
     std::string getPlaylistName() const;
@@ -74,7 +78,9 @@ private:
 
     volatile State currentState_;
     RepeatMode repeatMode_;
+    PlaybackAction requestedAction_;
     bool isShuffle_;
+    bool _isLoadingTrack;
     float currentGain_; // Current gain level (0.0 to 2.5)
     
     std::vector<std::string> currentPlaylist_;
