@@ -89,33 +89,31 @@ void MusicPlayer::mixerTaskLoop() {
 
             bool isCurrent = (i == currentSlot_);
 
-            // If a slot is NOT the current one but is still running, it's an old
-            // track that needs to be stopped.
-            if (!isCurrent && mp3_[i]->isRunning()) {
-                LOG(LogLevel::INFO, "PLAYER_TASK", "Stopping old slot %d", i);
-                mp3_[i]->stop();
-            }
-
-            // Clean up the non-current, stopped slot.
-            if (!isCurrent && !mp3_[i]->isRunning()) {
-                LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up finished slot %d", i);
-                delete mp3_[i]; mp3_[i] = nullptr;
-                delete stub_[i]; stub_[i] = nullptr;
-                delete file_[i]; file_[i] = nullptr;
-                continue; // Skip to next slot
-            }
-
-            if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
-                if (!mp3_[i]->loop()) {
-                    mp3_[i]->stop();
-                    if (isCurrent) {
-                        // This is the main track finishing, advance the playlist.
-                        // We must do this from the main thread to avoid concurrency issues.
-                        // So, we just set the state and the main thread will pick it up.
+            // This is the currently active track and we're in a playing state
+            if (isCurrent && currentState_ == State::PLAYING) {
+                if (mp3_[i]->isRunning()) {
+                    if (!mp3_[i]->loop()) {
+                        // Song has finished naturally
+                        mp3_[i]->stop();
                         currentState_ = State::STOPPED;
                     }
+                    any_running = true;
                 }
-                any_running = true;
+            }
+            // This is an old track that needs to be stopped and/or cleaned up
+            else {
+                if (mp3_[i]->isRunning()) {
+                    // If it's still running, stop it first.
+                    LOG(LogLevel::INFO, "PLAYER_TASK", "Stopping old slot %d", i);
+                    mp3_[i]->stop();
+                    any_running = true; // Still running for now, don't sleep
+                } else {
+                    // If it's not running and not current, it's safe to clean up.
+                    LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up old slot %d", i);
+                    delete mp3_[i]; mp3_[i] = nullptr;
+                    delete stub_[i]; stub_[i] = nullptr;
+                    delete file_[i]; file_[i] = nullptr;
+                }
             }
         }
 
@@ -229,14 +227,6 @@ void MusicPlayer::startPlayback(const std::string& path) {
 
     LOG(LogLevel::INFO, "PLAYER", "Attempting to start '%s' in slot %d", path.c_str(), nextSlot);
 
-    // Defensive cleanup: If the next slot is somehow not clean, force it.
-    if (mp3_[nextSlot] != nullptr) {
-        LOG(LogLevel::WARN, "PLAYER", "Next slot %d was not clean. Forcing cleanup.", nextSlot);
-        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
-        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
-        delete file_[nextSlot]; file_[nextSlot] = nullptr;
-    }
-
     // --- Prepare the next track ---
     file_[nextSlot] = new AudioFileSourceSD(path.c_str());
     if (!file_[nextSlot]->isOpen()) {
@@ -251,20 +241,24 @@ void MusicPlayer::startPlayback(const std::string& path) {
     stub_[nextSlot]->SetGain(currentGain_);
     mp3_[nextSlot] = new AudioGeneratorMP3();
 
+    // Atomically update the current slot *before* starting the new track.
+    // This prevents the mixer task from seeing a running track in a slot that isn't
+    // yet marked as current, which it would interpret as an old track to be stopped.
+    currentSlot_ = nextSlot;
+
     if (!mp3_[nextSlot]->begin(file_[nextSlot], stub_[nextSlot])) {
         LOG(LogLevel::ERROR, "PLAYER", "MP3 begin failed for slot %d", nextSlot);
         delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
         delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
         delete file_[nextSlot]; file_[nextSlot] = nullptr;
+        currentSlot_ = prevSlot; // Revert slot on failure
         playNextInPlaylist(false); // Try next song
         return;
     }
 
     LOG(LogLevel::INFO, "PLAYER", "Playback started successfully in slot %d", nextSlot);
 
-    // --- Transition to the new slot ---
-    // The mixer task will see this change and handle stopping/cleaning up the old slot.
-    currentSlot_ = nextSlot;
+    // --- Update track metadata ---
     currentTrackPath_ = path;
     size_t last_slash = path.find_last_of('/');
     currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
