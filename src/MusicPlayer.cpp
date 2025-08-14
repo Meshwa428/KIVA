@@ -316,6 +316,10 @@ void MusicPlayer::serviceRequest() {
     playNextInPlaylist(false);
 }
 
+void MusicPlayer::songFinished() {
+    playNextInPlaylist(true);
+}
+
 float MusicPlayer::getPlaybackProgress() const {
     if (currentSlot_ != -1 && file_[currentSlot_] && file_[currentSlot_]->isOpen()) {
         uint32_t pos = file_[currentSlot_]->getPos();

@@ -41,6 +41,7 @@ public:
     void toggleShuffle();
     void cycleRepeatMode();
     void setVolume(uint8_t volumePercent); // New public method
+    void songFinished();
 
     State getState() const;
     RepeatMode getRepeatMode() const;

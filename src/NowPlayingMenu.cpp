@@ -56,7 +56,7 @@ void NowPlayingMenu::onUpdate(App* app) {
     MusicPlayer::State currentPlayerState = player.getState();
     if (lastPlayerState_ == MusicPlayer::State::PLAYING && currentPlayerState == MusicPlayer::State::STOPPED) {
         // The song just finished, play the next one
-        player.playNextInPlaylist(true);
+        player.songFinished();
     }
     lastPlayerState_ = currentPlayerState;
 }
