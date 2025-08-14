@@ -28,6 +28,7 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     playbackTriggered_ = false;
     _serviceRequestPending = false;
     volumeDisplayUntil_ = 0;
+    lastPlayerState_ = app->getMusicPlayer().getState();
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
@@ -50,6 +51,14 @@ void NowPlayingMenu::onUpdate(App* app) {
     else if (requestIsPending) {
         _serviceRequestPending = true;
     }
+
+    // --- Auto-play next song ---
+    MusicPlayer::State currentPlayerState = player.getState();
+    if (lastPlayerState_ == MusicPlayer::State::PLAYING && currentPlayerState == MusicPlayer::State::STOPPED) {
+        // The song just finished, play the next one
+        player.playNextInPlaylist(true);
+    }
+    lastPlayerState_ = currentPlayerState;
 }
 
 void NowPlayingMenu::onExit(App* app) {
