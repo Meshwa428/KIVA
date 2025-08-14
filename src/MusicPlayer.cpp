@@ -89,9 +89,10 @@ void MusicPlayer::mixerTaskLoop() {
 
             bool isCurrent = (i == currentSlot_);
 
-            // This is the currently active track and we're in a playing state
-            if (isCurrent && currentState_ == State::PLAYING) {
-                if (mp3_[i]->isRunning()) {
+            // This is the currently active track
+            if (isCurrent) {
+                // And we're in a playing state
+                if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
                     if (!mp3_[i]->loop()) {
                         // Song has finished naturally
                         mp3_[i]->stop();
@@ -154,7 +155,7 @@ void MusicPlayer::stop() {
 // ... the rest of MusicPlayer.cpp remains unchanged ...
 void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
-    _isLoadingTrack = true; // Set loading flag immediately
+    _isLoadingTrack = true;
     currentState_ = State::LOADING;
     playlistName_ = name;
     currentPlaylist_ = tracks;
@@ -241,9 +242,8 @@ void MusicPlayer::startPlayback(const std::string& path) {
     stub_[nextSlot]->SetGain(currentGain_);
     mp3_[nextSlot] = new AudioGeneratorMP3();
 
-    // Atomically update the current slot *before* starting the new track.
-    // This prevents the mixer task from seeing a running track in a slot that isn't
-    // yet marked as current, which it would interpret as an old track to be stopped.
+    // Set the current slot *before* calling begin() to prevent a race condition
+    // where the mixer task sees a running track in a non-current slot and stops it.
     currentSlot_ = nextSlot;
 
     if (!mp3_[nextSlot]->begin(file_[nextSlot], stub_[nextSlot])) {
@@ -263,7 +263,7 @@ void MusicPlayer::startPlayback(const std::string& path) {
     size_t last_slash = path.find_last_of('/');
     currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
     currentState_ = State::PLAYING;
-    _isLoadingTrack = false; // Loading is complete
+    _isLoadingTrack = false;
 }
 
 void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
