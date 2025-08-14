@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 #include "Logger.h"
 #include "AudioOutputPDM.h"
 #include "freertos/FreeRTOS.h"
@@ -17,6 +18,7 @@ class App;
 
 class MusicPlayer {
 public:
+    using SongFinishedCallback = std::function<void()>;
     enum class State { STOPPED, LOADING, PLAYING, PAUSED };
     enum class RepeatMode { REPEAT_OFF, REPEAT_ALL, REPEAT_ONE };
     enum class PlaybackAction { NONE, NEXT, PREV };
@@ -41,6 +43,8 @@ public:
     void toggleShuffle();
     void cycleRepeatMode();
     void setVolume(uint8_t volumePercent); // New public method
+    void setSongFinishedCallback(SongFinishedCallback cb);
+    void songFinished();
 
     State getState() const;
     RepeatMode getRepeatMode() const;
@@ -92,6 +96,7 @@ private:
     std::string playlistName_;
 
     TaskHandle_t mixerTaskHandle_; // Handle to the persistent mixer task
+    SongFinishedCallback songFinishedCallback_;
 };
 
 #endif // MUSIC_PLAYER_H

@@ -32,6 +32,10 @@ void MusicPlayer::setup(App* app) {
     app_ = app;
 }
 
+void MusicPlayer::setSongFinishedCallback(SongFinishedCallback cb) {
+    songFinishedCallback_ = cb;
+}
+
 bool MusicPlayer::isServiceRunning() const {
     return mixerTaskHandle_ != nullptr;
 }
@@ -96,7 +100,9 @@ void MusicPlayer::mixerTaskLoop() {
                     if (!mp3_[i]->loop()) {
                         // Song has finished naturally
                         mp3_[i]->stop();
-                        currentState_ = State::STOPPED;
+                        if (songFinishedCallback_) {
+                            songFinishedCallback_();
+                        }
                     }
                     any_running = true;
                 }
@@ -290,6 +296,10 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     
     const std::string& path = isShuffle_ ? currentPlaylist_[shuffledIndices_[playlistTrackIndex_]] : currentPlaylist_[playlistTrackIndex_];
     startPlayback(path);
+}
+
+void MusicPlayer::songFinished() {
+    playNextInPlaylist(true);
 }
 
 void MusicPlayer::serviceRequest() {
