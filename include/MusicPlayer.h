@@ -74,7 +74,7 @@ private:
     AudioFileSourceSD* file_[2];
     AudioGeneratorMP3* mp3_[2];
     AudioOutputMixerStub* stub_[2];
-    int currentSlot_; // 0 or 1
+    volatile int currentSlot_; // 0 or 1
 
     volatile State currentState_;
     RepeatMode repeatMode_;

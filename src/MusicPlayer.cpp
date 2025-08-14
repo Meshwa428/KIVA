@@ -101,7 +101,7 @@ void MusicPlayer::mixerTaskLoop() {
                 }
             }
             // This is an old track that needs to be stopped and/or cleaned up
-            else {
+            else if (currentSlot_ != -1) {
                 if (mp3_[i]->isRunning()) {
                     // If it's still running, stop it first.
                     LOG(LogLevel::INFO, "PLAYER_TASK", "Stopping old slot %d", i);
