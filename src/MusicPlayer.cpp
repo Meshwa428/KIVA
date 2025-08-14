@@ -224,7 +224,7 @@ void MusicPlayer::startPlayback(const std::string& path) {
 
     // Defensive cleanup: If the next slot is somehow not clean, force it.
     if (mp3_[nextSlot] != nullptr) {
-        LOG(LogLevel::WARNING, "PLAYER", "Next slot %d was not clean. Forcing cleanup.", nextSlot);
+        LOG(LogLevel::WARN, "PLAYER", "Next slot %d was not clean. Forcing cleanup.", nextSlot);
         delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
         delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
         delete file_[nextSlot]; file_[nextSlot] = nullptr;
