@@ -10,7 +10,8 @@ NowPlayingMenu::NowPlayingMenu() :
     entryTime_(0),
     playbackTriggered_(false),
     _serviceRequestPending(false),
-    volumeDisplayUntil_(0)
+    volumeDisplayUntil_(0),
+    _songFinished(false)
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
@@ -28,7 +29,12 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     playbackTriggered_ = false;
     _serviceRequestPending = false;
     volumeDisplayUntil_ = 0;
-    lastPlayerState_ = app->getMusicPlayer().getState();
+    _songFinished = false;
+
+    // Register callback to know when a song finishes
+    app->getMusicPlayer().setSongFinishedCallback([this](){
+        this->_songFinished = true;
+    });
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
@@ -52,13 +58,11 @@ void NowPlayingMenu::onUpdate(App* app) {
         _serviceRequestPending = true;
     }
 
-    // --- Auto-play next song ---
-    MusicPlayer::State currentPlayerState = player.getState();
-    if (lastPlayerState_ == MusicPlayer::State::PLAYING && currentPlayerState == MusicPlayer::State::STOPPED) {
-        // The song just finished, play the next one
+    // --- Auto-play next song (via callback) ---
+    if (_songFinished) {
+        _songFinished = false;
         player.songFinished();
     }
-    lastPlayerState_ = currentPlayerState;
 }
 
 void NowPlayingMenu::onExit(App* app) {
@@ -66,6 +70,8 @@ void NowPlayingMenu::onExit(App* app) {
     app->getMusicPlayer().stop();
     // Release resources when leaving the player screen entirely.
     app->getMusicPlayer().releaseResources();
+    // Un-register the callback
+    app->getMusicPlayer().setSongFinishedCallback(nullptr);
 }
 
 void NowPlayingMenu::handleInput(App* app, InputEvent event) {
