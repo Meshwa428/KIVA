@@ -12,8 +12,8 @@
 MusicPlayer::MusicPlayer() : 
     app_(nullptr), resourcesAllocated_(false),
     out_(nullptr), mixer_(nullptr), currentSlot_(-1),
-    currentState_(State::STOPPED), repeatMode_(RepeatMode::REPEAT_OFF), isShuffle_(false),
-    currentGain_(1.75f),
+    currentState_(State::STOPPED), repeatMode_(RepeatMode::REPEAT_OFF), requestedAction_(PlaybackAction::NONE), isShuffle_(false),
+    _isLoadingTrack(false), currentGain_(1.75f),
     playlistTrackIndex_(-1),
     mixerTaskHandle_(nullptr)
 {
@@ -81,19 +81,39 @@ void MusicPlayer::mixerTaskLoop() {
     LOG(LogLevel::INFO, "PLAYER_TASK", "Mixer task started.");
     while (true) {
         bool any_running = false;
-        
-        // This logic now correctly mirrors your reference code:
-        // if (!paused) { mp3->loop(); }
-        if (currentState_ == State::PLAYING) {
-            for (int i = 0; i < 2; i++) {
-                if (mp3_[i] && mp3_[i]->isRunning()) {
+
+        for (int i = 0; i < 2; i++) {
+            if (mp3_[i] == nullptr) {
+                continue;
+            }
+
+            bool isCurrent = (i == currentSlot_);
+
+            // This is the currently active track
+            if (isCurrent) {
+                // And we're in a playing state
+                if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
                     if (!mp3_[i]->loop()) {
+                        // Song has finished naturally
                         mp3_[i]->stop();
-                        if (i == currentSlot_) {
-                            currentState_ = State::STOPPED;
-                        }
+                        currentState_ = State::STOPPED;
                     }
                     any_running = true;
+                }
+            }
+            // This is an old track that needs to be stopped and/or cleaned up
+            else if (currentSlot_ != -1) {
+                if (mp3_[i]->isRunning()) {
+                    // If it's still running, stop it first.
+                    LOG(LogLevel::INFO, "PLAYER_TASK", "Stopping old slot %d", i);
+                    mp3_[i]->stop();
+                    any_running = true; // Still running for now, don't sleep
+                } else {
+                    // If it's not running and not current, it's safe to clean up.
+                    LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up old slot %d", i);
+                    delete mp3_[i]; mp3_[i] = nullptr;
+                    delete stub_[i]; stub_[i] = nullptr;
+                    delete file_[i]; file_[i] = nullptr;
                 }
             }
         }
@@ -135,6 +155,7 @@ void MusicPlayer::stop() {
 // ... the rest of MusicPlayer.cpp remains unchanged ...
 void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
+    _isLoadingTrack = true;
     currentState_ = State::LOADING;
     playlistName_ = name;
     currentPlaylist_ = tracks;
@@ -160,17 +181,15 @@ void MusicPlayer::startQueuedPlayback() {
 
 void MusicPlayer::nextTrack() {
     if (!currentPlaylist_.empty()) {
-        playNextInPlaylist(false);
+        _isLoadingTrack = true;
+        requestedAction_ = PlaybackAction::NEXT;
     }
 }
 
 void MusicPlayer::prevTrack() {
     if (!currentPlaylist_.empty()) {
-        playlistTrackIndex_ -= 2; 
-        if (playlistTrackIndex_ < -1) {
-            playlistTrackIndex_ = currentPlaylist_.size() - 2;
-        }
-        playNextInPlaylist(false);
+        _isLoadingTrack = true;
+        requestedAction_ = PlaybackAction::PREV;
     }
 }
 
@@ -191,43 +210,60 @@ void MusicPlayer::setVolume(uint8_t volumePercent) {
 }
 
 void MusicPlayer::stopPlayback() {
-    if (currentSlot_ == -1) return;
-
-    LOG(LogLevel::INFO, "PLAYER", "Stopping playback in slot %d.", currentSlot_);
-    if (mp3_[currentSlot_] && mp3_[currentSlot_]->isRunning()) {
-        mp3_[currentSlot_]->stop();
+    LOG(LogLevel::INFO, "PLAYER", "Stopping all playback and cleaning up both slots.");
+    for (int i = 0; i < 2; ++i) {
+        if (mp3_[i] && mp3_[i]->isRunning()) {
+            mp3_[i]->stop();
+        }
+        delete mp3_[i]; mp3_[i] = nullptr;
+        delete stub_[i]; stub_[i] = nullptr;
+        delete file_[i]; file_[i] = nullptr;
     }
-    delete mp3_[currentSlot_];  mp3_[currentSlot_] = nullptr;
-    delete file_[currentSlot_]; file_[currentSlot_] = nullptr;
-    delete stub_[currentSlot_]; stub_[currentSlot_] = nullptr;
     currentSlot_ = -1;
 }
 
 void MusicPlayer::startPlayback(const std::string& path) {
-    stopPlayback(); // Stop whatever was playing before
+    int prevSlot = currentSlot_;
+    int nextSlot = (currentSlot_ == -1) ? 0 : (currentSlot_ + 1) % 2;
 
-    int nextSlot = 0;
-    currentSlot_ = nextSlot;
+    LOG(LogLevel::INFO, "PLAYER", "Attempting to start '%s' in slot %d", path.c_str(), nextSlot);
 
-    LOG(LogLevel::INFO, "PLAYER", "Starting playback for '%s' in slot %d.", path.c_str(), currentSlot_);
-
-    file_[currentSlot_] = new AudioFileSourceSD(path.c_str());
-    if (!file_[currentSlot_]->isOpen()) {
-        LOG(LogLevel::ERROR, "PLAYER", "Failed to open file.");
-        stopPlayback();
+    // --- Prepare the next track ---
+    file_[nextSlot] = new AudioFileSourceSD(path.c_str());
+    if (!file_[nextSlot]->isOpen()) {
+        LOG(LogLevel::ERROR, "PLAYER", "Failed to open file for slot %d", nextSlot);
+        delete file_[nextSlot];
+        file_[nextSlot] = nullptr;
         playNextInPlaylist(false); // Try next song
         return;
     }
 
-    stub_[currentSlot_] = mixer_->NewInput();
-    stub_[currentSlot_]->SetGain(currentGain_); // Apply the current volume
-    mp3_[currentSlot_] = new AudioGeneratorMP3();
-    mp3_[currentSlot_]->begin(file_[currentSlot_], stub_[currentSlot_]);
+    stub_[nextSlot] = mixer_->NewInput();
+    stub_[nextSlot]->SetGain(currentGain_);
+    mp3_[nextSlot] = new AudioGeneratorMP3();
 
+    // Set the current slot *before* calling begin() to prevent a race condition
+    // where the mixer task sees a running track in a non-current slot and stops it.
+    currentSlot_ = nextSlot;
+
+    if (!mp3_[nextSlot]->begin(file_[nextSlot], stub_[nextSlot])) {
+        LOG(LogLevel::ERROR, "PLAYER", "MP3 begin failed for slot %d", nextSlot);
+        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
+        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
+        delete file_[nextSlot]; file_[nextSlot] = nullptr;
+        currentSlot_ = prevSlot; // Revert slot on failure
+        playNextInPlaylist(false); // Try next song
+        return;
+    }
+
+    LOG(LogLevel::INFO, "PLAYER", "Playback started successfully in slot %d", nextSlot);
+
+    // --- Update track metadata ---
     currentTrackPath_ = path;
     size_t last_slash = path.find_last_of('/');
     currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
     currentState_ = State::PLAYING;
+    _isLoadingTrack = false;
 }
 
 void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
@@ -254,6 +290,30 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     
     const std::string& path = isShuffle_ ? currentPlaylist_[shuffledIndices_[playlistTrackIndex_]] : currentPlaylist_[playlistTrackIndex_];
     startPlayback(path);
+}
+
+void MusicPlayer::serviceRequest() {
+    if (requestedAction_ == PlaybackAction::NONE) {
+        return;
+    }
+
+    if (requestedAction_ == PlaybackAction::NEXT) {
+        // This logic is taken from the original playNextInPlaylist
+        // No changes needed here.
+    } else if (requestedAction_ == PlaybackAction::PREV) {
+        // This logic is taken from the original prevTrack()
+        playlistTrackIndex_ -= 2;
+        if (playlistTrackIndex_ < -1) {
+            // Wrap around to the end of the playlist
+            playlistTrackIndex_ = currentPlaylist_.size() - 2;
+        }
+    }
+
+    // Reset the action now that we're handling it
+    requestedAction_ = PlaybackAction::NONE;
+
+    // Call the actual playback function
+    playNextInPlaylist(false);
 }
 
 float MusicPlayer::getPlaybackProgress() const {
@@ -297,6 +357,8 @@ void MusicPlayer::generateShuffledIndices() {
 
 MusicPlayer::State MusicPlayer::getState() const { return currentState_; }
 MusicPlayer::RepeatMode MusicPlayer::getRepeatMode() const { return repeatMode_; }
+MusicPlayer::PlaybackAction MusicPlayer::getRequestedAction() const { return requestedAction_; }
+bool MusicPlayer::isLoadingTrack() const { return _isLoadingTrack; }
 bool MusicPlayer::isShuffle() const { return isShuffle_; }
 std::string MusicPlayer::getCurrentTrackName() const { return currentTrackName_; }
 std::string MusicPlayer::getPlaylistName() const { return playlistName_; }

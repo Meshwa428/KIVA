@@ -9,6 +9,7 @@ NowPlayingMenu::NowPlayingMenu() :
     marqueeScrollLeft_(true),
     entryTime_(0),
     playbackTriggered_(false),
+    _serviceRequestPending(false),
     volumeDisplayUntil_(0)
 {}
 
@@ -25,7 +26,9 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     marqueeScrollLeft_ = true;
     entryTime_ = millis();
     playbackTriggered_ = false;
+    _serviceRequestPending = false;
     volumeDisplayUntil_ = 0;
+    lastPlayerState_ = app->getMusicPlayer().getState();
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
@@ -34,6 +37,28 @@ void NowPlayingMenu::onUpdate(App* app) {
         app->getMusicPlayer().startQueuedPlayback();
         playbackTriggered_ = true;
     }
+
+    // --- Deferred track change logic ---
+    auto& player = app->getMusicPlayer();
+    bool requestIsPending = player.getRequestedAction() != MusicPlayer::PlaybackAction::NONE;
+
+    // If we have a pending request to service, do it now.
+    if (_serviceRequestPending) {
+        player.serviceRequest();
+        _serviceRequestPending = false; // Reset the flag
+    }
+    // If a new request was just made, set the flag to service it on the *next* update cycle.
+    else if (requestIsPending) {
+        _serviceRequestPending = true;
+    }
+
+    // --- Auto-play next song ---
+    MusicPlayer::State currentPlayerState = player.getState();
+    if (lastPlayerState_ == MusicPlayer::State::PLAYING && currentPlayerState == MusicPlayer::State::STOPPED) {
+        // The song just finished, play the next one
+        player.playNextInPlaylist(true);
+    }
+    lastPlayerState_ = currentPlayerState;
 }
 
 void NowPlayingMenu::onExit(App* app) {
@@ -111,13 +136,16 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
 
     // --- Track Title (Marquee) ---
     display.setFont(u8g2_font_6x10_tf);
-    std::string trackName = (state == MusicPlayer::State::LOADING) ? "Loading..." : player.getCurrentTrackName();
+    std::string trackName = player.isLoadingTrack() ? "Loading..." : player.getCurrentTrackName();
     if (trackName.empty()) trackName = "Stopped";
 
-    if (state != MusicPlayer::State::LOADING) {
+    // The marquee should not run when "Loading..." is displayed
+    if (!player.isLoadingTrack()) {
         updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_,
                       marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_,
                       marqueeText_, marqueeTextLenPx_, trackName.c_str(), 120, display);
+    } else {
+        marqueeActive_ = false; // Stop marquee if it was running
     }
     display.setClipWindow(4, topY + 12, 124, topY + 26);
     if (marqueeActive_) {

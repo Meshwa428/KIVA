@@ -3,6 +3,7 @@
 #define NOW_PLAYING_MENU_H
 
 #include "IMenu.h"
+#include "MusicPlayer.h" // Needed for MusicPlayer::State
 
 class NowPlayingMenu : public IMenu {
 public:
@@ -31,9 +32,13 @@ private:
     // --- NEW MEMBERS FOR DELAYED PLAYBACK TRIGGER ---
     unsigned long entryTime_;
     bool playbackTriggered_;
+    bool _serviceRequestPending; // Flag to delay servicing track change by one update loop
 
     // --- NEW MEMBER FOR VOLUME DISPLAY ---
     unsigned long volumeDisplayUntil_;
+
+    // --- NEW MEMBER FOR AUTO-NEXT ---
+    MusicPlayer::State lastPlayerState_;
 };
 
 #endif // NOW_PLAYING_MENU_H
