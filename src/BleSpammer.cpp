@@ -68,9 +68,7 @@ void BleSpammer::stop() {
 
     isActive_ = false; // Signal task to stop
 
-    // Give the task a moment to stop gracefully
-    vTaskDelay(pdMS_TO_TICKS(100));
-
+    // The task will see the flag and exit its loop. Now, we delete it.
     if (spamTaskHandle_ != nullptr) {
         vTaskDelete(spamTaskHandle_);
         spamTaskHandle_ = nullptr;
@@ -78,7 +76,6 @@ void BleSpammer::stop() {
     }
 
     // The BleManager will handle stopping any advertising and de-initializing the stack.
-    // No need to add extra checks here.
     bleManager_->releaseBle();
     LOG(LogLevel::INFO, "BLESPAM", "BLE resource released.");
 }
@@ -93,8 +90,8 @@ void BleSpammer::spamTask() {
         executeSpamPacket();
         vTaskDelay(pdMS_TO_TICKS(40)); // Delay between packets
     }
-    LOG(LogLevel::INFO, "BLESPAM_TASK", "Task stopping.");
-    vTaskDelete(NULL); // Task deletes itself
+    // The task now simply exits. The `stop()` function is responsible for deletion.
+    LOG(LogLevel::INFO, "BLESPAM_TASK", "Task stopping and exiting.");
 }
 
 void BleSpammer::executeSpamPacket() {
@@ -215,7 +212,10 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
 
 void BleSpammer::generateRandomMac(uint8_t* mac) {
     esp_fill_random(mac, 6);
-    mac[0] |= 0xC0; // Set MAC to random static
+    // For a random static address, the two most significant bits must be 1.
+    mac[0] |= 0xC0;
+    // The error "Base MAC must be a unicast MAC" implies the LSB must be 0.
+    mac[0] &= 0xFE; // Clear the LSB to enforce unicast.
 }
 
 const char* BleSpammer::generateRandomName() {
