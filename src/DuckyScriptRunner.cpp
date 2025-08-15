@@ -1,6 +1,7 @@
 #include "DuckyScriptRunner.h"
 #include "App.h"
 #include "Logger.h"
+#include "BleManager.h"
 #include <BleKeyboard.h> 
 
 static const DuckyCommand duckyCmds[] = {
@@ -66,9 +67,12 @@ static const DuckyCombination duckyCombos[] = {
     {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT, 0}
 };
 
-DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
+DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), bleManager_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
 
-void DuckyScriptRunner::setup(App* app) { app_ = app; }
+void DuckyScriptRunner::setup(App* app, BleManager* bleManager) {
+    app_ = app;
+    bleManager_ = bleManager;
+}
 
 bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     if (isActive()) stopScript();
@@ -77,19 +81,11 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     currentMode_ = mode;
 
     if (mode == Mode::BLE) {
-        // --- THIS IS THE FIX ---
-        // 1. Call the new blocking start function.
-        BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
-
-        // 2. If it returns nullptr, the startup failed or timed out. Abort cleanly.
-        if (!keyboard) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard instance.");
-            // No need to call stopKeyboard() here, as the BleManager is still in an idle state.
+        if (!bleManager_->requestBle(BleManager::BleOwner::KEYBOARD)) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "Failed to acquire BLE resource for keyboard.");
             return false;
         }
-        
-        // 3. If we get here, 'keyboard' is a valid pointer.
-        activeHid_.reset(new BleHid(keyboard));
+        activeHid_.reset(new BleHid(bleManager_->getKeyboard()));
 
     } else { // USB Mode
         activeHid_.reset(new UsbHid());
@@ -97,15 +93,11 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     
     if (!activeHid_->begin()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
-        if (mode == Mode::BLE) {
-            // If begin fails for some reason, we must now stop the manager we just started.
-            app_->getBleManager().stopKeyboard();
-        }
-        activeHid_.reset();
+        // If begin() fails, stopScript() will handle the cleanup, including releasing BLE if needed.
+        stopScript();
         return false;
     }
 
-    // ... (rest of the function is correct) ...
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
@@ -135,8 +127,9 @@ void DuckyScriptRunner::stopScript() {
         activeHid_->end();
     }
     
+    // Release the BLE resource if we were in BLE mode
     if (currentMode_ == Mode::BLE) {
-        app_->getBleManager().stopKeyboard();
+        bleManager_->releaseBle();
     }
 
     activeHid_.reset();
@@ -156,23 +149,22 @@ void DuckyScriptRunner::loop() {
             state_ = State::POST_CONNECTION_DELAY;
             connectionTime_ = millis();
         }
-        return; // Important: exit loop iteration here
+        return;
     }
 
     if (state_ == State::POST_CONNECTION_DELAY) {
-        // Wait for 750ms after connection before starting the script.
         if (millis() - connectionTime_ > 750) {
              LOG(LogLevel::INFO, "DuckyRunner", "Delay complete. Changing state to RUNNING.");
              state_ = State::RUNNING;
         }
-        return; // Don't proceed to RUNNING state in the same loop iteration
+        return;
     }
 
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
         
         activeHid_->releaseAll();
-        delay(defaultDelay_); // This is the inter-command delay
+        delay(defaultDelay_);
         
         currentLine_ = scriptReader_.readLine().c_str(); 
 

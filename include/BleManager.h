@@ -12,9 +12,10 @@ class BleKeyboard;
 
 class BleManager {
 public:
-    enum class State {
-        IDLE,           // Stack is off
-        KEYBOARD_ACTIVE // Stack is on and keyboard services are running
+    enum class BleOwner {
+        NONE,
+        KEYBOARD,
+        SPAMMER
     };
 
     BleManager();
@@ -22,17 +23,13 @@ public:
 
     void setup(App* app);
 
-    // --- REVISED Public API ---
-    // Returns a valid keyboard pointer on success, nullptr on failure.
-    // This function BLOCKS until the BLE task is fully ready.
-    BleKeyboard* startKeyboard();
-
-    // This function BLOCKS until the BLE task has fully shut down.
-    void stopKeyboard();
+    bool requestBle(BleOwner owner);
+    void releaseBle();
     
     // --- Getters for UI ---
-    State getState() const;
+    BleOwner getOwner() const;
     bool isKeyboardConnected() const;
+    BleKeyboard* getKeyboard();
 
 private:
     static void bleTaskWrapper(void* param);
@@ -40,12 +37,11 @@ private:
 
     App* app_;
     TaskHandle_t bleTaskHandle_;
-    SemaphoreHandle_t startSemaphore_; // Confirms startup is complete
-    SemaphoreHandle_t stopSemaphore_;  // Confirms shutdown is complete
+    SemaphoreHandle_t requestSemaphore_;
+    SemaphoreHandle_t releaseSemaphore_;
 
-    volatile State currentState_;
-    volatile bool startKeyboardRequested_;
-    volatile bool stopKeyboardRequested_;
+    volatile BleOwner currentOwner_;
+    volatile BleOwner requestedOwner_;
     
     // unique_ptr to manage the keyboard object's lifetime
     std::unique_ptr<BleKeyboard> bleKeyboard_;

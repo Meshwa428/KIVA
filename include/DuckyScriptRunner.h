@@ -2,6 +2,7 @@
 #define DUCKY_SCRIPT_RUNNER_H
 
 #include "SdCardManager.h"
+#include "BleManager.h" // Include BleManager
 #include <string>
 #include <memory>
 #include <vector>
@@ -80,7 +81,7 @@ public:
     enum class State { IDLE, WAITING_FOR_CONNECTION, POST_CONNECTION_DELAY, RUNNING, FINISHED };
 
     DuckyScriptRunner();
-    void setup(App* app);
+    void setup(App* app, BleManager* bleManager); // Updated setup
     void loop();
 
     bool startScript(const std::string& scriptPath, Mode mode);
@@ -97,6 +98,7 @@ private:
     void executeCombination(const std::string& command, const std::string& arg);
 
     App* app_;
+    BleManager* bleManager_; // Add BleManager pointer
     SdCardManager::LineReader scriptReader_;
     
     std::unique_ptr<HIDInterface> activeHid_;
@@ -109,7 +111,7 @@ private:
     
     unsigned long delayUntil_;
     int defaultDelay_;
-    unsigned long connectionTime_; // <-- ADD THIS MEMBER
+    unsigned long connectionTime_;
     
     std::string lastLine_;
 };

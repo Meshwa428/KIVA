@@ -289,8 +289,8 @@ void App::setup()
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"BLE Manager",     [&](){ bleManager_.setup(this); }},
-        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
+        {"BLE Spammer",     [&](){ bleSpammer_.setup(this, &bleManager_); }},
+        {"BadUSB",          [&](){ duckyRunner_.setup(this, &bleManager_); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }}
     };
@@ -383,7 +383,6 @@ void App::loop()
     evilTwin_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
-    bleSpammer_.loop();
     duckyRunner_.loop();
 
     bool wifiIsRequired = false; 

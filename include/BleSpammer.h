@@ -2,6 +2,9 @@
 #define BLE_SPAMMER_H
 
 #include <NimBLEDevice.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "BleManager.h" // Include the new BleManager header
 
 class App;
 
@@ -18,10 +21,10 @@ enum class BleSpamMode {
 class BleSpammer {
 public:
     BleSpammer();
-    void setup(App* app);
+    void setup(App* app, BleManager* bleManager); // Updated setup
     void start(BleSpamMode mode);
     void stop();
-    void loop();
+    // loop() is removed, as it's being replaced by a dedicated task
     bool isActive() const;
     const char* getModeString() const;
 
@@ -31,11 +34,17 @@ private:
     void generateRandomMac(uint8_t* mac);
     const char* generateRandomName();
 
+    // Task-related functions
+    static void spamTaskWrapper(void* param);
+    void spamTask();
+
     App* app_;
-    bool isActive_;
+    BleManager* bleManager_; // Pointer to the BleManager
+    TaskHandle_t spamTaskHandle_; // Handle for the spam task
+
+    volatile bool isActive_; // Make volatile for thread safety
     BleSpamMode currentMode_;
     BleSpamMode currentSubMode_; // For 'ALL' mode cycling
-    unsigned long lastPacketTime_;
 };
 
 #endif // BLE_SPAMMER_H
