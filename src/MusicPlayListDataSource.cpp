@@ -60,9 +60,6 @@ void MusicPlayListDataSource::loadItemsFromPath(const char* directoryPath) {
         reader.close();
     }
 
-    if (currentPath_ != SD_ROOT::USER_MUSIC) {
-        items_.push_back({"Back", "", ItemType::BACK});
-    }
     items_.push_back({"Re-index Library", "", ItemType::REINDEX});
 }
 
@@ -122,17 +119,6 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
             app->changeMenu(MenuType::NOW_PLAYING);
             break;
         }
-        case ItemType::BACK: {
-            size_t lastSlash = currentPath_.find_last_of('/');
-            if (lastSlash != std::string::npos && lastSlash > 0) {
-                currentPath_ = currentPath_.substr(0, lastSlash);
-            } else {
-                currentPath_ = SD_ROOT::USER_MUSIC;
-            }
-            loadItemsFromPath(currentPath_.c_str());
-            needsReload_ = true; 
-            break;
-        }
         case ItemType::REINDEX: {
             isReindexing_ = true;
             menu->reloadData(app, true);
@@ -164,7 +150,6 @@ void MusicPlayListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, 
         case ItemType::PLAYLIST: icon = IconType::PLAYLIST; break;
         case ItemType::TRACK:    icon = IconType::MUSIC_NOTE; break;
         case ItemType::REINDEX:  icon = IconType::UI_REFRESH; break;
-        case ItemType::BACK:     icon = IconType::NAV_BACK; break;
         default:                 icon = IconType::NONE; break;
     }
     
@@ -175,4 +160,20 @@ void MusicPlayListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, 
     int text_w = w - (text_x - x) - 4;
     
     menu->updateAndDrawText(display, item.name.c_str(), text_x, text_y, text_w, isSelected);
+}
+
+bool MusicPlayListDataSource::onBackPress(App* app, ListMenu* menu) {
+    if (currentPath_ != SD_ROOT::USER_MUSIC) {
+        // Navigate up one directory
+        size_t lastSlash = currentPath_.find_last_of('/');
+        if (lastSlash != std::string::npos && lastSlash > 0) {
+            currentPath_ = currentPath_.substr(0, lastSlash);
+        } else {
+            currentPath_ = SD_ROOT::USER_MUSIC;
+        }
+        loadItemsFromPath(currentPath_.c_str());
+        needsReload_ = true;
+        return true; // We handled the back press
+    }
+    return false; // We are at the root, let the menu handle it (will go to MainMenu)
 }

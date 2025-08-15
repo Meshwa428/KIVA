@@ -70,6 +70,12 @@ public:
      * @return true if a custom message was drawn, false to allow the ListMenu to draw its default message.
      */
     virtual bool drawCustomEmptyMessage(App* app, U8G2& display) { return false; }
+
+    /**
+     * @brief [Optional] Handles a back button press.
+     * @return true if the event was handled, false to let the menu perform its default action.
+     */
+    virtual bool onBackPress(App* app, ListMenu* menu) { return false; }
 };
 
 #endif // I_LIST_MENU_DATA_SOURCE_H
