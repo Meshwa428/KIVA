@@ -92,15 +92,11 @@ void BleManager::taskLoop() {
         if (currentState_ == State::IDLE && startKeyboardRequested_) {
             LOG(LogLevel::INFO, "BLE_MGR_TASK", "STATE_IDLE -> STARTING...");
             
-            if(!NimBLEDevice::init("")) {
-                LOG(LogLevel::ERROR, "BLE_MGR_TASK", "Failed to initialize NimBLE");
-                bleKeyboard_.reset();
-            } else {
-                pServer = NimBLEDevice::createServer();
-                bleKeyboard_.reset(new BleKeyboard("Kiva Ducky", "Kiva Systems", 100));
-                bleKeyboard_->begin();
-                currentState_ = State::KEYBOARD_ACTIVE;
-            }
+            NimBLEDevice::init("");
+            pServer = NimBLEDevice::createServer();
+            bleKeyboard_.reset(new BleKeyboard("Kiva Ducky", "Kiva Systems", 100));
+            bleKeyboard_->begin();
+            currentState_ = State::KEYBOARD_ACTIVE;
             
             startKeyboardRequested_ = false;
             xSemaphoreGive(startSemaphore_);
@@ -127,9 +123,7 @@ void BleManager::taskLoop() {
             
             // 3. De-initialize the entire NimBLE stack. This correctly cleans up
             // the server and removes its internal pointer to our BleKeyboard object.
-            if(NimBLEDevice::isInitialized()) {
-                NimBLEDevice::deinit(true);
-            }
+            NimBLEDevice::deinit();
             
             // 4. NOW it is safe to destroy the BleKeyboard C++ object.
             bleKeyboard_.reset();

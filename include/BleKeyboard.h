@@ -6,13 +6,8 @@
 #include "sdkconfig.h"
 #if defined(CONFIG_BT_ENABLED)
 
-#if defined(USE_NIMBLE)
-
 #include "NimBLECharacteristic.h"
 #include "NimBLEHIDDevice.h"
-#include "NimBLEServer.h"
-#include "NimBLEAdvertising.h"
-#include "NimBLEConnInfo.h"
 
 #define BLEDevice                  NimBLEDevice
 #define BLEServerCallbacks         NimBLEServerCallbacks
@@ -21,13 +16,6 @@
 #define BLECharacteristic          NimBLECharacteristic
 #define BLEAdvertising             NimBLEAdvertising
 #define BLEServer                  NimBLEServer
-
-#else
-
-#include "BLEHIDDevice.h"
-#include "BLECharacteristic.h"
-
-#endif // USE_NIMBLE
 
 #include "Print.h"
 
@@ -131,14 +119,14 @@ typedef struct
   uint8_t keys[6];
 } KeyReport;
 
-class BleKeyboard : public Print, public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks
+class BleKeyboard : public Print, public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
 private:
-  NimBLEHIDDevice* hid;
-  NimBLECharacteristic* inputKeyboard;
-  NimBLECharacteristic* outputKeyboard;
-  NimBLECharacteristic* inputMediaKeys;
-  NimBLEAdvertising*    advertising;
+  BLEHIDDevice* hid;
+  BLECharacteristic* inputKeyboard;
+  BLECharacteristic* outputKeyboard;
+  BLECharacteristic* inputMediaKeys;
+  BLEAdvertising*    advertising;
   KeyReport          _keyReport;
   MediaKeyReport     _mediaKeyReport;
   std::string        deviceName;
@@ -154,7 +142,6 @@ private:
 
 public:
   BleKeyboard(std::string deviceName = "ESP32 Keyboard", std::string deviceManufacturer = "Espressif", uint8_t batteryLevel = 100);
-  virtual ~BleKeyboard(); // <-- FIX: Declare virtual destructor
   void begin(void);
   void end(void);
   void sendReport(KeyReport* keys);
@@ -176,10 +163,11 @@ public:
   void set_product_id(uint16_t pid);
   void set_version(uint16_t version);
 protected:
-  virtual void onStarted(NimBLEServer *pServer) { };
-  void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
-  void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
-  void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override;
+  virtual void onStarted(BLEServer *pServer) { };
+  virtual void onConnect(BLEServer* pServer) override;
+  virtual void onDisconnect(BLEServer* pServer) override;
+  virtual void onWrite(BLECharacteristic* me) override;
+
 };
 
 #endif // CONFIG_BT_ENABLED

