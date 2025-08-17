@@ -78,6 +78,12 @@ bool ProbeSniffer::start() {
     delay(100);
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
+
+    // --- START OF FIX: Explicitly set Station mode before starting ---
+    // This prevents the ESP32 from defaulting to AP mode and broadcasting an SSID.
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    // --- END OF FIX ---
+    
     esp_wifi_start();
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(&packetHandlerCallback);

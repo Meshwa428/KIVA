@@ -32,6 +32,10 @@ void MusicPlayer::setup(App* app) {
     app_ = app;
 }
 
+void MusicPlayer::setSongFinishedCallback(SongFinishedCallback cb) {
+    songFinishedCallback_ = cb;
+}
+
 bool MusicPlayer::isServiceRunning() const {
     return mixerTaskHandle_ != nullptr;
 }
@@ -96,7 +100,9 @@ void MusicPlayer::mixerTaskLoop() {
                     if (!mp3_[i]->loop()) {
                         // Song has finished naturally
                         mp3_[i]->stop();
-                        currentState_ = State::STOPPED;
+                        if (songFinishedCallback_) {
+                            songFinishedCallback_();
+                        }
                     }
                     any_running = true;
                 }
@@ -292,6 +298,10 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
     startPlayback(path);
 }
 
+void MusicPlayer::songFinished() {
+    playNextInPlaylist(true);
+}
+
 void MusicPlayer::serviceRequest() {
     if (requestedAction_ == PlaybackAction::NONE) {
         return;
@@ -338,10 +348,12 @@ void MusicPlayer::toggleShuffle() {
             }
         }
     }
+    LOG(LogLevel::INFO, "PLAYER", "Shuffle mode %s", isShuffle_ ? "enabled" : "disabled");
 }
 
 void MusicPlayer::cycleRepeatMode() {
     repeatMode_ = static_cast<RepeatMode>((static_cast<int>(repeatMode_) + 1) % 3);
+    LOG(LogLevel::INFO, "PLAYER", "Repeat mode %s", repeatMode_ == RepeatMode::REPEAT_OFF ? "off" : repeatMode_ == RepeatMode::REPEAT_ALL ? "all" : "one");
 }
 
 void MusicPlayer::generateShuffledIndices() {

@@ -18,8 +18,11 @@ public:
     void onExit(App* app, ListMenu* menu) override;
     void onUpdate(App* app, ListMenu* menu) override; // Add override specifier
 
+    // Handle back button presses for directory navigation
+    bool onBackPress(App* app, ListMenu* menu) override;
+
 private:
-    enum class ItemType { TRACK, PLAYLIST, REINDEX, BACK };
+    enum class ItemType { TRACK, PLAYLIST, REINDEX };
 
     struct PlaylistItem {
         std::string name;

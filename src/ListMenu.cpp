@@ -56,11 +56,18 @@ void ListMenu::onExit(App* app) {
 void ListMenu::handleInput(App* app, InputEvent event) {
     if (!dataSource_) return;
 
-    // --- FIX: Allow back button even if list is empty (e.g. while scanning) ---
-    if (totalItems_ == 0) {
-        if (event == InputEvent::BTN_BACK_PRESS) {
+    if (event == InputEvent::BTN_BACK_PRESS) {
+        // Delegate back press to data source first. If it returns false,
+        // then perform the default action of going back in the menu stack.
+        if (!dataSource_->onBackPress(app, this)) {
             app->changeMenu(MenuType::BACK);
         }
+        return; // Back press is handled, either by source or by us.
+    }
+
+    // If the list is empty, we only handle BTN_BACK_PRESS (done above).
+    // No other input should do anything.
+    if (totalItems_ == 0) {
         return;
     }
 
@@ -77,9 +84,7 @@ void ListMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_OK_PRESS:
             dataSource_->onItemSelected(app, this, selectedIndex_);
             break;
-        case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
-            break;
+        // BTN_BACK_PRESS is now handled at the top of the function.
         default: break;
     }
 }
