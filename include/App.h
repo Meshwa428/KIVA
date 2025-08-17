@@ -34,6 +34,9 @@
 #include "ProbeSnifferActiveMenu.h"
 #include "KarmaAttacker.h"
 #include "KarmaActiveMenu.h"
+#include "HandshakeCapture.h"
+#include "HandshakeCaptureMenu.h"
+#include "HandshakeCaptureActiveMenu.h"
 #include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
 #include "DuckyScriptRunner.h"
@@ -72,6 +75,7 @@ public:
     EvilTwin &getEvilTwin() { return evilTwin_; }
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
+    HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
     BleManager &getBleManager() { return bleManager_; }
@@ -109,6 +113,7 @@ private:
     EvilTwin evilTwin_;
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
+    HandshakeCapture handshakeCapture_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
     BleManager bleManager_;
@@ -154,6 +159,8 @@ private:
     EvilTwinActiveMenu evilTwinActiveMenu_;
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
+    HandshakeCaptureMenu handshakeCaptureMenu_;
+    HandshakeCaptureActiveMenu handshakeCaptureActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
 

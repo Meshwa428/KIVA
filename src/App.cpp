@@ -50,6 +50,7 @@ App::App() :
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
         MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
         MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
+        MenuItem{"Handshake Sniffer", IconType::WIFI_SCAN, MenuType::HANDSHAKE_CAPTURE_MENU},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", {
@@ -229,6 +230,7 @@ App::App() :
     jammer_(),
     beaconSpammer_(),
     karmaAttacker_(),
+    handshakeCapture_(),
     wifiListDataSource_(),
     firmwareListDataSource_(),
     beaconFileListDataSource_(),
@@ -242,6 +244,8 @@ App::App() :
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
+    handshakeCaptureMenu_(),
+    handshakeCaptureActiveMenu_(),
     bleSpamActiveMenu_(),
     duckyRunner_(),
     bleManager_(),
@@ -288,6 +292,7 @@ void App::setup()
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
+        {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
         {"BLE Manager",     [&](){ bleManager_.setup(this); }},
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
@@ -360,6 +365,8 @@ void App::setup()
     menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
+    menuRegistry_[MenuType::HANDSHAKE_CAPTURE_MENU] = &handshakeCaptureMenu_;
+    menuRegistry_[MenuType::HANDSHAKE_CAPTURE_ACTIVE] = &handshakeCaptureActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
     // --- NEW MUSIC MENUS ---
@@ -383,6 +390,7 @@ void App::loop()
     evilTwin_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
+    handshakeCapture_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
 

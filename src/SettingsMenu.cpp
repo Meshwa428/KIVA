@@ -10,6 +10,7 @@ SettingsMenu::SettingsMenu() :
     menuItems_ = {
         {"Brightness", MenuType::NONE, nullptr, true},
         {"Volume", MenuType::NONE, nullptr, true}, // New volume slider
+        {"Hop Delay", MenuType::NONE, nullptr, true},
         {"KB Layout", MenuType::NONE, nullptr, false},
         {"OTA Password", MenuType::NONE, nullptr, false},
         {"WiFi Settings", MenuType::WIFI_LIST, nullptr, false},
@@ -60,6 +61,15 @@ void SettingsMenu::handleInput(App* app, InputEvent event) {
         }
         if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
             changeVolume(app, 5);
+            return;
+        }
+    } else if (selectedItem.label == "Hop Delay") {
+        if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
+            changeChannelHopDelay(app, -500);
+            return;
+        }
+        if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
+            changeChannelHopDelay(app, 500);
             return;
         }
     } else if (selectedItem.label == "KB Layout") {
@@ -142,6 +152,15 @@ void SettingsMenu::changeVolume(App* app, int delta) {
     app->getConfigManager().saveSettings();
 }
 
+void SettingsMenu::changeChannelHopDelay(App* app, int delta) {
+    auto& settings = app->getConfigManager().getSettings();
+    int newDelay = settings.channelHopDelayMs + delta;
+    if (newDelay < 100) newDelay = 100;
+    if (newDelay > 10000) newDelay = 10000;
+    settings.channelHopDelayMs = newDelay;
+    app->getConfigManager().saveSettings();
+}
+
 void SettingsMenu::changeKeyboardLayout(App* app, int direction) {
     auto& configManager = app->getConfigManager();
     auto& settings = configManager.getSettings();
@@ -194,7 +213,12 @@ void SettingsMenu::draw(App* app, U8G2& display) {
             char buf[16];
             snprintf(buf, sizeof(buf), "< %d%% >", settings.volume);
             valueText = buf;
-        } 
+        }
+        else if (item.label == "Hop Delay") {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "< %dms >", settings.channelHopDelayMs);
+            valueText = buf;
+        }
         else if (item.label == "KB Layout") {
             const auto& layouts = configManager.getKeyboardLayouts();
             const std::string& layoutName = layouts[settings.keyboardLayoutIndex].first;

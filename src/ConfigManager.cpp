@@ -104,6 +104,7 @@ void ConfigManager::loadFromSdCard() {
     settings_.volume = doc["volume"] | 100; // Load volume, default to 100%
     settings_.keyboardLayoutIndex = doc["kb_layout_idx"] | 0;
     strlcpy(settings_.otaPassword, doc["ota_password"] | "KIVA_PASS", sizeof(settings_.otaPassword));
+    settings_.channelHopDelayMs = doc["channel_hop_delay_ms"] | 500;
     
     if (settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         settings_.keyboardLayoutIndex = 0;
@@ -120,6 +121,7 @@ void ConfigManager::saveToSdCard() {
     doc["volume"] = settings_.volume; // Save volume
     doc["kb_layout_idx"] = settings_.keyboardLayoutIndex;
     doc["ota_password"] = settings_.otaPassword;
+    doc["channel_hop_delay_ms"] = settings_.channelHopDelayMs;
 
     String jsonStr;
     serializeJson(doc, jsonStr);
@@ -132,6 +134,7 @@ void ConfigManager::useDefaultSettings() {
     settings_.volume = 100; // Default volume to 100%
     settings_.keyboardLayoutIndex = 0; 
     strcpy(settings_.otaPassword, "KIVA_PASS");
+    settings_.channelHopDelayMs = 500;
 }
 
 bool ConfigManager::reloadFromSdCard() {

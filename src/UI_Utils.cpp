@@ -145,6 +145,12 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::USB:
             xbm_data = icon_usb_large_bits;
             break;
+        case IconType::WIFI_SCAN:
+            xbm_data = icon_wifi_scan_large_bits;
+            break;
+        case IconType::TARGET:
+            xbm_data = icon_target_large_bits;
+            break;
         case IconType::MUSIC_PLAYER:
             xbm_data = icon_music_player_large_bits;
             break;
