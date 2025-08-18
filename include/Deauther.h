@@ -46,10 +46,19 @@ public:
     const DeauthConfig& getPendingConfig() const;
     const std::string& getCurrentTargetSsid() const;
 
+    /**
+     * @brief Sends a burst of deauthentication packets to a target on a specific channel.
+     * This is a static utility function that can be called from anywhere in the app.
+     * It handles channel switching internally.
+     * @param targetBssid The 6-byte BSSID of the target access point.
+     * @param channel The channel the target AP is on.
+     * @param clientMac The 6-byte MAC address of a specific client to deauth. If nullptr, a broadcast deauth is sent.
+     */
+    static void sendPacket(const uint8_t* targetBssid, int channel, const uint8_t* clientMac = nullptr);
+
 private:
     void hopToNextTarget();
     void executeAttackForCurrentTarget();
-    void sendBroadcastDeauthPacket();
 
     App* app_;
     std::unique_ptr<HardwareManager::RfLock> rfLock_;

@@ -50,6 +50,7 @@ App::App() :
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
         MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
         MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
+        MenuItem{"Handshake Sniffer", IconType::NET_WIFI, MenuType::HANDSHAKE_CAPTURE_MENU},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", {
@@ -185,14 +186,32 @@ App::App() :
         MenuItem{"RogueAP (Once)", IconType::BEACON, MenuType::NONE,
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
-                app->getWifiListDataSource().setScanOnEnter(true);
+                auto& ds = app->getWifiListDataSource();
+                // --- RENAMED ---
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getDeauther().start(selectedNetwork)) {
+                        app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }
         },
         MenuItem{"Bcast (Once)", IconType::SKULL, MenuType::NONE, 
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
-                app->getWifiListDataSource().setScanOnEnter(true);
+                auto& ds = app->getWifiListDataSource();
+                // --- RENAMED ---
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getDeauther().start(selectedNetwork)) {
+                        app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
         MenuItem{"RogueAP (All)", IconType::BEACON, MenuType::NONE, 
@@ -229,6 +248,7 @@ App::App() :
     jammer_(),
     beaconSpammer_(),
     karmaAttacker_(),
+    handshakeCapture_(),
     wifiListDataSource_(),
     firmwareListDataSource_(),
     beaconFileListDataSource_(),
@@ -242,6 +262,8 @@ App::App() :
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
+    handshakeCaptureMenu_(),
+    handshakeCaptureActiveMenu_(),
     bleSpamActiveMenu_(),
     duckyRunner_(),
     bleManager_(),
@@ -288,6 +310,7 @@ void App::setup()
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
+        {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
         {"BLE Manager",     [&](){ bleManager_.setup(this); }},
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
@@ -360,6 +383,8 @@ void App::setup()
     menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
+    menuRegistry_[MenuType::HANDSHAKE_CAPTURE_MENU] = &handshakeCaptureMenu_;
+    menuRegistry_[MenuType::HANDSHAKE_CAPTURE_ACTIVE] = &handshakeCaptureActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
     // --- NEW MUSIC MENUS ---
@@ -383,6 +408,7 @@ void App::loop()
     evilTwin_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
+    handshakeCapture_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
 
@@ -407,7 +433,8 @@ void App::loop()
         deauther_.isActive() || 
         evilTwin_.isActive() || 
         karmaAttacker_.isAttacking() || 
-        karmaAttacker_.isSniffing())
+        karmaAttacker_.isSniffing() ||
+        handshakeCapture_.isActive()) // <-- ADD THIS LINE
     {
         wifiIsRequired = true;
     }
@@ -440,7 +467,7 @@ void App::loop()
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))
     {
-        esp_task_wdt_reset();
+        // esp_task_wdt_reset();
         return;
     }
     lastRenderTime = millis();

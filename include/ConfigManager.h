@@ -15,6 +15,7 @@ struct DeviceSettings {
     uint8_t volume;                // 0-200, representing 0-200%
     int keyboardLayoutIndex;
     char otaPassword[33]; // Max 32 chars + null terminator
+    int channelHopDelayMs; // in milliseconds
 };
 
 class ConfigManager {

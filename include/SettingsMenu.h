@@ -24,6 +24,7 @@ private:
     void scroll(int direction);
     void changeBrightness(App* app, int delta, const std::string& target);
     void changeVolume(App* app, int delta); // New helper for volume
+    void changeChannelHopDelay(App* app, int delta);
     void changeKeyboardLayout(App* app, int direction);
 
     struct SettingItem {

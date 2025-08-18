@@ -49,6 +49,7 @@ enum class IconType
     FIRMWARE_UPDATE,
     DISCONNECT,
     USB,
+    TARGET,
     // --- NEW MUSIC ICONS ---
     MUSIC_PLAYER,
     PLAYLIST,
@@ -98,6 +99,7 @@ extern const unsigned char icon_basic_ota_large_bits[];
 extern const unsigned char icon_firmware_update_large_bits[];
 extern const unsigned char icon_disconnect_large_bits[];
 extern const unsigned char icon_usb_large_bits[];
+extern const unsigned char icon_target_large_bits[];
 // --- NEW MUSIC ICONS ---
 extern const unsigned char icon_music_player_large_bits[];
 extern const unsigned char icon_playlist_large_bits[];
