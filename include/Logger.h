@@ -40,7 +40,9 @@ public:
             snprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, format, args...);
         }
 
+        #ifdef ENABLE_DEBUG_PRINT
         Serial.println(buffer);
+        #endif
 
         if (toFile && isInitialized_ && !currentLogFile_.isEmpty()) {
             File logFile = SdCardManager::openFile(currentLogFile_.c_str(), FILE_APPEND);
