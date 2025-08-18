@@ -50,7 +50,7 @@ App::App() :
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
         MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
         MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
-        MenuItem{"Handshake Sniffer", IconType::WIFI_SCAN, MenuType::HANDSHAKE_CAPTURE_MENU},
+        MenuItem{"Handshake Sniffer", IconType::NET_WIFI, MenuType::HANDSHAKE_CAPTURE_MENU},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", {
