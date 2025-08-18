@@ -81,6 +81,7 @@ void HardwareManager::releaseRfControl() {
     if (currentRfClient_ == RfClient::NRF_JAMMER) {
         if (radio1_.isChipConnected()) radio1_.powerDown();
         if (radio2_.isChipConnected()) radio2_.powerDown();
+        SPI.end();
 
     } else if (currentRfClient_ == RfClient::WIFI) {
         WiFi.mode(WIFI_OFF);
@@ -149,15 +150,11 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         }
 
     } else if (client == RfClient::WIFI) {
-        if (radio1_.isChipConnected()) radio1_.powerDown();
-        if (radio2_.isChipConnected()) radio2_.powerDown();
         WiFi.mode(WIFI_STA); 
         currentRfClient_ = RfClient::WIFI;
         return std::unique_ptr<RfLock>(new RfLock(*this, true));
 
     } else if (client == RfClient::WIFI_PROMISCUOUS) {
-        if (radio1_.isChipConnected()) radio1_.powerDown();
-        if (radio2_.isChipConnected()) radio2_.powerDown();
         WiFi.softAPdisconnect(true);
         WiFi.disconnect(true, true);
         delay(100);
@@ -171,8 +168,6 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         }
     
     } else if (client == RfClient::ROGUE_AP) { // <-- ADD THIS BLOCK
-        if (radio1_.isChipConnected()) radio1_.powerDown();
-        if (radio2_.isChipConnected()) radio2_.powerDown();
         WiFi.disconnect(true, true);
         delay(100);
 

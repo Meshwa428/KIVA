@@ -94,8 +94,6 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
         if (hardwareEnabled_) {
             LOG(LogLevel::WARN, "WIFI_MANAGER", "Disabling radio hardware completely.");
             MDNS.end();
-            WiFi.disconnect(true, true);
-            WiFi.softAPdisconnect(true);
             WiFi.mode(WIFI_OFF);
             hardwareEnabled_ = false;
             state_ = WifiState::OFF;

@@ -17,6 +17,12 @@ enum class HandshakeCaptureMode {
     PMKID
 };
 
+enum class TargetedAttackState {
+    WAITING_FOR_DEAUTH,
+    LISTENING,
+    COOLDOWN
+};
+
 enum class HandshakeCaptureType {
     SCANNER,
     TARGETED
@@ -44,6 +50,7 @@ public:
     uint32_t getPacketCount() const;
     int getHandshakeCount() const;
     int getPmkidCount() const;
+    TargetedAttackState getTargetedState() const;
 
 private:
     std::vector<std::string> savedHandshakes;
@@ -51,8 +58,6 @@ private:
 
     static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);
     void handlePacket(wifi_promiscuous_pkt_t *packet);
-
-    void sendDeauthPacket(const WifiNetworkInfo& target);
 
     bool isItEAPOL(const wifi_promiscuous_pkt_t *packet);
     void saveHandshake(const wifi_promiscuous_pkt_t *packet, bool beacon);
@@ -73,7 +78,10 @@ private:
     int channelHopIndex_;
     unsigned long lastChannelHopTime_;
     unsigned long channelHopDelayMs_;
+    
+    TargetedAttackState targetedState_;
     unsigned long lastDeauthTime_;
+    unsigned long handshakeCapturedTime_;
 
     static HandshakeCapture* instance_;
 };

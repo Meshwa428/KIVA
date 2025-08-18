@@ -22,8 +22,10 @@ void HandshakeCaptureActiveMenu::onUpdate(App* app) {
     // Nothing to do here, the capture runs in the background
 }
 
+// --- THIS IS THE MISSING FUNCTION IMPLEMENTATION ---
 void HandshakeCaptureActiveMenu::handleInput(App* app, InputEvent event) {
     if (event == InputEvent::BTN_BACK_PRESS) {
+        // Use returnToMenu to reliably get back to the grid menu
         app->returnToMenu(MenuType::HANDSHAKE_CAPTURE_MENU);
     }
 }
@@ -39,12 +41,22 @@ void HandshakeCaptureActiveMenu::draw(App* app, U8G2& display) {
     int titleWidth = display.getStrWidth(title);
     display.drawStr((128 - titleWidth) / 2, 16, title);
 
-    // Mode
-    const char* type_str = (config.type == HandshakeCaptureType::SCANNER) ? "Scanner" : "Targeted";
-    snprintf(buffer, sizeof(buffer), "Mode: %s", type_str);
+    // Status Section
+    display.setFont(u8g2_font_6x10_tf);
+    if (config.type == HandshakeCaptureType::SCANNER) {
+        snprintf(buffer, sizeof(buffer), "Mode: Scanning");
+    } else {
+        const char* stateStr = "Unknown";
+        switch(capture.getTargetedState()) {
+            case TargetedAttackState::WAITING_FOR_DEAUTH: stateStr = "Deauthing..."; break;
+            case TargetedAttackState::LISTENING:          stateStr = "Listening..."; break;
+            case TargetedAttackState::COOLDOWN:           stateStr = "Cooldown...";  break;
+        }
+        snprintf(buffer, sizeof(buffer), "Status: %s", stateStr);
+    }
     display.drawStr(5, 30, buffer);
 
-    // Stats
+    // Stats Section
     snprintf(buffer, sizeof(buffer), "Packets: %u", capture.getPacketCount());
     display.drawStr(5, 42, buffer);
 

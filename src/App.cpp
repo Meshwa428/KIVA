@@ -433,7 +433,8 @@ void App::loop()
         deauther_.isActive() || 
         evilTwin_.isActive() || 
         karmaAttacker_.isAttacking() || 
-        karmaAttacker_.isSniffing())
+        karmaAttacker_.isSniffing() ||
+        handshakeCapture_.isActive()) // <-- ADD THIS LINE
     {
         wifiIsRequired = true;
     }
@@ -466,7 +467,7 @@ void App::loop()
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))
     {
-        esp_task_wdt_reset();
+        // esp_task_wdt_reset();
         return;
     }
     lastRenderTime = millis();
