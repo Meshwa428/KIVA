@@ -7,6 +7,11 @@
 
 WifiListDataSource::WifiListDataSource() {}
 
+void WifiListDataSource::setSelectionCallback(SelectionCallback callback) {
+    selectionCallback_ = callback;
+}
+
+
 void WifiListDataSource::setScanOnEnter(bool scan) {
     scanOnEnter_ = scan;
 }
@@ -37,6 +42,7 @@ void WifiListDataSource::onExit(App* app, ListMenu* menu) {
     scanOnEnter_ = true;
     isScanning_ = false;
     backNavOverride_ = false;
+    selectionCallback_ = nullptr; // <-- RENAMED
 }
 
 void WifiListDataSource::onUpdate(App* app, ListMenu* menu) {
@@ -106,33 +112,20 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
             app->changeMenu(MenuType::BACK);
             break;
         case ListItemType::NETWORK: {
-            auto& deauther = app->getDeauther();
-            auto& evilTwin = app->getEvilTwin();
-
-            if (deauther.isAttackPending()) {
+            // --- RENAMED ---
+            if (selectionCallback_) {
                 const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
-                if (deauther.start(netInfo)) {
-                    app->changeMenu(MenuType::DEAUTH_ACTIVE);
-                } else {
-                    app->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
-                }
+                // Execute the callback that was set by the calling menu.
+                selectionCallback_(app, netInfo);
+                // The callback is responsible for navigation, so we are done.
                 return;
             }
 
-            if (evilTwin.isAttackPending()) {
-                const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
-                if (evilTwin.start(netInfo)) {
-                    app->changeMenu(MenuType::EVIL_TWIN_ACTIVE);
-                } else {
-                    app->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
-                }
-                return;
-            }
-            
+            // --- FALLBACK: Original connection logic if no callback is set ---
             if (selectedItem.label.rfind("* ", 0) == 0) {
                 app->showPopUp("Disconnect?", selectedItem.label.substr(2), [this, app, menu](App* app_cb) {
                     app_cb->getWifiManager().disconnect();
-                    this->setScanOnEnter(false); 
+                    this->setScanOnEnter(false);
                     this->forceReload(app_cb, menu);
                 }, "OK", "Cancel", true);
             } else {
@@ -145,11 +138,9 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                     } else {
                         TextInputMenu& textMenu = app->getTextInputMenu();
                         textMenu.configure("Enter Password",
-                            // --- THIS IS THE FIX ---
-                            // Use replaceMenu to swap TEXT_INPUT with the status screen in the navigation history.
                             [](App* cb_app, const char* password) {
                                 cb_app->getWifiManager().connectWithPassword(password);
-                                cb_app->replaceMenu(MenuType::WIFI_CONNECTION_STATUS); // <-- CHANGE THIS LINE
+                                cb_app->replaceMenu(MenuType::WIFI_CONNECTION_STATUS);
                             }, true);
                         app->changeMenu(MenuType::TEXT_INPUT);
                     }

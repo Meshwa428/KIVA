@@ -186,14 +186,32 @@ App::App() :
         MenuItem{"RogueAP (Once)", IconType::BEACON, MenuType::NONE,
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
-                app->getWifiListDataSource().setScanOnEnter(true);
+                auto& ds = app->getWifiListDataSource();
+                // --- RENAMED ---
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getDeauther().start(selectedNetwork)) {
+                        app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }
         },
         MenuItem{"Bcast (Once)", IconType::SKULL, MenuType::NONE, 
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
-                app->getWifiListDataSource().setScanOnEnter(true);
+                auto& ds = app->getWifiListDataSource();
+                // --- RENAMED ---
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getDeauther().start(selectedNetwork)) {
+                        app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
         MenuItem{"RogueAP (All)", IconType::BEACON, MenuType::NONE, 

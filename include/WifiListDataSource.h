@@ -5,9 +5,13 @@
 #include "WifiManager.h"
 #include <vector>
 #include <string>
+#include <functional> // <-- ADD THIS
 
 class WifiListDataSource : public IListMenuDataSource {
 public:
+    // --- RENAMED TYPE ALIAS ---
+    using SelectionCallback = std::function<void(App*, const WifiNetworkInfo&)>;
+
     WifiListDataSource();
 
     // IListMenuDataSource implementation
@@ -23,6 +27,9 @@ public:
     void setScanOnEnter(bool scan);
     void setBackNavOverride(bool override);
     void forceReload(App* app, ListMenu* menu);
+
+    // --- RENAMED METHOD ---
+    void setSelectionCallback(SelectionCallback callback);
 
 private:
     void rebuildDisplayItems(App* app);
@@ -43,6 +50,9 @@ private:
     uint32_t lastKnownScanCount_ = 0;
     bool isScanning_ = false;
     bool backNavOverride_ = false;
+
+    // --- RENAMED MEMBER VARIABLE ---
+    SelectionCallback selectionCallback_ = nullptr;
 };
 
 #endif // WIFI_LIST_DATA_SOURCE_H

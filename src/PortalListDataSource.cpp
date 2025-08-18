@@ -48,8 +48,18 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     app->getEvilTwin().prepareAttack();
     app->getEvilTwin().setSelectedPortal(selectedPortal);
     
-    app->getWifiListDataSource().setScanOnEnter(true);
-    app->getWifiListDataSource().setBackNavOverride(false);
+    auto& ds = app->getWifiListDataSource();
+    // --- RENAMED ---
+    ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork) {
+        if (app_cb->getEvilTwin().start(selectedNetwork)) {
+            app_cb->changeMenu(MenuType::EVIL_TWIN_ACTIVE);
+        } else {
+            app_cb->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
+        }
+    });
+
+    ds.setScanOnEnter(true);
+    ds.setBackNavOverride(false);
     app->changeMenu(MenuType::WIFI_LIST);
 }
 
