@@ -13,7 +13,7 @@ void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
     app->getHardwareManager().setPerformanceMode(true);
 
     auto& spammer = app->getBeaconSpammer();
-    auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    auto rfLock = app->getHardwareManager().requestWifiControl(RfClient::WIFI_PROMISCUOUS);
     
     // This now only handles a low-level hardware lock failure, which is the correct behavior.
     if (!spammer.start(std::move(rfLock), modeToStart_, filePathToUse_)) {

@@ -1,7 +1,7 @@
 #include "ChannelSelectionMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
-#include "Jammer.h" // To get JammingMode and JammerConfig
+#include <RF_Sweeper.h> // Include new library header
 
 ChannelSelectionMenu::ChannelSelectionMenu() :
     selectedIndex_(0),
@@ -151,20 +151,16 @@ void ChannelSelectionMenu::startJamming(App* app) {
         return;
     }
     
-    // --- REVERTED FOR FAST SWEEP ---
     config.technique = JammingTechnique::NOISE_INJECTION;
 
-    // 1. Get the destination menu instance.
     JammingActiveMenu* jammerMenu = static_cast<JammingActiveMenu*>(app->getMenu(MenuType::JAMMING_ACTIVE));
     if (jammerMenu) {
-        // 2. Configure it with the mode and custom channels.
+        // Use the new library's enum and config struct
         jammerMenu->setJammingModeToStart(JammingMode::CHANNEL_FLOOD_CUSTOM);
         jammerMenu->setJammingConfig(config);
         
-        // 3. Navigate to it. Its onEnter() will do the work.
         app->changeMenu(MenuType::JAMMING_ACTIVE);
     } else {
-        // This should not happen if the menu is registered correctly.
         app->showPopUp("Fatal Error", "Jamming menu not found.", nullptr, "OK", "", true);
     }
 }

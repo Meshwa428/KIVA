@@ -1,24 +1,36 @@
 #include "BleSpamActiveMenu.h"
 #include "App.h"
+#include "Logger.h"
 
-BleSpamActiveMenu::BleSpamActiveMenu() : modeToStart_(BleSpamMode::ALL) {}
+BleSpamActiveMenu::BleSpamActiveMenu() : spamType_(BleSpam::AppleJuice), spamAll_(false) {}
 
-void BleSpamActiveMenu::setSpamModeToStart(BleSpamMode mode) {
-    modeToStart_ = mode;
+void BleSpamActiveMenu::setSpamType(BleSpam::EBLEPayloadType type) {
+    spamType_ = type;
+}
+
+void BleSpamActiveMenu::setSpamAll(bool all) {
+    spamAll_ = all;
 }
 
 void BleSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
     app->getHardwareManager().setPerformanceMode(true);
-    app->getBleSpammer().start(modeToStart_);
+    if (spamAll_) {
+        app->getBleSpammer().startAll();
+        LOG(LogLevel::INFO, "BLE_SPAM", "Started spamming ALL types.");
+    } else {
+        app->getBleSpammer().start(spamType_);
+        LOG(LogLevel::INFO, "BLE_SPAM", "Started spamming type: %s", getSpamTypeString());
+    }
 }
 
 void BleSpamActiveMenu::onUpdate(App* app) {
-    // Logic is handled by BleSpammer::loop()
+    // The library handles its own background task
 }
 
 void BleSpamActiveMenu::onExit(App* app) {
     app->getBleSpammer().stop();
     app->getHardwareManager().setPerformanceMode(false);
+    LOG(LogLevel::INFO, "BLE_SPAM", "Stopped spamming.");
 }
 
 void BleSpamActiveMenu::handleInput(App* app, InputEvent event) {
@@ -27,10 +39,20 @@ void BleSpamActiveMenu::handleInput(App* app, InputEvent event) {
     }
 }
 
+const char* BleSpamActiveMenu::getSpamTypeString() const {
+    if (spamAll_) return "All Types";
+    switch (spamType_) {
+        case BleSpam::AppleJuice: return "AppleJuice";
+        case BleSpam::SourApple: return "Sour Apple";
+        case BleSpam::Samsung: return "Samsung";
+        case BleSpam::Google: return "Google";
+        case BleSpam::Microsoft: return "Microsoft";
+        default: return "Unknown";
+    }
+}
+
 void BleSpamActiveMenu::draw(App* app, U8G2& display) {
-    auto& spammer = app->getBleSpammer();
-    
-    const char* modeText = spammer.getModeString();
+    const char* modeText = getSpamTypeString();
     
     display.setFont(u8g2_font_7x13B_tr);
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeText))/2, 28, modeText);

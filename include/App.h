@@ -16,7 +16,6 @@
 #include "OtaManager.h"
 #include "OtaStatusMenu.h"
 #include "SplitSelectionMenu.h"
-#include "Jammer.h"
 #include "ChannelSelectionMenu.h"
 #include "JammingActiveMenu.h"
 #include "ListMenu.h"
@@ -37,12 +36,9 @@
 #include "HandshakeCapture.h"
 #include "HandshakeCaptureMenu.h"
 #include "HandshakeCaptureActiveMenu.h"
-#include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
-#include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
-#include "BleManager.h" 
 #include "SettingsMenu.h"
 #include "BrightnessMenu.h"
 #include "ConfigManager.h"
@@ -52,6 +48,13 @@
 #include "NowPlayingMenu.h"
 #include "MusicLibraryManager.h"
 #include "Logger.h"
+
+// --- NEW LIBRARY INCLUDES ---
+#include <BleSpam.h>
+#include <HIDForge.h>
+#include <RF_Sweeper.h>
+#include "DuckyScriptRunner.h"
+#include "MouseJitterActiveMenu.h"
 
 class App
 {
@@ -66,19 +69,17 @@ public:
 
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
                    const std::string &confirmText = "OK", const std::string &cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
+                   
+    // --- UPDATED GETTERS ---
     HardwareManager &getHardwareManager() { return hardware_; }
     WifiManager &getWifiManager() { return wifiManager_; }
     OtaManager &getOtaManager() { return otaManager_; }
-    Jammer &getJammer() { return jammer_; }
     BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
     Deauther &getDeauther() { return deauther_; }
     EvilTwin &getEvilTwin() { return evilTwin_; }
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
-    BleSpammer &getBleSpammer() { return bleSpammer_; }
-    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
-    BleManager &getBleManager() { return bleManager_; }
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
@@ -86,6 +87,17 @@ public:
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
+    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
+    BleSpam& getBleSpammer() { return bleSpammer_; }
+    RFSweeper& getSweeper() { return sweeper_; }
+
+    // --- NEW: HIDForge Getters ---
+    UsbHid& getUsbKeyboard() { return usbKeyboard_; }
+    BleHid& getBleKeyboard() { return bleKeyboard_; }
+    UsbMouse& getUsbMouse() { return usbMouse_; }
+    BleMouse& getBleMouse() { return bleMouse_; }
+    UsbMsc& getUsbMsc() { return usbMsc_; }
+
 
     MenuType getPreviousMenuType() const;
     void clearInputQueue() { hardware_.clearInputQueue(); }
@@ -107,19 +119,26 @@ private:
     HardwareManager hardware_;
     WifiManager wifiManager_;
     OtaManager otaManager_;
-    Jammer jammer_;
     BeaconSpammer beaconSpammer_;
     Deauther deauther_;
     EvilTwin evilTwin_;
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
     HandshakeCapture handshakeCapture_;
-    BleSpammer bleSpammer_;
-    DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_;
     ConfigManager configManager_;
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;
+
+    // --- NEW LIBRARY OBJECTS ---
+    BleSpam bleSpammer_;
+    RFSweeper sweeper_;
+    DuckyScriptRunner duckyRunner_;
+    UsbHid usbKeyboard_;
+    BleHid bleKeyboard_;
+    UsbMouse usbMouse_;
+    BleMouse bleMouse_;
+    UsbMsc usbMsc_;
+
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -140,6 +159,7 @@ private:
     GridMenu firmwareUpdateGrid_;
     GridMenu jammingToolsMenu_;
     GridMenu deauthToolsMenu_;
+    GridMenu mouseToolsMenu_; // New Menu for Mouse Attacks
 
     SettingsMenu settingsMenu_;
     BrightnessMenu brightnessMenu_;
@@ -163,6 +183,7 @@ private:
     HandshakeCaptureActiveMenu handshakeCaptureActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
+    MouseJitterActiveMenu mouseJitterActiveMenu_;
 
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;

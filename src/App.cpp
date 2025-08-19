@@ -1,18 +1,20 @@
 #include "App.h"
 #include "Icons.h"
 #include "UI_Utils.h"
-#include "Jammer.h"
-#include "BleSpammer.h"
-#include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
+#include "DuckyScriptRunner.h"
+
 
 App::App() : 
     currentMenu_(nullptr),
     currentProgressBarFillPx_(0.0f),
+    sweeper_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, Pins::NRF2_CE_PIN, Pins::NRF2_CSN_PIN),
+    bleKeyboard_("Kiva BLE Keyboard"),
+    bleMouse_("Kiva BLE Mouse"),
     mainMenu_(),
     toolsMenu_("Tools", {
         MenuItem{"WiFi Tools", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
@@ -37,9 +39,7 @@ App::App() :
                     HardwareManager &hw = app->getHardwareManager();
                     hw.setLaser(!hw.isLaserOn());
                 }},
-        // --- START OF FIX ---
         MenuItem{"USB Drive Mode", IconType::SD_CARD, MenuType::USB_DRIVE_MODE},
-        // --- END OF FIX ---
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     settingsMenu_(),
@@ -54,52 +54,88 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", {
-        MenuItem{"Apple Juice", IconType::BEACON, MenuType::NONE, 
+        MenuItem{"AppleJuice", IconType::BEACON, MenuType::NONE, 
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) { 
+                    menu->setSpamType(BleSpam::AppleJuice);
+                    menu->setSpamAll(false);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE); 
+                }
             }},
         MenuItem{"Sour Apple", IconType::BEACON, MenuType::NONE, 
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) { 
+                    menu->setSpamType(BleSpam::SourApple);
+                    menu->setSpamAll(false);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE); 
+                }
             }},
         MenuItem{"Android", IconType::BEACON, MenuType::NONE,
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) { 
+                    menu->setSpamType(BleSpam::Google); 
+                    menu->setSpamAll(false);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE);
+                }
             }},
         MenuItem{"Samsung", IconType::BEACON, MenuType::NONE,
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) { 
+                    menu->setSpamType(BleSpam::Samsung);
+                    menu->setSpamAll(false);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE);
+                }
             }},
         MenuItem{"Swift Pair", IconType::BEACON, MenuType::NONE,
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) { 
+                    menu->setSpamType(BleSpam::Microsoft);
+                    menu->setSpamAll(false);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE);
+                }
             }},
         MenuItem{"Tutti-Frutti", IconType::SKULL, MenuType::NONE,
             [](App* app){
                 auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-                if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+                if(menu) {
+                    menu->setSpamAll(true);
+                    app->changeMenu(MenuType::BLE_SPAM_ACTIVE);
+                }
             }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     hostToolsMenu_("Host Tools", {
         MenuItem{"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
-                app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
+                app->getDuckyScriptListDataSource().setHidInterface(&app->getUsbKeyboard());
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
         MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
             [](App* app){
-                app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
+                app->getDuckyScriptListDataSource().setHidInterface(&app->getBleKeyboard());
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
-        MenuItem{"BLE Keyboard", IconType::NONE, MenuType::NONE},
-        MenuItem{"BLE Media", IconType::NONE, MenuType::NONE},
-        MenuItem{"BLE Scroller", IconType::NONE, MenuType::NONE},
+        MenuItem{"Mouse", IconType::NONE, MenuType::MOUSE_TOOLS_GRID},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+    mouseToolsMenu_("Mouse Tools", {
+        MenuItem{"USB Jitter", IconType::USB, MenuType::NONE, 
+            [](App* app) {
+                auto* menu = static_cast<MouseJitterActiveMenu*>(app->getMenu(MenuType::MOUSE_JITTER_ACTIVE));
+                menu->setJitterMode(MouseJitterActiveMenu::JitterMode::USB);
+                app->changeMenu(MenuType::MOUSE_JITTER_ACTIVE);
+            }},
+        MenuItem{"BLE Jitter", IconType::NET_BLUETOOTH, MenuType::NONE, 
+            [](App* app) {
+                auto* menu = static_cast<MouseJitterActiveMenu*>(app->getMenu(MenuType::MOUSE_JITTER_ACTIVE));
+                menu->setJitterMode(MouseJitterActiveMenu::JitterMode::BLE);
+                app->changeMenu(MenuType::MOUSE_JITTER_ACTIVE);
+            }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", {
@@ -125,61 +161,47 @@ App::App() :
         MenuItem{"BLE", IconType::NET_BLUETOOTH, MenuType::NONE,
             [](App *app) {
                 JammingActiveMenu *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
-                if (jammerMenu)
-                {
-                    jammerMenu->setJammingModeToStart(JammingMode::BLE);
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::BLE_ADVERTISING);
                     JammerConfig cfg;
                     cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
+        MenuItem{"Bluetooth", IconType::NET_BLUETOOTH, MenuType::NONE,
             [](App *app) {
                 JammingActiveMenu *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
-                    jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
+                    jammerMenu->setJammingModeToStart(JammingMode::BLUETOOTH);
                     JammerConfig cfg;
                     cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
+        MenuItem{"WiFi", IconType::NET_WIFI, MenuType::NONE,
             [](App *app) {
                 JammingActiveMenu *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
-                    jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
+                    jammerMenu->setJammingModeToStart(JammingMode::WIFI);
                     JammerConfig cfg;
                     cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"Wide Spectrum", IconType::TOOL_JAMMING, MenuType::NONE,
+        MenuItem{"Full Spectrum", IconType::TOOL_JAMMING, MenuType::NONE,
             [](App *app) {
                 JammingActiveMenu *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
-                if (jammerMenu)
-                {
-                    jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::FULL_SPECTRUM);
                     JammerConfig cfg;
                     cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, [](App *app)
-                {
-                    JammingActiveMenu *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
-                    if (jammerMenu)
-                    {
-                        jammerMenu->setJammingModeToStart(JammingMode::ZIGBEE);
-                        JammerConfig cfg;
-                        cfg.technique = JammingTechnique::NOISE_INJECTION;
-                        jammerMenu->setJammingConfig(cfg);
-                        app->changeMenu(MenuType::JAMMING_ACTIVE);
-                    }
-                }},
         MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}},2),
     deauthToolsMenu_("Deauth Attack", {
@@ -187,7 +209,6 @@ App::App() :
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
-                // --- RENAMED ---
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
                     if (app_cb->getDeauther().start(selectedNetwork)) {
                         app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
@@ -203,7 +224,6 @@ App::App() :
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
-                // --- RENAMED ---
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
                     if (app_cb->getDeauther().start(selectedNetwork)) {
                         app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
@@ -245,7 +265,6 @@ App::App() :
     otaStatusMenu_(),
     channelSelectionMenu_(),
     jammingActiveMenu_(),
-    jammer_(),
     beaconSpammer_(),
     karmaAttacker_(),
     handshakeCapture_(),
@@ -265,10 +284,9 @@ App::App() :
     handshakeCaptureMenu_(),
     handshakeCaptureActiveMenu_(),
     bleSpamActiveMenu_(),
-    duckyRunner_(),
-    bleManager_(),
     duckyScriptListDataSource_(),
     duckyScriptActiveMenu_(),
+    mouseJitterActiveMenu_(),
     musicPlayerListMenu_("Music Player", MenuType::MUSIC_PLAYER_LIST, &musicPlayListDataSource_),
     nowPlayingMenu_() 
 {
@@ -283,6 +301,7 @@ void App::setup()
     Serial.begin(115200);
     delay(100);
     Wire.begin();
+    SPI.begin(); // Initialize SPI for RF_Sweeper and SD Card
 
     hardware_.setAmplifier(false);
     hardware_.getMainDisplay().begin();
@@ -304,16 +323,14 @@ void App::setup()
         {"Logger",          [&](){ Logger::getInstance().setup(); }},
         {"WiFi System",     [&](){ wifiManager_.setup(this); }},
         {"OTA System",      [&](){ otaManager_.setup(this, &wifiManager_); }},
-        {"Jammer",          [&](){ jammer_.setup(this); }},
+        {"RF Sweeper",      [&](){ if(!sweeper_.begin()) logToSmallDisplay("NRF24s", "FAIL"); }},
         {"Beacon Spammer",  [&](){ beaconSpammer_.setup(this); }},
         {"Deauther",        [&](){ deauther_.setup(this); }},
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
-        {"BLE Manager",     [&](){ bleManager_.setup(this); }},
-        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
+        {"HIDForge",        [&](){ duckyRunner_.setup(this); }}, // HIDForge is mostly header-only setup
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }}
     };
@@ -358,6 +375,7 @@ void App::setup()
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
     menuRegistry_[MenuType::BLE_TOOLS_GRID] = &bleToolsMenu_;
     menuRegistry_[MenuType::HOST_TOOLS_GRID] = &hostToolsMenu_;
+    menuRegistry_[MenuType::MOUSE_TOOLS_GRID] = &mouseToolsMenu_;
     menuRegistry_[MenuType::FIRMWARE_UPDATE_GRID] = &firmwareUpdateGrid_;
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
     menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
@@ -387,6 +405,7 @@ void App::setup()
     menuRegistry_[MenuType::HANDSHAKE_CAPTURE_ACTIVE] = &handshakeCaptureActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
+    menuRegistry_[MenuType::MOUSE_JITTER_ACTIVE] = &mouseJitterActiveMenu_;
     // --- NEW MUSIC MENUS ---
     menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
     menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
@@ -402,14 +421,13 @@ void App::loop()
     hardware_.update();
     wifiManager_.update();
     otaManager_.loop();
-    jammer_.loop();
+    sweeper_.handleJammer(); // New jammer loop
     beaconSpammer_.loop();
     deauther_.loop();
     evilTwin_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
     handshakeCapture_.loop();
-    bleSpammer_.loop();
     duckyRunner_.loop();
 
     bool wifiIsRequired = false; 
@@ -450,7 +468,6 @@ void App::loop()
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
         LOG(LogLevel::DEBUG, "Input", false, "Event: %s", DebugUtils::inputEventToString(event));
-        // Serial.printf("Event: %s\n", DebugUtils::inputEventToString(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
         }
@@ -461,8 +478,8 @@ void App::loop()
         currentMenu_->onUpdate(this);
     }
 
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
-                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive() ||
+    bool perfMode = sweeper_.isJamming() || beaconSpammer_.isActive() || deauther_.isActive() || 
+                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isRunning() ||
                     duckyRunner_.isActive();
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))

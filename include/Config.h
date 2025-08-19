@@ -4,6 +4,9 @@
 #include <U8g2lib.h>
 #include <cstdint> // For uint8_t
 
+// Define the total size to allocate for EEPROM settings
+#define EEPROM_SIZE 64
+
 // Menu System Enums
 enum class MenuType
 {
@@ -46,9 +49,11 @@ enum class MenuType
     USB_DRIVE_MODE,
     HANDSHAKE_CAPTURE_MENU,
     HANDSHAKE_CAPTURE_ACTIVE,
-    // --- NEW MUSIC PLAYER MENU TYPES ---
     MUSIC_PLAYER_LIST,
-    NOW_PLAYING
+    NOW_PLAYING,
+    // --- NEW MOUSE MENUS ---
+    MOUSE_TOOLS_GRID,
+    MOUSE_JITTER_ACTIVE
 };
 
 // Input Event System

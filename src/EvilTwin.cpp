@@ -70,7 +70,7 @@ bool EvilTwin::start(const WifiNetworkInfo& target) {
         return false;
     }
 
-    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);
+    rfLock_ = app_->getHardwareManager().requestWifiControl(RfClient::ROGUE_AP);
     if (!rfLock_ || !rfLock_->isValid()) {
         // Serial.println("[EVILTWIN] Failed to acquire RF Lock.");
         LOG(LogLevel::ERROR, "EVILTWIN", "Failed to acquire RF Lock.");

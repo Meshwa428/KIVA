@@ -4,8 +4,7 @@
 #include "SdCardManager.h"
 #include <EEPROM.h>
 #include <ArduinoJson.h>
-
-#define EEPROM_SIZE 64 // Allocate 64 bytes for settings
+#include <HIDForge.h>
 
 const uint32_t ConfigManager::EEPROM_MAGIC_NUMBER;
 
@@ -162,4 +161,22 @@ DeviceSettings& ConfigManager::getSettings() {
 
 const std::vector<std::pair<std::string, std::string>>& ConfigManager::getKeyboardLayouts() const {
     return keyboardLayouts_;
+}
+
+const uint8_t* ConfigManager::getHidLayout() const {
+    if ((size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
+        return KeyboardLayout_en_US; // Safe fallback
+    }
+
+    const std::string& layoutName = keyboardLayouts_[settings_.keyboardLayoutIndex].first;
+
+    if (layoutName == "US") return KeyboardLayout_en_US;
+    if (layoutName == "UK") return KeyboardLayout_en_UK;
+    if (layoutName == "DE") return KeyboardLayout_de_DE;
+    if (layoutName == "FR") return KeyboardLayout_fr_FR;
+    if (layoutName == "ES") return KeyboardLayout_es_ES;
+    if (layoutName == "PT") return KeyboardLayout_pt_PT;
+    
+    // Default to US if no match is found
+    return KeyboardLayout_en_US;
 }

@@ -1,4 +1,4 @@
-#include "KeyboardLayout.h"
+#include "OnScreenKeyboardLayout.h"
 
 // Define your keyboard layouts here
 const KeyboardKey keyboard_lowercase[KB_ROWS][KB_LOGICAL_COLS] = {

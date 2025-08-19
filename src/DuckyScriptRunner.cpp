@@ -1,111 +1,58 @@
 #include "DuckyScriptRunner.h"
 #include "App.h"
 #include "Logger.h"
-#include <BleKeyboard.h> 
 
-static const DuckyCommand duckyCmds[] = {
-    {"STRING", 0, DuckyCommand::Type::PRINT},
-    {"STRINGLN", 0, DuckyCommand::Type::PRINT},
-    {"REM", 0, DuckyCommand::Type::PRINT},
-    {"DELAY", 0, DuckyCommand::Type::DELAY},
-    {"DEFAULTDELAY", 0, DuckyCommand::Type::DELAY},
-    {"DEFAULT_DELAY", 0, DuckyCommand::Type::DELAY},
-    {"REPEAT", 0, DuckyCommand::Type::REPEAT},
-    {"BACKSPACE", KEY_BACKSPACE, DuckyCommand::Type::CMD},
-    {"DELETE", KEY_DELETE, DuckyCommand::Type::CMD},
-    {"ALT", KEY_LEFT_ALT, DuckyCommand::Type::CMD},
-    {"CTRL", KEY_LEFT_CTRL, DuckyCommand::Type::CMD},
-    {"CONTROL", KEY_LEFT_CTRL, DuckyCommand::Type::CMD},
-    {"GUI", KEY_LEFT_GUI, DuckyCommand::Type::CMD},
-    {"WINDOWS", KEY_LEFT_GUI, DuckyCommand::Type::CMD},
-    {"SHIFT", KEY_LEFT_SHIFT, DuckyCommand::Type::CMD},
-    {"ESCAPE", KEY_ESC, DuckyCommand::Type::CMD},
-    {"ESC", KEY_ESC, DuckyCommand::Type::CMD},
-    {"TAB", KEY_TAB, DuckyCommand::Type::CMD},
-    {"ENTER", KEY_RETURN, DuckyCommand::Type::CMD},
-    {"DOWNARROW", KEY_DOWN_ARROW, DuckyCommand::Type::CMD},
-    {"DOWN", KEY_DOWN_ARROW, DuckyCommand::Type::CMD},
-    {"LEFTARROW", KEY_LEFT_ARROW, DuckyCommand::Type::CMD},
-    {"LEFT", KEY_LEFT_ARROW, DuckyCommand::Type::CMD},
-    {"RIGHTARROW", KEY_RIGHT_ARROW, DuckyCommand::Type::CMD},
-    {"RIGHT", KEY_RIGHT_ARROW, DuckyCommand::Type::CMD},
-    {"UPARROW", KEY_UP_ARROW, DuckyCommand::Type::CMD},
-    {"UP", KEY_UP_ARROW, DuckyCommand::Type::CMD},
-    {"PAUSE", 0x48, DuckyCommand::Type::CMD},
-    {"BREAK", 0x48, DuckyCommand::Type::CMD},
-    {"CAPSLOCK", KEY_CAPS_LOCK, DuckyCommand::Type::CMD},
-    {"END", KEY_END, DuckyCommand::Type::CMD},
-    {"HOME", KEY_HOME, DuckyCommand::Type::CMD},
-    {"INSERT", KEY_INSERT, DuckyCommand::Type::CMD},
-    {"MENU", 0x65, DuckyCommand::Type::CMD},
-    {"NUMLOCK", 0x53, DuckyCommand::Type::CMD},
-    {"PAGEUP", KEY_PAGE_UP, DuckyCommand::Type::CMD},
-    {"PAGEDOWN", KEY_PAGE_DOWN, DuckyCommand::Type::CMD},
-    {"PRINTSCREEN", 0x46, DuckyCommand::Type::CMD},
-    {"SCROLLLOCK", 0x47, DuckyCommand::Type::CMD},
-    {"SPACE", ' ', DuckyCommand::Type::CMD},
-    {"F1", KEY_F1, DuckyCommand::Type::CMD},
-    {"F2", KEY_F2, DuckyCommand::Type::CMD},
-    {"F3", KEY_F3, DuckyCommand::Type::CMD},
-    {"F4", KEY_F4, DuckyCommand::Type::CMD},
-    {"F5", KEY_F5, DuckyCommand::Type::CMD},
-    {"F6", KEY_F6, DuckyCommand::Type::CMD},
-    {"F7", KEY_F7, DuckyCommand::Type::CMD},
-    {"F8", KEY_F8, DuckyCommand::Type::CMD},
-    {"F9", KEY_F9, DuckyCommand::Type::CMD},
-    {"F10", KEY_F10, DuckyCommand::Type::CMD},
-    {"F11", KEY_F11, DuckyCommand::Type::CMD},
-    {"F12", KEY_F12, DuckyCommand::Type::CMD},
+// Define mappings from generic DuckyScript keys to HIDForge keys
+static const struct {
+    const char* command;
+    uint8_t key;
+} duckyKeyMap[] = {
+    {"BACKSPACE", KEYBACKSPACE}, {"DELETE", KEY_DELETE}, {"ALT", KEY_LEFT_ALT},
+    {"CTRL", KEY_LEFT_CTRL}, {"CONTROL", KEY_LEFT_CTRL}, {"GUI", KEY_LEFT_GUI},
+    {"WINDOWS", KEY_LEFT_GUI}, {"SHIFT", KEY_LEFT_SHIFT}, {"ESCAPE", KEY_ESC},
+    {"ESC", KEY_ESC}, {"TAB", KEYTAB}, {"ENTER", KEY_RETURN},
+    {"DOWNARROW", KEY_DOWN_ARROW}, {"DOWN", KEY_DOWN_ARROW}, {"LEFTARROW", KEY_LEFT_ARROW},
+    {"LEFT", KEY_LEFT_ARROW}, {"RIGHTARROW", KEY_RIGHT_ARROW}, {"RIGHT", KEY_RIGHT_ARROW},
+    {"UPARROW", KEY_UP_ARROW}, {"UP", KEY_UP_ARROW}, {"PAUSE", KEY_PAUSE},
+    {"BREAK", KEY_PAUSE}, {"CAPSLOCK", KEY_CAPS_LOCK}, {"END", KEY_END},
+    {"HOME", KEY_HOME}, {"INSERT", KEY_INSERT}, {"MENU", KEY_MENU},
+    {"PRINTSCREEN", KEY_PRINT_SCREEN}, {"SCROLLLOCK", KEY_SCROLL_LOCK},
+    {"SPACE", ' '}, {"F1", KEY_F1}, {"F2", KEY_F2}, {"F3", KEY_F3}, {"F4", KEY_F4},
+    {"F5", KEY_F5}, {"F6", KEY_F6}, {"F7", KEY_F7}, {"F8", KEY_F8}, {"F9", KEY_F9},
+    {"F10", KEY_F10}, {"F11", KEY_F11}, {"F12", KEY_F12}
 };
+
+// --- RE-ADD THIS STRUCT FOR THE duckyCombos ARRAY ---
+struct DuckyCombination {
+    const char* command;
+    uint8_t key1;
+    uint8_t key2;
+};
+
+// --- RE-ADD THIS ARRAY AS REQUESTED ---
 static const DuckyCombination duckyCombos[] = {
-    {"CTRL-ALT",   KEY_LEFT_CTRL, KEY_LEFT_ALT,   0},
-    {"CTRL-SHIFT", KEY_LEFT_CTRL, KEY_LEFT_SHIFT, 0},
-    {"ALT-SHIFT",  KEY_LEFT_ALT,  KEY_LEFT_SHIFT, 0},
-    {"CTRL-GUI",   KEY_LEFT_CTRL, KEY_LEFT_GUI,   0},
-    {"ALT-GUI",    KEY_LEFT_ALT,  KEY_LEFT_GUI,   0},
-    {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT, 0}
+    {"CTRL-ALT",   KEY_LEFT_CTRL, KEY_LEFT_ALT},
+    {"CTRL-SHIFT", KEY_LEFT_CTRL, KEY_LEFT_SHIFT},
+    {"ALT-SHIFT",  KEY_LEFT_ALT,  KEY_LEFT_SHIFT},
+    {"CTRL-GUI",   KEY_LEFT_CTRL, KEY_LEFT_GUI},
+    {"ALT-GUI",    KEY_LEFT_ALT,  KEY_LEFT_GUI},
+    {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT}
 };
 
-DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
+
+DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), activeHid_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
 
 void DuckyScriptRunner::setup(App* app) { app_ = app; }
 
-bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
+bool DuckyScriptRunner::startScript(const std::string& scriptPath, HIDInterface* hid) {
     if (isActive()) stopScript();
-    
-    LOG(LogLevel::INFO, "DuckyRunner", "Starting script %s in %s mode", scriptPath.c_str(), (mode == Mode::USB ? "USB" : "BLE"));
-    currentMode_ = mode;
 
-    if (mode == Mode::BLE) {
-        // --- THIS IS THE FIX ---
-        // 1. Call the new blocking start function.
-        BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
-
-        // 2. If it returns nullptr, the startup failed or timed out. Abort cleanly.
-        if (!keyboard) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard instance.");
-            // No need to call stopKeyboard() here, as the BleManager is still in an idle state.
-            return false;
-        }
-        
-        // 3. If we get here, 'keyboard' is a valid pointer.
-        activeHid_.reset(new BleHid(keyboard));
-
-    } else { // USB Mode
-        activeHid_.reset(new UsbHid());
-    }
-    
-    if (!activeHid_->begin()) {
-        LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
-        if (mode == Mode::BLE) {
-            // If begin fails for some reason, we must now stop the manager we just started.
-            app_->getBleManager().stopKeyboard();
-        }
-        activeHid_.reset();
+    activeHid_ = hid;
+    if (!activeHid_) {
+        LOG(LogLevel::ERROR, "DuckyRunner", "Provided HID interface is null.");
         return false;
     }
 
-    // ... (rest of the function is correct) ...
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
@@ -115,36 +62,26 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     
     state_ = State::WAITING_FOR_CONNECTION;
     scriptName_ = scriptPath.substr(scriptPath.find_last_of('/') + 1);
-    currentLine_ = "Connecting...";
     linesExecuted_ = 0;
     delayUntil_ = 0;
     defaultDelay_ = 100;
     connectionTime_ = 0;
     lastLine_ = "";
-    
+
     return true;
 }
 
 void DuckyScriptRunner::stopScript() {
     if (!isActive()) return;
     
-    LOG(LogLevel::INFO, "DuckyRunner", "Stopping script...");
-
     if (activeHid_) {
         activeHid_->releaseAll();
-        activeHid_->end();
-    }
-    
-    if (currentMode_ == Mode::BLE) {
-        app_->getBleManager().stopKeyboard();
     }
 
-    activeHid_.reset();
+    activeHid_ = nullptr;
     scriptReader_.close();
     state_ = State::IDLE;
-    currentLine_ = "";
     scriptName_ = "";
-    LOG(LogLevel::INFO, "DuckyRunner", "Script stopped and resources released.");
 }
 
 void DuckyScriptRunner::loop() {
@@ -153,37 +90,27 @@ void DuckyScriptRunner::loop() {
     if (state_ == State::WAITING_FOR_CONNECTION) {
         if (activeHid_->isConnected()) {
             LOG(LogLevel::INFO, "DuckyRunner", "HID connected. Starting post-connection delay.");
-            state_ = State::POST_CONNECTION_DELAY;
             connectionTime_ = millis();
+            state_ = State::RUNNING; // Directly to running, delay is handled by first command
         }
-        return; // Important: exit loop iteration here
-    }
-
-    if (state_ == State::POST_CONNECTION_DELAY) {
-        // Wait for 750ms after connection before starting the script.
-        if (millis() - connectionTime_ > 750) {
-             LOG(LogLevel::INFO, "DuckyRunner", "Delay complete. Changing state to RUNNING.");
-             state_ = State::RUNNING;
-        }
-        return; // Don't proceed to RUNNING state in the same loop iteration
+        return;
     }
 
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
         
         activeHid_->releaseAll();
-        delay(defaultDelay_); // This is the inter-command delay
+        delay(defaultDelay_);
         
-        currentLine_ = scriptReader_.readLine().c_str(); 
+        std::string currentLine = scriptReader_.readLine().c_str(); 
 
-        if (currentLine_.empty()) {
+        if (currentLine.empty()) {
             state_ = State::FINISHED;
-            currentLine_ = "Finished";
             return;
         }
         
         linesExecuted_++;
-        parseAndExecute(currentLine_);
+        parseAndExecute(currentLine);
     }
 }
 
@@ -198,70 +125,98 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
     } else {
         command = line;
     }
+
     if (command == "REM") return;
     if (command != "REPEAT") lastLine_ = line;
-    for (const auto& cmd : duckyCmds) {
-        if (command == cmd.command) {
-            switch (cmd.type) {
-                case DuckyCommand::Type::PRINT:
-                    if (command == "STRING") {
-                        activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
-                    } else if (command == "STRINGLN") {
-                        activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
-                        activeHid_->press(KEY_RETURN);
-                    }
-                    return;
-                case DuckyCommand::Type::DELAY:
-                    if (command == "DELAY") delayUntil_ = millis() + std::stoi(arg);
-                    else if (command == "DEFAULTDELAY" || command == "DEFAULT_DELAY") defaultDelay_ = std::stoi(arg);
-                    return;
-                case DuckyCommand::Type::CMD:
-                    executeCombination(command, arg);
-                    return;
-                case DuckyCommand::Type::REPEAT:
-                    if (!lastLine_.empty()) {
-                        int count = std::stoi(arg);
-                        for (int i = 0; i < count; ++i) {
-                            if (i > 0) { 
-                                activeHid_->releaseAll();
-                                delay(defaultDelay_);
-                            }
-                            parseAndExecute(lastLine_);
-                        }
-                    }
-                    return; 
-                default: break;
+
+    if (command == "STRING") {
+        activeHid_->print(arg.c_str());
+        return;
+    }
+    if (command == "DELAY") {
+        delayUntil_ = millis() + std::stoi(arg);
+        return;
+    }
+    if (command == "DEFAULTDELAY" || command == "DEFAULT_DELAY") {
+        defaultDelay_ = std::stoi(arg);
+        return;
+    }
+    if (command == "REPEAT") {
+        if (!lastLine_.empty()) {
+            int count = std::stoi(arg);
+            for (int i = 0; i < count; ++i) {
+                if (i > 0) { 
+                    activeHid_->releaseAll();
+                    delay(defaultDelay_);
+                }
+                parseAndExecute(lastLine_);
             }
         }
+        return;
     }
-    activeHid_->write((const uint8_t*)line.c_str(), line.length());
-}
-
-void DuckyScriptRunner::executeCombination(const std::string& command, const std::string& arg) {
-    if (!activeHid_) return;
+    
+    // --- START: MODIFIED PARSING LOGIC ---
+    // 1. Check for hardcoded two-key combinations first, as requested.
     for (const auto& combo : duckyCombos) {
         if (command == combo.command) {
             activeHid_->press(combo.key1);
             activeHid_->press(combo.key2);
-            if (!arg.empty()) activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
-            return;
+            if (!arg.empty()) {
+                activeHid_->press(arg[0]); // Press the character argument
+            }
+            return; // Combination handled, exit function.
         }
     }
-    uint8_t keyToPress = 0;
-    for (const auto& cmd : duckyCmds) {
-        if (command == cmd.command && cmd.type == DuckyCommand::Type::CMD) {
-            keyToPress = cmd.key;
+
+    // 2. If not a hardcoded combo, proceed to the dynamic parser.
+    std::vector<uint8_t> keysToPress;
+    size_t start = 0;
+    size_t end = command.find('-');
+    while (end != std::string::npos) {
+        std::string key_str = command.substr(start, end - start);
+        bool found = false;
+        for (const auto& key : duckyKeyMap) {
+            if (key_str == key.command) {
+                keysToPress.push_back(key.key);
+                found = true;
+                break;
+            }
+        }
+        if (!found) { // If part of a combo isn't a known key, it's not a combo.
+            keysToPress.clear();
             break;
         }
+        start = end + 1;
+        end = command.find('-', start);
     }
-    if (keyToPress) {
-        activeHid_->press(keyToPress);
-        if (!arg.empty()) activeHid_->write((const uint8_t*)arg.c_str(), arg.length());
+    
+    // Process the last (or only) part of the command
+    if (keysToPress.empty() || start < command.length()) {
+        std::string last_key_str = command.substr(start);
+        bool found = false;
+        for (const auto& key : duckyKeyMap) {
+            if (last_key_str == key.command) {
+                keysToPress.push_back(key.key);
+                found = true;
+                break;
+            }
+        }
+        if (!found) { // This part is not a recognized key command
+            keysToPress.clear();
+        }
     }
+
+    if (!keysToPress.empty()) { // It's a combo or single command key
+        for (uint8_t key : keysToPress) activeHid_->press(key);
+        if (!arg.empty()) activeHid_->press(arg[0]);
+    } else {
+        // Not a known command, treat the whole line as a string to print
+        activeHid_->println(line.c_str());
+    }
+    // --- END: MODIFIED PARSING LOGIC ---
 }
 
 DuckyScriptRunner::State DuckyScriptRunner::getState() const { return state_; }
 bool DuckyScriptRunner::isActive() const { return state_ != State::IDLE; }
-const std::string& DuckyScriptRunner::getCurrentLine() const { return currentLine_; }
 const std::string& DuckyScriptRunner::getScriptName() const { return scriptName_; }
 uint32_t DuckyScriptRunner::getLinesExecuted() const { return linesExecuted_; }

@@ -3,13 +3,12 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
+#include "DuckyScriptRunner.h"
 
-// --- ADD CONSTRUCTOR ---
-DuckyScriptListDataSource::DuckyScriptListDataSource() : modeToExecute_(DuckyScriptRunner::Mode::USB) {}
+DuckyScriptListDataSource::DuckyScriptListDataSource() : hidInterfaceToUse_(nullptr) {}
 
-// --- ADD SETTER IMPLEMENTATION ---
-void DuckyScriptListDataSource::setExecutionMode(DuckyScriptRunner::Mode mode) {
-    modeToExecute_ = mode;
+void DuckyScriptListDataSource::setHidInterface(HIDInterface* hid) {
+    hidInterfaceToUse_ = hid;
 }
 
 void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
@@ -32,31 +31,32 @@ void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForward
     root.close();
 }
 
-void DuckyScriptListDataSource::onExit(App* app, ListMenu* menu) {}
+void DuckyScriptListDataSource::onExit(App* app, ListMenu* menu) {
+    hidInterfaceToUse_ = nullptr; // Clear the pointer on exit
+}
 
 int DuckyScriptListDataSource::getNumberOfItems(App* app) {
     return fileNames_.size();
 }
 
-const std::string& DuckyScriptListDataSource::getSelectedScriptPath(int index) {
-    return filePaths_[index];
-}
-
 void DuckyScriptListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
-    if (index >= filePaths_.size()) return;
+    if (index >= (int)filePaths_.size() || !hidInterfaceToUse_) return;
+
     const std::string& path = filePaths_[index];
-    if (app->getDuckyRunner().startScript(path, modeToExecute_)) {
+    
+    // Get the correct layout pointer from the config manager and set it.
+    const uint8_t* layoutPtr = app->getConfigManager().getHidLayout();
+    hidInterfaceToUse_->setLayout(layoutPtr);
+
+    if (app->getDuckyRunner().startScript(path, hidInterfaceToUse_)) {
         app->changeMenu(MenuType::DUCKY_SCRIPT_ACTIVE);
     } else {
-        const char* errorMsg = (modeToExecute_ == DuckyScriptRunner::Mode::USB) 
-                                ? "Failed to start USB HID." 
-                                : "Failed to start BLE HID.";
-        app->showPopUp("Error", errorMsg, nullptr, "OK", "", true);
+        app->showPopUp("Error", "Failed to start HID.", nullptr, "OK", "", true);
     }
 }
 
 void DuckyScriptListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
-    if (index >= fileNames_.size()) return;
+    if (index >= (int)fileNames_.size()) return;
 
     const std::string& label = fileNames_[index];
     display.setDrawColor(isSelected ? 0 : 1);

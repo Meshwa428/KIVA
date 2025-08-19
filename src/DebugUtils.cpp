@@ -44,6 +44,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::HANDSHAKE_CAPTURE_ACTIVE: return "HANDSHAKE_CAPTURE_ACTIVE";
         case MenuType::MUSIC_PLAYER_LIST: return "MUSIC_PLAYER_LIST";
         case MenuType::NOW_PLAYING: return "NOW_PLAYING";
+        case MenuType::MOUSE_TOOLS_GRID: return "MOUSE_TOOLS_GRID";
+        case MenuType::MOUSE_JITTER_ACTIVE: return "MOUSE_JITTER_ACTIVE";
         default: return "UNKNOWN_MENU";
     }
 }

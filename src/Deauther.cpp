@@ -168,7 +168,7 @@ void Deauther::executeAttackForCurrentTarget() {
     app_->getHardwareManager().setPerformanceMode(true);
 
     if (currentConfig_.mode == DeauthMode::ROGUE_AP) {
-        rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);
+        rfLock_ = app_->getHardwareManager().requestWifiControl(RfClient::ROGUE_AP);
         if (!rfLock_ || !rfLock_->isValid()) {
             Serial.printf("[DEAUTHER] Failed to acquire ROGUE_AP lock for %s.\n", newTarget.ssid);
             return;
@@ -180,7 +180,7 @@ void Deauther::executeAttackForCurrentTarget() {
     } else if (currentConfig_.mode == DeauthMode::BROADCAST) {
         // For broadcast, we only need to set up the hardware once.
         if (!rfLock_ || !rfLock_->isValid()) {
-            rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+            rfLock_ = app_->getHardwareManager().requestWifiControl(RfClient::WIFI_PROMISCUOUS);
              if (!rfLock_ || !rfLock_->isValid()) {
                 Serial.printf("[DEAUTHER] Failed to acquire WIFI_PROMISCUOUS lock for %s.\n", newTarget.ssid);
                 return;

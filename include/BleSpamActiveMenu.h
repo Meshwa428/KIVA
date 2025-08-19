@@ -2,7 +2,7 @@
 #define BLE_SPAM_ACTIVE_MENU_H
 
 #include "IMenu.h"
-#include "BleSpammer.h" // For BleSpamMode
+#include <BleSpam.h> // Use the new library's header
 
 class BleSpamActiveMenu : public IMenu {
 public:
@@ -14,13 +14,17 @@ public:
     void draw(App* app, U8G2& display) override;
     void handleInput(App* app, InputEvent event) override;
 
-    void setSpamModeToStart(BleSpamMode mode);
+    // Use the new library's enum
+    void setSpamType(BleSpam::EBLEPayloadType type);
+    void setSpamAll(bool all);
 
     const char* getTitle() const override { return "BLE Spam Active"; }
     MenuType getMenuType() const override { return MenuType::BLE_SPAM_ACTIVE; }
 
 private:
-    BleSpamMode modeToStart_;
+    BleSpam::EBLEPayloadType spamType_;
+    bool spamAll_;
+    const char* getSpamTypeString() const;
 };
 
 #endif // BLE_SPAM_ACTIVE_MENU_H

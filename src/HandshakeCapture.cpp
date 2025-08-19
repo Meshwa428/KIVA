@@ -43,7 +43,7 @@ bool HandshakeCapture::start(const WifiNetworkInfo& targetNetwork) {
 
     currentConfig_.specific_target_info = targetNetwork;
 
-    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    rfLock_ = app_->getHardwareManager().requestWifiControl(RfClient::WIFI_PROMISCUOUS);
     if (!rfLock_ || !rfLock_->isValid()) {
         LOG(LogLevel::ERROR, "HS_CAPTURE", "Failed to acquire RF lock.");
         return false;
@@ -78,7 +78,7 @@ bool HandshakeCapture::startScanner() {
 
     channelHopDelayMs_ = app_->getConfigManager().getSettings().channelHopDelayMs;
 
-    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    rfLock_ = app_->getHardwareManager().requestWifiControl(RfClient::WIFI_PROMISCUOUS);
     if (!rfLock_ || !rfLock_->isValid()) {
         LOG(LogLevel::ERROR, "HS_CAPTURE", "Failed to acquire RF lock.");
         return false;

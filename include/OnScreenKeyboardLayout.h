@@ -1,5 +1,5 @@
-#ifndef KEYBOARD_LAYOUT_H
-#define KEYBOARD_LAYOUT_H
+#ifndef ON_SCREEN_KEYBOARD_LAYOUT_H
+#define ON_SCREEN_KEYBOARD_LAYOUT_H
 
 #define KB_ROWS 4
 #define KB_LOGICAL_COLS 10
@@ -30,4 +30,4 @@ namespace KeyboardLayout {
     const KeyboardKey& getKey(const KeyboardKey* layout_ptr, int row, int col);
 }
 
-#endif // KEYBOARD_LAYOUT_H
+#endif // ON_SCREEN_KEYBOARD_LAYOUT_H

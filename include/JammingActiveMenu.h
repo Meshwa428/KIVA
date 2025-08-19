@@ -2,7 +2,7 @@
 #define JAMMING_ACTIVE_MENU_H
 
 #include "IMenu.h"
-#include "Jammer.h"
+#include <RF_Sweeper.h> // Use the new library's header
 
 class JammingActiveMenu : public IMenu {
 public:
@@ -14,8 +14,9 @@ public:
     void draw(App* app, U8G2& display) override;
     void handleInput(App* app, InputEvent event) override;
 
+    // Use the new library's enums and config struct
     void setJammingModeToStart(JammingMode mode);
-    void setJammingConfig(const JammerConfig& config); // Now takes the full config struct
+    void setJammingConfig(const JammerConfig& config);
 
     const char* getTitle() const override { return "Jammer Active"; }
     MenuType getMenuType() const override { return MenuType::JAMMING_ACTIVE; }

@@ -4,41 +4,24 @@
 #include "Config.h"
 #include <Wire.h>
 #include <vector>
-#include <memory> // For std::unique_ptr
-#include <RF24.h>
-#undef FEATURE // <-- ADD THIS LINE to resolve the macro conflict with BLE libraries
+#include <memory>
 #include <SPI.h>
-#include "USB.h"
-#include <NimBLEDevice.h>
 
 // Enum to identify which system is requesting RF control
 enum class RfClient {
     NONE,
-    NRF_JAMMER,
     WIFI,
     WIFI_PROMISCUOUS,
     ROGUE_AP
 };
 
-// --- NEW ENUM FOR HOST PERIPHERALS ---
-enum class HostClient {
-    NONE,
-    USB_HID,
-    BLE_HID
-};
-
-static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
-
 class HardwareManager {
 public:
-    // --- NEW RAII LOCK CLASS (defined inside HardwareManager) ---
+    // --- THIS CLASS IS RESTORED ---
     class RfLock {
     public:
         ~RfLock(); // Destructor will release the lock
         bool isValid() const { return valid_; }
-        RF24* radio1 = nullptr;
-        RF24* radio2 = nullptr;
-
     private:
         friend class HardwareManager; // Allow HardwareManager to create this
         RfLock(HardwareManager& manager, bool success);
@@ -50,12 +33,8 @@ public:
     void setup();
     void update(); 
 
-    // --- NEW: RF Control Method ---
-    std::unique_ptr<RfLock> requestRfControl(RfClient client);
-
-    // --- NEW: Host Peripheral Control Methods ---
-    bool requestHostControl(HostClient client);
-    void releaseHostControl();
+    // --- RF Control method for WIFI RADIO ONLY ---
+    std::unique_ptr<RfLock> requestWifiControl(RfClient client);
 
     // Display accessors
     U8G2& getMainDisplay();
@@ -83,7 +62,7 @@ public:
     bool isCharging() const;
 
 private:
-    void releaseRfControl(); // <-- NEW private helper
+    void releaseWifiControl(); // Private helper
 
     // Input methods
     void processEncoder();
@@ -106,14 +85,8 @@ private:
     U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2_main_;
     U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2_small_;
     
-    // --- NEW: RF Hardware Objects and State ---
-    RF24 radio1_;
-    RF24 radio2_;
+    // --- RF State is simplified ---
     RfClient currentRfClient_;
-
-    // --- NEW: Host Peripheral State ---
-    HostClient currentHostClient_;
-    bool bleStackInitialized_;
 
     // Input state
     bool prevDbncHState0_[8];

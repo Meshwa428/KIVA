@@ -3,13 +3,13 @@
 
 #include <string>
 #include <vector>
+#include <cstdint> // for uint8_t
 
 // Forward declaration
 class App;
 
 // A struct to hold all persistent settings
 struct DeviceSettings {
-    // REMOVED: uint8_t unifiedBrightness;
     uint8_t mainDisplayBrightness; // 0-255
     uint8_t auxDisplayBrightness;  // 0-255
     uint8_t volume;                // 0-200, representing 0-200%
@@ -31,6 +31,9 @@ public:
     // Accessors
     DeviceSettings& getSettings();
     const std::vector<std::pair<std::string, std::string>>& getKeyboardLayouts() const;
+
+    // --- NEW HELPER FUNCTION ---
+    const uint8_t* getHidLayout() const;
 
 private:
     void applySettings();

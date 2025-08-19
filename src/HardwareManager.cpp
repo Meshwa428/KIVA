@@ -5,15 +5,10 @@
 #include <esp_wifi.h>
 #include "Logger.h"
 
-// --- Constructor ---
 HardwareManager::HardwareManager() : 
                                      u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
                                      u8g2_small_(U8G2_R0, U8X8_PIN_NONE),
-                                     radio1_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, SPI_SPEED_NRF), 
-                                     radio2_(Pins::NRF2_CE_PIN, Pins::NRF2_CSN_PIN, SPI_SPEED_NRF), 
                                      currentRfClient_(RfClient::NONE),
-                                     currentHostClient_(HostClient::NONE),
-                                     bleStackInitialized_(false),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false), amplifierOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
@@ -72,25 +67,18 @@ HardwareManager::RfLock::RfLock(HardwareManager& manager, bool success)
 
 HardwareManager::RfLock::~RfLock() {
     if (valid_) {
-        manager_.releaseRfControl();
+        manager_.releaseWifiControl();
     }
 }
 
-void HardwareManager::releaseRfControl() {
-    Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
-    if (currentRfClient_ == RfClient::NRF_JAMMER) {
-        if (radio1_.isChipConnected()) radio1_.powerDown();
-        if (radio2_.isChipConnected()) radio2_.powerDown();
-        SPI.end();
-
-    } else if (currentRfClient_ == RfClient::WIFI) {
+void HardwareManager::releaseWifiControl() {
+    LOG(LogLevel::INFO, "HW_MANAGER", "Releasing WiFi lock from client %d", (int)currentRfClient_);
+    if (currentRfClient_ == RfClient::WIFI) {
         WiFi.mode(WIFI_OFF);
-
     } else if (currentRfClient_ == RfClient::WIFI_PROMISCUOUS) {
         esp_wifi_set_promiscuous(false);
         WiFi.mode(WIFI_OFF);
-    
-    } else if (currentRfClient_ == RfClient::ROGUE_AP) { // <-- ADD THIS
+    } else if (currentRfClient_ == RfClient::ROGUE_AP) {
         WiFi.softAPdisconnect(true);
         WiFi.enableAP(false);
         WiFi.mode(WIFI_OFF);
@@ -98,62 +86,22 @@ void HardwareManager::releaseRfControl() {
     currentRfClient_ = RfClient::NONE;
 }
 
-std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfClient client) {
+std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestWifiControl(RfClient client) {
     if (client == currentRfClient_) {
         return std::unique_ptr<RfLock>(new RfLock(*this, true));
     }
 
     if (currentRfClient_ != RfClient::NONE) {
-        Serial.printf("[HW-RF] DENIED request from client %d. Lock held by %d\n", (int)client, (int)currentRfClient_);
+        LOG(LogLevel::ERROR, "HW_MANAGER", "DENIED WiFi request from client %d. Lock held by %d", (int)client, (int)currentRfClient_);
         return std::unique_ptr<RfLock>(new RfLock(*this, false)); 
     }
 
-    Serial.printf("[HW-RF] GRANTED request for client %d\n", (int)client);
+    LOG(LogLevel::INFO, "HW_MANAGER", "GRANTED WiFi request for client %d", (int)client);
 
-    if (client == RfClient::NRF_JAMMER) {
-        WiFi.mode(WIFI_OFF);
-        delay(100);
-        
-        bool r1_ok = radio1_.begin() && radio1_.isChipConnected();
-        bool r2_ok = radio2_.begin() && radio2_.isChipConnected();
-
-        if (r1_ok || r2_ok) {
-            currentRfClient_ = RfClient::NRF_JAMMER;
-            auto lock = std::unique_ptr<RfLock>(new RfLock(*this, true));
-            if (r1_ok) {
-                radio1_.powerUp();
-                radio1_.setAutoAck(false);
-                radio1_.stopListening();
-                radio1_.setRetries(0, 0);
-                radio1_.setPayloadSize(5);
-                radio1_.setAddressWidth(3);
-                radio1_.setPALevel(RF24_PA_MAX, true);
-                radio1_.setDataRate(RF24_2MBPS);
-                radio1_.setCRCLength(RF24_CRC_DISABLED);
-                lock->radio1 = &radio1_;
-            }
-            if (r2_ok) {
-                radio2_.powerUp();
-                radio2_.setAutoAck(false);
-                radio2_.stopListening();
-                radio2_.setRetries(0, 0);
-                radio2_.setPayloadSize(5);
-                radio2_.setAddressWidth(3);
-                radio2_.setPALevel(RF24_PA_MAX, true);
-                radio2_.setDataRate(RF24_2MBPS);
-                radio2_.setCRCLength(RF24_CRC_DISABLED);
-                lock->radio2 = &radio2_;
-            }
-            return lock;
-        } else {
-             return std::unique_ptr<RfLock>(new RfLock(*this, false));
-        }
-
-    } else if (client == RfClient::WIFI) {
+    if (client == RfClient::WIFI) {
         WiFi.mode(WIFI_STA); 
         currentRfClient_ = RfClient::WIFI;
         return std::unique_ptr<RfLock>(new RfLock(*this, true));
-
     } else if (client == RfClient::WIFI_PROMISCUOUS) {
         WiFi.softAPdisconnect(true);
         WiFi.disconnect(true, true);
@@ -163,72 +111,20 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
             esp_wifi_set_promiscuous(true);
             currentRfClient_ = RfClient::WIFI_PROMISCUOUS;
             return std::unique_ptr<RfLock>(new RfLock(*this, true));
-        } else {
-            return std::unique_ptr<RfLock>(new RfLock(*this, false));
         }
-    
-    } else if (client == RfClient::ROGUE_AP) { // <-- ADD THIS BLOCK
+    } else if (client == RfClient::ROGUE_AP) {
         WiFi.disconnect(true, true);
         delay(100);
 
         if (WiFi.mode(WIFI_AP_STA)) {
             currentRfClient_ = RfClient::ROGUE_AP;
             return std::unique_ptr<RfLock>(new RfLock(*this, true));
-        } else {
-            return std::unique_ptr<RfLock>(new RfLock(*this, false));
         }
     }
 
+    // If we reach here, the request failed.
     return std::unique_ptr<RfLock>(new RfLock(*this, false));
 }
-
-// --- REVISED AND FINALIZED HOST CONTROL LOGIC ---
-bool HardwareManager::requestHostControl(HostClient client) {
-    if (client == currentHostClient_) {
-        return true;
-    }
-    if (currentHostClient_ != HostClient::NONE) {
-        LOG(LogLevel::ERROR, "HW_MANAGER", "DENIED request from client %d. Lock held by %d", (int)client, (int)currentHostClient_);
-        return false; 
-    }
-
-    LOG(LogLevel::INFO, "HW_MANAGER", "GRANTING host control to client %d.", (int)client);
-
-    switch(client) {
-        case HostClient::USB_HID:
-            USB.begin();
-            break;
-        case HostClient::BLE_HID:
-            // --- REMOVED ---
-            // BLE stack is now fully managed by BleManager's dedicated task.
-            // HardwareManager should not touch it.
-            break;
-        case HostClient::NONE:
-            break;
-    }
-
-    currentHostClient_ = client;
-    return true;
-}
-
-void HardwareManager::releaseHostControl() {
-    LOG(LogLevel::INFO, "HW_MANAGER", "RELEASING host control from client %d.", (int)currentHostClient_);
-    
-    switch(currentHostClient_) {
-        case HostClient::USB_HID:
-            // USB.end(); // Optional, often better to leave it.
-            break;
-        case HostClient::BLE_HID:
-            // --- REMOVED ---
-            // BLE stack is now fully managed by BleManager's dedicated task.
-            break;
-        case HostClient::NONE:
-            break;
-    }
-    
-    currentHostClient_ = HostClient::NONE;
-}
-
 
 
 void HardwareManager::update()
