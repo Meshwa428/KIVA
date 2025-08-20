@@ -22,14 +22,12 @@ static const struct {
     {"F10", KEY_F10}, {"F11", KEY_F11}, {"F12", KEY_F12}
 };
 
-// --- RE-ADD THIS STRUCT FOR THE duckyCombos ARRAY ---
 struct DuckyCombination {
     const char* command;
     uint8_t key1;
     uint8_t key2;
 };
 
-// --- RE-ADD THIS ARRAY AS REQUESTED ---
 static const DuckyCombination duckyCombos[] = {
     {"CTRL-ALT",   KEY_LEFT_CTRL, KEY_LEFT_ALT},
     {"CTRL-SHIFT", KEY_LEFT_CTRL, KEY_LEFT_SHIFT},
@@ -39,20 +37,31 @@ static const DuckyCombination duckyCombos[] = {
     {"GUI-SHIFT",  KEY_LEFT_GUI,  KEY_LEFT_SHIFT}
 };
 
+DuckyScriptRunner::DuckyScriptRunner() 
+    : app_(nullptr), activeHid_(nullptr), isUsb_(false), state_(State::IDLE), 
+      delayUntil_(0), defaultDelay_(100) {}
 
-DuckyScriptRunner::DuckyScriptRunner() : app_(nullptr), activeHid_(nullptr), state_(State::IDLE), delayUntil_(0), defaultDelay_(100) {}
+void DuckyScriptRunner::setup(App* app) { 
+    app_ = app; 
+}
 
-void DuckyScriptRunner::setup(App* app) { app_ = app; }
-
-bool DuckyScriptRunner::startScript(const std::string& scriptPath, HIDInterface* hid) {
-    if (isActive()) stopScript();
-
-    activeHid_ = hid;
-    if (!activeHid_) {
-        LOG(LogLevel::ERROR, "DuckyRunner", "Provided HID interface is null.");
+bool DuckyScriptRunner::startScript(const std::string& scriptPath, HIDInterface* hid, bool isUsb) {
+    if (isActive() || !hid) {
         return false;
     }
+    
+    activeHid_ = hid;
+    isUsb_ = isUsb; // Store the type
+    LOG(LogLevel::INFO, "DuckyRunner", "Starting script %s", scriptPath.c_str());
 
+    // Initialize the specific device and set its layout
+    activeHid_->begin(app_->getConfigManager().getHidLayout());
+    
+    // Start the global USB stack ONLY if we were given a USB device
+    if (isUsb_) {
+        USB.begin();
+    }
+    
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
@@ -67,15 +76,26 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, HIDInterface*
     defaultDelay_ = 100;
     connectionTime_ = 0;
     lastLine_ = "";
-
+    
     return true;
 }
 
 void DuckyScriptRunner::stopScript() {
     if (!isActive()) return;
     
+    LOG(LogLevel::INFO, "DuckyRunner", "Stopping script...");
+
     if (activeHid_) {
+        // Check if it was a USB device before trying to end the global stack
+        bool wasUsb = isUsb_;
+
         activeHid_->releaseAll();
+        activeHid_->end(); // This now correctly handles deinit for BLE
+        
+        if (wasUsb) {
+            // USB.end();
+            // TODO: USB.end() isnt available, figure out how to disable USB stack
+        }
     }
 
     activeHid_ = nullptr;
@@ -91,7 +111,7 @@ void DuckyScriptRunner::loop() {
         if (activeHid_->isConnected()) {
             LOG(LogLevel::INFO, "DuckyRunner", "HID connected. Starting post-connection delay.");
             connectionTime_ = millis();
-            state_ = State::RUNNING; // Directly to running, delay is handled by first command
+            state_ = State::RUNNING;
         }
         return;
     }
@@ -116,6 +136,7 @@ void DuckyScriptRunner::loop() {
 
 void DuckyScriptRunner::parseAndExecute(const std::string& line) {
     if (!activeHid_) return;
+
     std::string command;
     std::string arg;
     size_t firstSpace = line.find(' ');
@@ -131,6 +152,10 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
 
     if (command == "STRING") {
         activeHid_->print(arg.c_str());
+        return;
+    }
+    if (command == "STRINGLN") {
+        activeHid_->println(arg.c_str());
         return;
     }
     if (command == "DELAY") {
@@ -154,24 +179,23 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
         }
         return;
     }
-    
-    // --- START: MODIFIED PARSING LOGIC ---
-    // 1. Check for hardcoded two-key combinations first, as requested.
+
     for (const auto& combo : duckyCombos) {
         if (command == combo.command) {
             activeHid_->press(combo.key1);
             activeHid_->press(combo.key2);
             if (!arg.empty()) {
-                activeHid_->press(arg[0]); // Press the character argument
+                activeHid_->press(arg[0]);
             }
-            return; // Combination handled, exit function.
+            return;
         }
     }
 
-    // 2. If not a hardcoded combo, proceed to the dynamic parser.
     std::vector<uint8_t> keysToPress;
     size_t start = 0;
     size_t end = command.find('-');
+    bool isCombo = (end != std::string::npos);
+    
     while (end != std::string::npos) {
         std::string key_str = command.substr(start, end - start);
         bool found = false;
@@ -182,8 +206,8 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
                 break;
             }
         }
-        if (!found) { // If part of a combo isn't a known key, it's not a combo.
-            keysToPress.clear();
+        if (!found) {
+            isCombo = false;
             break;
         }
         start = end + 1;
@@ -201,22 +225,45 @@ void DuckyScriptRunner::parseAndExecute(const std::string& line) {
                 break;
             }
         }
-        if (!found) { // This part is not a recognized key command
-            keysToPress.clear();
-        }
+        if(!found) isCombo = false;
     }
 
-    if (!keysToPress.empty()) { // It's a combo or single command key
+    if (isCombo) {
         for (uint8_t key : keysToPress) activeHid_->press(key);
         if (!arg.empty()) activeHid_->press(arg[0]);
     } else {
-        // Not a known command, treat the whole line as a string to print
-        activeHid_->println(line.c_str());
+        bool commandFound = false;
+        for (const auto& key : duckyKeyMap) {
+            if (command == key.command) {
+                activeHid_->press(key.key);
+                if (!arg.empty()) activeHid_->print(arg.c_str());
+                commandFound = true;
+                break;
+            }
+        }
+        if (!commandFound) {
+            activeHid_->println(line.c_str());
+        }
     }
-    // --- END: MODIFIED PARSING LOGIC ---
 }
 
-DuckyScriptRunner::State DuckyScriptRunner::getState() const { return state_; }
-bool DuckyScriptRunner::isActive() const { return state_ != State::IDLE; }
-const std::string& DuckyScriptRunner::getScriptName() const { return scriptName_; }
-uint32_t DuckyScriptRunner::getLinesExecuted() const { return linesExecuted_; }
+// --- START OF FIX: Add missing function definitions ---
+
+DuckyScriptRunner::State DuckyScriptRunner::getState() const {
+    return state_;
+}
+
+bool DuckyScriptRunner::isActive() const {
+    // A script is considered "active" if it's doing anything other than sitting idle.
+    return state_ != State::IDLE;
+}
+
+const std::string& DuckyScriptRunner::getScriptName() const {
+    return scriptName_;
+}
+
+uint32_t DuckyScriptRunner::getLinesExecuted() const {
+    return linesExecuted_;
+}
+
+// --- END OF FIX ---

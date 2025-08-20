@@ -2,7 +2,7 @@
 #define DUCKY_SCRIPT_LIST_DATA_SOURCE_H
 
 #include "IListMenuDataSource.h"
-#include <HIDForge.h> // Include the main library header
+#include <HIDForge.h>
 #include <vector>
 #include <string>
 
@@ -16,13 +16,14 @@ public:
     void onEnter(App* app, ListMenu* menu, bool isForwardNav) override;
     void onExit(App* app, ListMenu* menu) override;
     
-    // --- NEW METHOD ---
-    void setHidInterface(HIDInterface* hid);
+    // This method is updated to track the interface type.
+    void setHidInterface(HIDInterface* hid, bool isUsb);
 
 private:
     std::vector<std::string> fileNames_;
     std::vector<std::string> filePaths_;
-    HIDInterface* hidInterfaceToUse_; // --- NEW MEMBER ---
+    HIDInterface* hidInterfaceToUse_;
+    bool isUsbInterface_;
 };
 
 #endif // DUCKY_SCRIPT_LIST_DATA_SOURCE_H

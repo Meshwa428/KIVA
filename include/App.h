@@ -54,6 +54,7 @@
 #include <HIDForge.h>
 #include <RF_Sweeper.h>
 #include "DuckyScriptRunner.h"
+#include "MouseJitter.h"
 #include "MouseJitterActiveMenu.h"
 
 class App
@@ -86,10 +87,12 @@ public:
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
+
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
     BleSpam& getBleSpammer() { return bleSpammer_; }
     RFSweeper& getSweeper() { return sweeper_; }
+    MouseJitter& getMouseJitter() { return mouseJitter_; }
 
     // --- NEW: HIDForge Getters ---
     UsbHid& getUsbKeyboard() { return usbKeyboard_; }
@@ -138,6 +141,7 @@ private:
     UsbMouse usbMouse_;
     BleMouse bleMouse_;
     UsbMsc usbMsc_;
+    MouseJitter mouseJitter_;
 
 
     std::map<MenuType, IMenu *> menuRegistry_;

@@ -1,6 +1,7 @@
 #include "MouseJitterActiveMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "MouseJitter.h"
 
 MouseJitterActiveMenu::MouseJitterActiveMenu() : mode_(JitterMode::USB), activeMouse_(nullptr) {}
 
@@ -10,36 +11,33 @@ void MouseJitterActiveMenu::setJitterMode(JitterMode mode) {
 
 void MouseJitterActiveMenu::onEnter(App* app, bool isForwardNav) {
     app->getHardwareManager().setPerformanceMode(true);
-
+    
     if (mode_ == JitterMode::USB) {
+      if (app->getMouseJitter().start(MouseJitter::Mode::USB)) {
         activeMouse_ = &app->getUsbMouse();
-        activeMouse_->begin();
-        USB.begin(); // Start the global USB stack
+      } else {
+        app->showPopUp("Error", "Failed to init USB Mouse", nullptr, "OK", "", true);
+      }
     } else { // BLE
+      if (app->getMouseJitter().start(MouseJitter::Mode::BLE)) {
         activeMouse_ = &app->getBleMouse();
-        activeMouse_->begin(); // This starts advertising
+      } else {
+        app->showPopUp("Error", "Failed to init BLE Mouse", nullptr, "OK", "", true);
+      }
     }
 }
 
 void MouseJitterActiveMenu::onUpdate(App* app) {
     if (activeMouse_ && activeMouse_->isConnected()) {
-        int8_t dx = (esp_random() % 21) - 10; // Random value between -10 and 10
+        int8_t dx = (esp_random() % 21) - 10;
         int8_t dy = (esp_random() % 21) - 10;
         activeMouse_->move(dx, dy);
-        delay(30); // A small delay to control the jitter speed
+        delay(30);
     }
 }
 
 void MouseJitterActiveMenu::onExit(App* app) {
-    if (activeMouse_) {
-        activeMouse_->end();
-    }
-    if (mode_ == JitterMode::USB) {
-        // USB.end();
-        // but USB doesn't have end method
-        // TODO: Find a way to end USB stack
-    }
-    activeMouse_ = nullptr;
+    app->getMouseJitter().stop();
     app->getHardwareManager().setPerformanceMode(false);
 }
 

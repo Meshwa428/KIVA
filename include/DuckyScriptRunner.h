@@ -2,10 +2,8 @@
 #define DUCKY_SCRIPT_RUNNER_H
 
 #include "SdCardManager.h"
-#include <HIDForge.h> // Use the new library
+#include <HIDForge.h>
 #include <string>
-#include <memory>
-#include <vector>
 
 class App;
 
@@ -17,21 +15,24 @@ public:
     void setup(App* app);
     void loop();
 
-    bool startScript(const std::string& scriptPath, HIDInterface* hid);
+    // The signature now accepts an interface pointer and a boolean type.
+    bool startScript(const std::string& scriptPath, HIDInterface* hid, bool isUsb);
     void stopScript();
 
     State getState() const;
     bool isActive() const;
     const std::string& getScriptName() const;
     uint32_t getLinesExecuted() const;
-    
+    HIDInterface* getHidInterface() { return activeHid_; }
+
 private:
     void parseAndExecute(const std::string& line);
 
     App* app_;
     SdCardManager::LineReader scriptReader_;
     
-    HIDInterface* activeHid_; // Raw pointer, lifetime managed by App
+    HIDInterface* activeHid_; // Pointer to the active HID object (owned by App)
+    bool isUsb_;              // This flag replaces dynamic_cast
     
     State state_;
     std::string scriptName_;

@@ -7,6 +7,7 @@
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
 #include "DuckyScriptRunner.h"
+#include "MouseJitter.h"
 
 
 App::App() : 
@@ -110,14 +111,16 @@ App::App() :
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     hostToolsMenu_("Host Tools", {
-        MenuItem{"USB Ducky", IconType::USB, MenuType::NONE, 
-            [](App* app){
-                app->getDuckyScriptListDataSource().setHidInterface(&app->getUsbKeyboard());
+        MenuItem{"USB Ducky", IconType::USB, MenuType::NONE,
+            [](App* app) {
+                // Pass the USB keyboard object and type to the next menu
+                app->getDuckyScriptListDataSource().setHidInterface(&app->getUsbKeyboard(), true);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
-        MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
-            [](App* app){
-                app->getDuckyScriptListDataSource().setHidInterface(&app->getBleKeyboard());
+        MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE,
+            [](App* app) {
+                // Pass the BLE keyboard object and type to the next menu
+                app->getDuckyScriptListDataSource().setHidInterface(&app->getBleKeyboard(), false);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
         MenuItem{"Mouse", IconType::NONE, MenuType::MOUSE_TOOLS_GRID},
@@ -330,7 +333,8 @@ void App::setup()
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
-        {"HIDForge",        [&](){ duckyRunner_.setup(this); }}, // HIDForge is mostly header-only setup
+        {"DuckyScript Runner",[&](){ duckyRunner_.setup(this); }},
+        {"Mouse Jitter",    [&](){ mouseJitter_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }}
     };
@@ -429,6 +433,7 @@ void App::loop()
     karmaAttacker_.loop();
     handshakeCapture_.loop();
     duckyRunner_.loop();
+    mouseJitter_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)

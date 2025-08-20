@@ -5,10 +5,11 @@
 #include "UI_Utils.h"
 #include "DuckyScriptRunner.h"
 
-DuckyScriptListDataSource::DuckyScriptListDataSource() : hidInterfaceToUse_(nullptr) {}
+DuckyScriptListDataSource::DuckyScriptListDataSource() : hidInterfaceToUse_(nullptr), isUsbInterface_(false) {}
 
-void DuckyScriptListDataSource::setHidInterface(HIDInterface* hid) {
+void DuckyScriptListDataSource::setHidInterface(HIDInterface* hid, bool isUsb) {
     hidInterfaceToUse_ = hid;
+    isUsbInterface_ = isUsb;
 }
 
 void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
@@ -32,7 +33,7 @@ void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForward
 }
 
 void DuckyScriptListDataSource::onExit(App* app, ListMenu* menu) {
-    hidInterfaceToUse_ = nullptr; // Clear the pointer on exit
+    // No special cleanup needed, the HID object lifecycle is in App
 }
 
 int DuckyScriptListDataSource::getNumberOfItems(App* app) {
@@ -44,19 +45,16 @@ void DuckyScriptListDataSource::onItemSelected(App* app, ListMenu* menu, int ind
 
     const std::string& path = filePaths_[index];
     
-    // Get the correct layout pointer from the config manager and set it.
-    const uint8_t* layoutPtr = app->getConfigManager().getHidLayout();
-    hidInterfaceToUse_->setLayout(layoutPtr);
-
-    if (app->getDuckyRunner().startScript(path, hidInterfaceToUse_)) {
+    // Pass the script path, interface pointer, AND the boolean type.
+    if (app->getDuckyRunner().startScript(path, hidInterfaceToUse_, isUsbInterface_)) {
         app->changeMenu(MenuType::DUCKY_SCRIPT_ACTIVE);
     } else {
-        app->showPopUp("Error", "Failed to start HID.", nullptr, "OK", "", true);
+        app->showPopUp("Error", "Failed to start runner.", nullptr, "OK", "", true);
     }
 }
 
 void DuckyScriptListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
-    if (index >= (int)fileNames_.size()) return;
+    if (index >= fileNames_.size()) return;
 
     const std::string& label = fileNames_[index];
     display.setDrawColor(isSelected ? 0 : 1);
