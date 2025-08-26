@@ -1,8 +1,8 @@
 #include "DuckyScriptRunner.h"
 #include "App.h"
 #include "Logger.h"
-#include <BleKeyboard.h> 
 
+// Key codes are now from HIDForge/common/keys.h
 static const DuckyCommand duckyCmds[] = {
     {"STRING", 0, DuckyCommand::Type::PRINT},
     {"STRINGLN", 0, DuckyCommand::Type::PRINT},
@@ -11,7 +11,7 @@ static const DuckyCommand duckyCmds[] = {
     {"DEFAULTDELAY", 0, DuckyCommand::Type::DELAY},
     {"DEFAULT_DELAY", 0, DuckyCommand::Type::DELAY},
     {"REPEAT", 0, DuckyCommand::Type::REPEAT},
-    {"BACKSPACE", KEY_BACKSPACE, DuckyCommand::Type::CMD},
+    {"BACKSPACE", KEYBACKSPACE, DuckyCommand::Type::CMD},
     {"DELETE", KEY_DELETE, DuckyCommand::Type::CMD},
     {"ALT", KEY_LEFT_ALT, DuckyCommand::Type::CMD},
     {"CTRL", KEY_LEFT_CTRL, DuckyCommand::Type::CMD},
@@ -21,7 +21,7 @@ static const DuckyCommand duckyCmds[] = {
     {"SHIFT", KEY_LEFT_SHIFT, DuckyCommand::Type::CMD},
     {"ESCAPE", KEY_ESC, DuckyCommand::Type::CMD},
     {"ESC", KEY_ESC, DuckyCommand::Type::CMD},
-    {"TAB", KEY_TAB, DuckyCommand::Type::CMD},
+    {"TAB", KEYTAB, DuckyCommand::Type::CMD},
     {"ENTER", KEY_RETURN, DuckyCommand::Type::CMD},
     {"DOWNARROW", KEY_DOWN_ARROW, DuckyCommand::Type::CMD},
     {"DOWN", KEY_DOWN_ARROW, DuckyCommand::Type::CMD},
@@ -31,18 +31,18 @@ static const DuckyCommand duckyCmds[] = {
     {"RIGHT", KEY_RIGHT_ARROW, DuckyCommand::Type::CMD},
     {"UPARROW", KEY_UP_ARROW, DuckyCommand::Type::CMD},
     {"UP", KEY_UP_ARROW, DuckyCommand::Type::CMD},
-    {"PAUSE", 0x48, DuckyCommand::Type::CMD},
-    {"BREAK", 0x48, DuckyCommand::Type::CMD},
+    {"PAUSE", KEY_PAUSE, DuckyCommand::Type::CMD},
+    {"BREAK", KEY_PAUSE, DuckyCommand::Type::CMD},
     {"CAPSLOCK", KEY_CAPS_LOCK, DuckyCommand::Type::CMD},
     {"END", KEY_END, DuckyCommand::Type::CMD},
     {"HOME", KEY_HOME, DuckyCommand::Type::CMD},
     {"INSERT", KEY_INSERT, DuckyCommand::Type::CMD},
-    {"MENU", 0x65, DuckyCommand::Type::CMD},
-    {"NUMLOCK", 0x53, DuckyCommand::Type::CMD},
+    {"MENU", KEY_MENU, DuckyCommand::Type::CMD},
+    {"NUMLOCK", 0, DuckyCommand::Type::CMD}, // Numlock not directly mappable here
     {"PAGEUP", KEY_PAGE_UP, DuckyCommand::Type::CMD},
     {"PAGEDOWN", KEY_PAGE_DOWN, DuckyCommand::Type::CMD},
-    {"PRINTSCREEN", 0x46, DuckyCommand::Type::CMD},
-    {"SCROLLLOCK", 0x47, DuckyCommand::Type::CMD},
+    {"PRINTSCREEN", KEY_PRINT_SCREEN, DuckyCommand::Type::CMD},
+    {"SCROLLLOCK", KEY_SCROLL_LOCK, DuckyCommand::Type::CMD},
     {"SPACE", ' ', DuckyCommand::Type::CMD},
     {"F1", KEY_F1, DuckyCommand::Type::CMD},
     {"F2", KEY_F2, DuckyCommand::Type::CMD},
@@ -75,37 +75,22 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     
     LOG(LogLevel::INFO, "DuckyRunner", "Starting script %s in %s mode", scriptPath.c_str(), (mode == Mode::USB ? "USB" : "BLE"));
     currentMode_ = mode;
+    
+    const uint8_t* layout = app_->getConfigManager().getSelectedKeyboardLayout();
 
     if (mode == Mode::BLE) {
-        // --- THIS IS THE FIX ---
-        // 1. Call the new blocking start function.
         BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
-
-        // 2. If it returns nullptr, the startup failed or timed out. Abort cleanly.
         if (!keyboard) {
             LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard instance.");
-            // No need to call stopKeyboard() here, as the BleManager is still in an idle state.
             return false;
         }
-        
-        // 3. If we get here, 'keyboard' is a valid pointer.
         activeHid_.reset(new BleHid(keyboard));
-
     } else { // USB Mode
         activeHid_.reset(new UsbHid());
     }
     
-    if (!activeHid_->begin()) {
-        LOG(LogLevel::ERROR, "DuckyRunner", "Failed to begin active HID component.");
-        if (mode == Mode::BLE) {
-            // If begin fails for some reason, we must now stop the manager we just started.
-            app_->getBleManager().stopKeyboard();
-        }
-        activeHid_.reset();
-        return false;
-    }
+    activeHid_->begin(layout);
 
-    // ... (rest of the function is correct) ...
     scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
@@ -146,6 +131,8 @@ void DuckyScriptRunner::stopScript() {
     scriptName_ = "";
     LOG(LogLevel::INFO, "DuckyRunner", "Script stopped and resources released.");
 }
+
+DuckyScriptRunner::Mode DuckyScriptRunner::getMode() const { return currentMode_; }
 
 void DuckyScriptRunner::loop() {
     if (!isActive() || !activeHid_) return;

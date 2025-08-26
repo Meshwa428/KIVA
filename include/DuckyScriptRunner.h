@@ -5,60 +5,10 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <HIDForge.h> // <-- ADD THIS
 
 // Forward Declarations
-class USBHIDKeyboard;
-class BleKeyboard;
 class App;
-
-// --- HID Interface ---
-class HIDInterface {
-public:
-    enum class Type { USB, BLE };
-    virtual ~HIDInterface() {}
-    virtual bool begin() = 0;
-    virtual void end() = 0;
-    virtual size_t press(uint8_t k) = 0;
-    virtual size_t release(uint8_t k) = 0;
-    virtual void releaseAll() = 0;
-    virtual size_t write(const uint8_t *buffer, size_t size) = 0;
-    virtual bool isConnected() = 0;
-    virtual Type getType() const = 0;
-};
-
-// --- Concrete BLE HID Implementation ---
-class BleHid : public HIDInterface {
-public:
-    BleHid(BleKeyboard* keyboard);
-    ~BleHid();
-    bool begin() override;
-    void end() override;
-    size_t press(uint8_t k) override;
-    size_t release(uint8_t k) override;
-    void releaseAll() override;
-    size_t write(const uint8_t *buffer, size_t size) override;
-    bool isConnected() override;
-    Type getType() const override { return Type::BLE; }
-private:
-    BleKeyboard* bleKeyboard_; // Does NOT own the keyboard object
-};
-
-// --- Concrete USB HID Implementation ---
-class UsbHid : public HIDInterface {
-public:
-    UsbHid();
-    ~UsbHid();
-    bool begin() override;
-    void end() override;
-    size_t press(uint8_t k) override;
-    size_t release(uint8_t k) override;
-    void releaseAll() override;
-    size_t write(const uint8_t *buffer, size_t size) override;
-    bool isConnected() override;
-    Type getType() const override { return Type::USB; }
-private:
-    std::unique_ptr<USBHIDKeyboard> usb_keyboard_;
-};
 
 // --- Ducky Script Keywords ---
 struct DuckyCommand {
@@ -87,6 +37,7 @@ public:
     void stopScript();
 
     State getState() const;
+    Mode getMode() const; // <-- ADD THIS
     bool isActive() const;
     const std::string& getCurrentLine() const;
     const std::string& getScriptName() const;
@@ -109,7 +60,7 @@ private:
     
     unsigned long delayUntil_;
     int defaultDelay_;
-    unsigned long connectionTime_; // <-- ADD THIS MEMBER
+    unsigned long connectionTime_;
     
     std::string lastLine_;
 };

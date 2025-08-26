@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint> // For uint8_t
 
 // Forward declaration
 class App;
@@ -31,6 +32,7 @@ public:
     // Accessors
     DeviceSettings& getSettings();
     const std::vector<std::pair<std::string, std::string>>& getKeyboardLayouts() const;
+    const uint8_t* getSelectedKeyboardLayout() const; // <-- ADD THIS
 
 private:
     void applySettings();

@@ -42,7 +42,6 @@
 #include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
-#include "BleManager.h" 
 #include "SettingsMenu.h"
 #include "BrightnessMenu.h"
 #include "ConfigManager.h"
@@ -52,6 +51,7 @@
 #include "NowPlayingMenu.h"
 #include "MusicLibraryManager.h"
 #include "Logger.h"
+#include <HIDForge.h> // <-- ADD THIS
 
 class App
 {
@@ -78,7 +78,7 @@ public:
     HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
-    BleManager &getBleManager() { return bleManager_; }
+    BleManager &getBleManager() { return bleManager_; } // <-- Now returns HIDForge::BleManager
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
@@ -116,7 +116,7 @@ private:
     HandshakeCapture handshakeCapture_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_;
+    BleManager bleManager_; // <-- Now using HIDForge::BleManager
     ConfigManager configManager_;
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;

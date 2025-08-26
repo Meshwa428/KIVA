@@ -37,9 +37,7 @@ App::App() :
                     HardwareManager &hw = app->getHardwareManager();
                     hw.setLaser(!hw.isLaserOn());
                 }},
-        // --- START OF FIX ---
         MenuItem{"USB Drive Mode", IconType::SD_CARD, MenuType::USB_DRIVE_MODE},
-        // --- END OF FIX ---
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     settingsMenu_(),
@@ -187,7 +185,6 @@ App::App() :
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
-                // --- RENAMED ---
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
                     if (app_cb->getDeauther().start(selectedNetwork)) {
                         app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
@@ -203,7 +200,6 @@ App::App() :
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
-                // --- RENAMED ---
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
                     if (app_cb->getDeauther().start(selectedNetwork)) {
                         app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
@@ -311,7 +307,7 @@ void App::setup()
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
-        {"BLE Manager",     [&](){ bleManager_.setup(this); }},
+        {"BLE Manager",     [&](){ bleManager_.setup(); }}, // <-- UPDATED
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
@@ -349,7 +345,6 @@ void App::setup()
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
-    // menuRegistry_[MenuType::SETTINGS_CAROUSEL] = &settingsMenu_;
     menuRegistry_[MenuType::SETTINGS] = &settingsMenu_;
     menuRegistry_[MenuType::BRIGHTNESS_MENU] = &brightnessMenu_;
     menuRegistry_[MenuType::UTILITIES_CAROUSEL] = &utilitiesMenu_;
@@ -387,7 +382,6 @@ void App::setup()
     menuRegistry_[MenuType::HANDSHAKE_CAPTURE_ACTIVE] = &handshakeCaptureActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
-    // --- NEW MUSIC MENUS ---
     menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
     menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
 
@@ -434,7 +428,7 @@ void App::loop()
         evilTwin_.isActive() || 
         karmaAttacker_.isAttacking() || 
         karmaAttacker_.isSniffing() ||
-        handshakeCapture_.isActive()) // <-- ADD THIS LINE
+        handshakeCapture_.isActive())
     {
         wifiIsRequired = true;
     }
@@ -450,7 +444,6 @@ void App::loop()
     InputEvent event = hardware_.getNextInputEvent();
     if (event != InputEvent::NONE) {
         LOG(LogLevel::DEBUG, "Input", false, "Event: %s", DebugUtils::inputEventToString(event));
-        // Serial.printf("Event: %s\n", DebugUtils::inputEventToString(event));
         if (currentMenu_ != nullptr) {
             currentMenu_->handleInput(this, event);
         }
@@ -467,7 +460,6 @@ void App::loop()
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))
     {
-        // esp_task_wdt_reset();
         return;
     }
     lastRenderTime = millis();

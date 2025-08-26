@@ -1,9 +1,8 @@
-// KIVA/include/UsbDriveMenu.h
-
 #ifndef USB_DRIVE_MENU_H
 #define USB_DRIVE_MENU_H
 
 #include "IMenu.h"
+#include <HIDForge.h> // <-- ADD THIS
 
 class UsbDriveMenu : public IMenu {
 public:
@@ -17,9 +16,10 @@ public:
 
     const char* getTitle() const override { return "USB Drive Mode"; }
     MenuType getMenuType() const override { return MenuType::USB_DRIVE_MODE; }
-    
-    // Public flag to be set by the C-style callback
-    volatile bool isEjected;
+
+private:
+    UsbMsc* msc_;
+    SDCard* card_;
 };
 
 #endif // USB_DRIVE_MENU_H
