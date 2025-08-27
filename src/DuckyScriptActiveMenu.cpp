@@ -1,17 +1,13 @@
 #include "DuckyScriptActiveMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include <HIDForge.h> // For USB object
 
 DuckyScriptActiveMenu::DuckyScriptActiveMenu() : entryTime_(0) {}
 
 void DuckyScriptActiveMenu::onEnter(App* app, bool isForwardNav) {
     entryTime_ = millis();
     app->getHardwareManager().setPerformanceMode(true);
-    
-    // If we're starting a USB script, we need to initialize the USB stack.
-    if (app->getDuckyRunner().getMode() == DuckyScriptRunner::Mode::USB) {
-        USB.begin();
-    }
 }
 
 void DuckyScriptActiveMenu::onExit(App* app) {
@@ -19,14 +15,6 @@ void DuckyScriptActiveMenu::onExit(App* app) {
     if(app->getDuckyRunner().isActive()) {
         app->getDuckyRunner().stopScript();
     }
-
-    // TODO: Find a way to disable USB stack and move back to JTAG mode
-    // If we were running a USB script, stop the USB stack.
-    // if (app->getDuckyRunner().getMode() == DuckyScriptRunner::Mode::USB) {
-    //     if (USB.isConnected()) {
-    //         USB.end();
-    //     }
-    // }
     
     app->getHardwareManager().setPerformanceMode(false);
 }

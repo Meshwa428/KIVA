@@ -82,6 +82,10 @@ namespace Pins
     static constexpr uint8_t MUX_CHANNEL_MAIN_DISPLAY = 4;
     static constexpr uint8_t MUX_CHANNEL_SECOND_DISPLAY = 2;
     static constexpr uint8_t MUX_CHANNEL_MPU = 3;
+    static constexpr uint8_t MUX_CHANNEL_RTC = 5;
+    static constexpr uint8_t MOSI_PIN = 8;
+    static constexpr uint8_t SCK_PIN = 7;
+    static constexpr uint8_t MISO_PIN = 9;
 
     static constexpr uint8_t ENC_BTN = 0;
     static constexpr uint8_t ENC_A = 1;
