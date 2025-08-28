@@ -1,9 +1,12 @@
-// KIVA/include/UsbDriveMenu.h
-
 #ifndef USB_DRIVE_MENU_H
 #define USB_DRIVE_MENU_H
 
 #include "IMenu.h"
+#include <memory> // Required for std::unique_ptr
+
+// Forward declarations for HIDForge classes
+class UsbMsc;
+class SDCard;
 
 class UsbDriveMenu : public IMenu {
 public:
@@ -18,8 +21,9 @@ public:
     const char* getTitle() const override { return "USB Drive Mode"; }
     MenuType getMenuType() const override { return MenuType::USB_DRIVE_MODE; }
     
-    // Public flag to be set by the C-style callback
-    volatile bool isEjected;
+private:
+    std::unique_ptr<UsbMsc> storage_;
+    std::unique_ptr<SDCard> card_;
 };
 
-#endif // USB_DRIVE_MENU_H
+#endif // USB_DRIVE_MODE
