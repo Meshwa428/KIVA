@@ -24,6 +24,7 @@ public:
 private:
     std::unique_ptr<UsbMsc> storage_;
     std::unique_ptr<SDCard> card_;
+    volatile bool isEjected;
 };
 
-#endif // USB_DRIVE_MODE
+#endif // USB_DRIVE_MENU_H
