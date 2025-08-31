@@ -97,6 +97,9 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::TOOL_INJECTION:
             xbm_data = icon_tool_injection_large_bits;
             break;
+        case IconType::TOOL_PROBE:
+            xbm_data = icon_probe_request_large_bits;
+            break;
         case IconType::SETTING_DISPLAY:
             xbm_data = icon_setting_display_large_bits;
             break;

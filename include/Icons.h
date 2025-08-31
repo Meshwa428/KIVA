@@ -31,6 +31,7 @@ enum class IconType
     NET_BLUETOOTH,
     TOOL_JAMMING,
     TOOL_INJECTION,
+    TOOL_PROBE,
     SETTING_DISPLAY,
     SETTING_SOUND,
     SETTING_SYSTEM,
@@ -83,6 +84,7 @@ extern const unsigned char icon_net_wifi_large_bits[];
 extern const unsigned char icon_net_bluetooth_large_bits[];
 extern const unsigned char icon_tool_jamming_large_bits[];
 extern const unsigned char icon_tool_injection_large_bits[];
+extern const unsigned char icon_probe_request_large_bits[];
 extern const unsigned char icon_setting_display_large_bits[];
 extern const unsigned char icon_setting_sound_large_bits[];
 extern const unsigned char icon_setting_system_large_bits[];

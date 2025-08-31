@@ -5,6 +5,8 @@
 #include "esp_wifi.h"
 #include <vector>
 #include <string>
+#include <memory>
+#include "HardwareManager.h"
 
 // Forward declaration to avoid circular dependencies
 class App; 
@@ -32,6 +34,7 @@ private:
     void handlePacket(wifi_promiscuous_pkt_t *packet); 
 
     App* app_;
+    std::unique_ptr<HardwareManager::RfLock> rfLock_;
     bool isActive_;
     uint32_t packetCount_;
     

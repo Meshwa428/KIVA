@@ -109,17 +109,22 @@ bool KarmaActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     display.setDrawColor(1);
 
     if (karma.isAttacking()) {
-        display.drawStr(2, 8, "Karma: Attacking");
+        const char* title = "Karma: Attacking!";
+        int textWidth = display.getStrWidth(title);
+        display.drawStr((128 - textWidth) / 2, 8, title);
     } else {
-        display.drawStr(2, 8, "Karma: Sniffing");
-        char countStr[16];
-        snprintf(countStr, sizeof(countStr), "Found: %d", displaySsids_.size());
+        // Sniffing state
+        drawCustomIcon(display, 2, 2, IconType::UI_REFRESH, IconRenderSize::SMALL);
+        display.drawStr(12, 8, "Karma");
+
+        char countStr[12];
+        snprintf(countStr, sizeof(countStr), "# %d", displaySsids_.size());
         int textWidth = display.getStrWidth(countStr);
         display.drawStr(128 - textWidth - 2, 8, countStr);
     }
     
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
-    return true;
+    return true; // We handled the drawing
 }
 
 void KarmaActiveMenu::draw(App* app, U8G2& display) {
@@ -178,7 +183,7 @@ void KarmaActiveMenu::draw(App* app, U8G2& display) {
         
         display.setDrawColor(1);
         display.setFont(u8g2_font_5x7_tf);
-        const char* instruction = "OK to attack / BACK to exit";
+        const char* instruction = "OK : attack / BACK : exit";
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, footerY, instruction);
     }
 }

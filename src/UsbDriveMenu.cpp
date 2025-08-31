@@ -1,3 +1,4 @@
+#include "USBCDC.h"
 #include "UsbDriveMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -43,10 +44,13 @@ void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
 void UsbDriveMenu::onExit(App* app) {
     LOG(LogLevel::INFO, "USB_DRIVE", "Exiting USB Mass Storage Mode.");
     
+    storage_->end();
     storage_.reset();
     card_.reset();
 
     USB.begin();
+    Serial.end();
+    Serial.begin(115200);
 
     LOG(LogLevel::INFO, "USB_DRIVE", "Re-initializing SD card for firmware use.");
     if (!SdCardManager::setup()) {
@@ -60,12 +64,25 @@ void UsbDriveMenu::onExit(App* app) {
 void UsbDriveMenu::onUpdate(App* app) {}
 
 void UsbDriveMenu::handleInput(App* app, InputEvent event) {
-    // --- RESTORED SAFE EXIT LOGIC ---
     if (event != InputEvent::NONE) {
         if (isEjected) {
-            app->changeMenu(MenuType::BACK);
+            app->showPopUp(
+                "WARNING!!!",                                   // Title
+                "A restart is recommended after using USB mode.", // Message
+                [](App* app_cb) {                               // OnConfirm callback
+                    LOG(LogLevel::WARN, "USB_DRIVE", "User confirmed restart.");
+                    app_cb->getHardwareManager().getMainDisplay().clear(); // Clear display before reboot
+                    app_cb->getHardwareManager().getMainDisplay().drawStr(30, 32, "Rebooting...");
+                    app_cb->getHardwareManager().getMainDisplay().sendBuffer();
+                    delay(500);
+                    ESP.restart();
+                },
+                "Restart",                                      // Confirm button text
+                "Cancel",                                     // Cancel button text
+                false // Let the popup handle navigation back if cancelled
+            );
         } else {
-            app->showPopUp("Please Eject First", "Safely eject the drive from your computer before exiting.", nullptr, "OK", "", true);
+            app->showPopUp("Please Eject First", "Safely eject from PC before exiting.", nullptr, "OK", "", true);
         }
     }
 }

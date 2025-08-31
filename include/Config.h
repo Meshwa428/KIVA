@@ -35,6 +35,8 @@ enum class MenuType
     EVIL_TWIN_ACTIVE,
     PROBE_ACTIVE,
     KARMA_ACTIVE,
+    PROBE_FLOOD_MODE_SELECTION,
+    PROBE_FLOOD_ACTIVE,
     BLE_TOOLS_GRID,
     HOST_TOOLS_GRID,
     BLE_SPAM_ACTIVE,
@@ -140,6 +142,8 @@ namespace SD_ROOT
     static constexpr const char *DATA_LOGS = "/data/logs";
     static constexpr const char *DATA_CAPTURES = "/data/captures";
     static constexpr const char *DATA_PROBES = "/data/captures/probes";
+    static constexpr const char *DATA_PROBES_SSID_SESSION = "/data/captures/probes/probes_session.txt";
+    static constexpr const char *DATA_PROBES_SSID_CUMULATIVE = "/data/captures/probes/probes_cumulative.txt";
     static constexpr const char *CAPTURES_EVILTWIN_CSV = "/data/captures/evil_twin_credentials.csv";
 
     static constexpr const char *USER_BEACON_LISTS = "/user/beacon_lists";

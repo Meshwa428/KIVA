@@ -37,6 +37,8 @@
 #include "HandshakeCapture.h"
 #include "HandshakeCaptureMenu.h"
 #include "HandshakeCaptureActiveMenu.h"
+#include "ProbeFlooder.h"
+#include "ProbeFloodActiveMenu.h"
 #include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
 #include "DuckyScriptRunner.h"
@@ -76,6 +78,7 @@ public:
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
+    ProbeFlooder &getProbeFlooder() { return probeFlooder_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
     BleManager &getBleManager() { return bleManager_; } // <-- Now returns HIDForge::BleManager
@@ -114,6 +117,7 @@ private:
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
     HandshakeCapture handshakeCapture_;
+    ProbeFlooder probeFlooder_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
     BleManager bleManager_; // <-- Now using HIDForge::BleManager
@@ -144,6 +148,7 @@ private:
     SettingsMenu settingsMenu_;
     BrightnessMenu brightnessMenu_;
 
+    SplitSelectionMenu probeFloodModeMenu_;
     SplitSelectionMenu beaconModeMenu_;
 
     TextInputMenu textInputMenu_;
@@ -160,6 +165,7 @@ private:
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
     HandshakeCaptureMenu handshakeCaptureMenu_;
+    ProbeFloodActiveMenu probeFloodActiveMenu_;
     HandshakeCaptureActiveMenu handshakeCaptureActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;

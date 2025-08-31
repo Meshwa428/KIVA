@@ -93,3 +93,25 @@ These features will refine the user experience, add personalization, and provide
 - **✨ Log & Capture Rotation (Auto-Cleanup)**
   - **Plan:** A setting to automatically keep only the X most recent log and capture files, deleting the oldest ones to free up space.
   - **Benefit:** "Set and forget" storage management that **prevents the SD card from filling up**, ensuring the device is always ready to capture new data.
+
+
+#### **1. The "Arm for Boot" System**
+
+This is the ultimate evolution of your workflow idea. It eliminates menus *entirely* for pre-planned operations.
+
+*   **How it Works:** We will add a new top-level option in the `Settings` menu called **"Arm for Boot"**.
+    *   Selecting this opens a `ListMenu` that presents a list of *every possible action* the device can perform (e.g., "Run Ducky Script...", "Start Beacon Spam (Random)", "Start Evil Twin...", "Start Handshake Sniffer (PMKID)").
+    *   When the user selects an action, they may be prompted for a final parameter if necessary (e.g., choosing the specific Ducky Script from a list).
+    *   Once confirmed, the device saves this "armed action" to a special configuration file on the SD card (e.g., `/config/armed_action.json`).
+    *   The screen will now display a persistent, clear visual indicator (e.g., a red "ARMED" icon in the status bar) to show it's in this state.
+
+*   **The Boot Logic Change:** At the very beginning of `App::setup()`, before any UI is initialized, the code will:
+    1.  Check if `/config/armed_action.json` exists.
+    2.  If it exists, it will *completely bypass the entire menu system*.
+    3.  It will read the action, initialize only the necessary modules (e.g., `DuckyScriptRunner`), and execute the mission. The screen might only show a minimal "Executing..." status.
+
+*   **User Experience:** A pentester wants to run a BadUSB attack.
+    1.  They navigate to `Settings -> Arm for Boot -> Run Ducky Script...`.
+    2.  They select `get_creds.txt` from the list.
+    3.  The screen now shows "ARMED". They power off the KIVA.
+    4.  They walk up to the target machine and plug it in. The moment KIVA gets power, it identifies as a keyboard and runs `get_creds.txt` without ever showing the main menu. **Zero clicks, maximum speed and stealth.**

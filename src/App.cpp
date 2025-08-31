@@ -3,6 +3,7 @@
 #include "UI_Utils.h"
 #include "Jammer.h"
 #include "BleSpammer.h"
+#include "ProbeFlooder.h"
 #include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
 #include <algorithm>
@@ -46,7 +47,8 @@ App::App() :
         MenuItem{"Beacon Spam", IconType::TOOL_JAMMING, MenuType::BEACON_MODE_SELECTION},
         MenuItem{"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_TOOLS_GRID},
         MenuItem{"Evil Twin", IconType::SKULL, MenuType::EVIL_TWIN_PORTAL_SELECTION},
-        MenuItem{"Probe Sniff", IconType::UI_REFRESH, MenuType::PROBE_ACTIVE},
+        MenuItem{"Probe Sniff", IconType::TOOL_PROBE, MenuType::PROBE_ACTIVE},
+        MenuItem{"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_SELECTION},
         MenuItem{"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
         MenuItem{"Handshake Sniffer", IconType::NET_WIFI, MenuType::HANDSHAKE_CAPTURE_MENU},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
@@ -224,15 +226,50 @@ App::App() :
     beaconModeMenu_("Beacon Spam", MenuType::BEACON_MODE_SELECTION, {
         MenuItem{"Random", IconType::BEACON, MenuType::NONE, 
             [](App *app) {
-                BeaconSpamActiveMenu *activeMenu = static_cast<BeaconSpamActiveMenu *>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
-                if (activeMenu)
-                {
-                    activeMenu->setAttackParameters(BeaconSsidMode::RANDOM);
+                auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
+                if (menu) {
+                    menu->setAttackParameters(BeaconSsidMode::RANDOM);
                     app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
                 }
             }
         },
-        MenuItem{"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST}, 
+        MenuItem{"From Probes", IconType::UI_REFRESH, MenuType::NONE,
+            [](App* app) {
+                auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
+                if (menu) {
+                    if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE)) {
+                        app->showPopUp("Error", "Run Probe Sniffer to create a list first.", nullptr, "OK", "", true);
+                        return;
+                    }
+                    menu->setAttackParameters(BeaconSsidMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_CUMULATIVE);
+                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST}
+    }),
+    probeFloodModeMenu_("Probe Flood", MenuType::PROBE_FLOOD_MODE_SELECTION, {
+        MenuItem{"Random Flood", IconType::TOOL_JAMMING, MenuType::NONE, 
+            [](App *app) {
+                auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
+                if (menu) {
+                    menu->setAttackParameters(ProbeFloodMode::RANDOM);
+                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                }
+            }
+        },
+        MenuItem{"Sniffed List", IconType::SD_CARD, MenuType::NONE,
+            [](App *app) {
+                auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
+                if (menu) {
+                    if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
+                        app->showPopUp("Error", "Run Probe Sniffer to create a list first.", nullptr, "OK", "", true);
+                        return;
+                    }
+                    menu->setAttackParameters(ProbeFloodMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_SESSION);
+                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                }
+            }},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     textInputMenu_(), 
@@ -258,6 +295,7 @@ App::App() :
     evilTwinActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
+    probeFloodActiveMenu_(),
     handshakeCaptureMenu_(),
     handshakeCaptureActiveMenu_(),
     bleSpamActiveMenu_(),
@@ -306,6 +344,7 @@ void App::setup()
         {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
+        {"Probe Flooder",   [&](){ probeFlooder_.setup(this); }},
         {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
         {"BLE Manager",     [&](){ bleManager_.setup(); }}, // <-- UPDATED
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
@@ -357,6 +396,7 @@ void App::setup()
     menuRegistry_[MenuType::JAMMING_TOOLS_GRID] = &jammingToolsMenu_;
     menuRegistry_[MenuType::DEAUTH_TOOLS_GRID] = &deauthToolsMenu_;
     menuRegistry_[MenuType::BEACON_MODE_SELECTION] = &beaconModeMenu_;
+    menuRegistry_[MenuType::PROBE_FLOOD_MODE_SELECTION] = &probeFloodModeMenu_;
 
     menuRegistry_[MenuType::TEXT_INPUT] = &textInputMenu_;
     menuRegistry_[MenuType::POPUP] = &popUpMenu_;
@@ -378,6 +418,7 @@ void App::setup()
     menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
+    menuRegistry_[MenuType::PROBE_FLOOD_ACTIVE] = &probeFloodActiveMenu_;
     menuRegistry_[MenuType::HANDSHAKE_CAPTURE_MENU] = &handshakeCaptureMenu_;
     menuRegistry_[MenuType::HANDSHAKE_CAPTURE_ACTIVE] = &handshakeCaptureActiveMenu_;
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
@@ -403,6 +444,7 @@ void App::loop()
     probeSniffer_.loop();
     karmaAttacker_.loop();
     handshakeCapture_.loop();
+    probeFlooder_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
 
@@ -428,6 +470,8 @@ void App::loop()
         evilTwin_.isActive() || 
         karmaAttacker_.isAttacking() || 
         karmaAttacker_.isSniffing() ||
+        probeFlooder_.isActive() ||
+        probeSniffer_.isActive() ||
         handshakeCapture_.isActive())
     {
         wifiIsRequired = true;
@@ -455,7 +499,7 @@ void App::loop()
     }
 
     bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
-                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || bleSpammer_.isActive() ||
+                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
                     duckyRunner_.isActive();
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))
