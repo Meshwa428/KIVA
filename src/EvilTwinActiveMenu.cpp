@@ -39,7 +39,7 @@ void EvilTwinActiveMenu::onUpdate(App* app) {
 
 void EvilTwinActiveMenu::handleInput(App* app, InputEvent event) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->returnToMenu(MenuType::WIFI_TOOLS_GRID);
+        app->returnToMenu(MenuType::WIFI_ATTACKS_LIST);
         return;
     }
 

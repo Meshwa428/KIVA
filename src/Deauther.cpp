@@ -113,7 +113,7 @@ void Deauther::loop() {
             allTargets_ = app_->getWifiManager().getScannedNetworks();
             if (allTargets_.empty()) {
                 app_->showPopUp("Error", "No networks found.", nullptr, "OK", "", true);
-                app_->returnToMenu(MenuType::DEAUTH_TOOLS_GRID);
+                app_->returnToMenu(MenuType::WIFI_ATTACKS_LIST);
                 return;
             }
             currentTargetIndex_ = -1;

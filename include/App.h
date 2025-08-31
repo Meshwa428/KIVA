@@ -15,7 +15,6 @@
 #include "PopUpMenu.h"
 #include "OtaManager.h"
 #include "OtaStatusMenu.h"
-#include "SplitSelectionMenu.h"
 #include "Jammer.h"
 #include "ChannelSelectionMenu.h"
 #include "JammingActiveMenu.h"
@@ -44,7 +43,6 @@
 #include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
-#include "SettingsMenu.h"
 #include "BrightnessMenu.h"
 #include "ConfigManager.h"
 #include "UsbDriveMenu.h"
@@ -53,7 +51,9 @@
 #include "NowPlayingMenu.h"
 #include "MusicLibraryManager.h"
 #include "Logger.h"
-#include <HIDForge.h> // <-- ADD THIS
+#include <HIDForge.h>
+#include "InfoMenu.h" 
+#include "ActionListDataSource.h" // Include our new generic data source
 
 class App
 {
@@ -81,7 +81,7 @@ public:
     ProbeFlooder &getProbeFlooder() { return probeFlooder_; }
     BleSpammer &getBleSpammer() { return bleSpammer_; }
     DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
-    BleManager &getBleManager() { return bleManager_; } // <-- Now returns HIDForge::BleManager
+    BleManager &getBleManager() { return bleManager_; } 
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
@@ -120,7 +120,7 @@ private:
     ProbeFlooder probeFlooder_;
     BleSpammer bleSpammer_;
     DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_; // <-- Now using HIDForge::BleManager
+    BleManager bleManager_;
     ConfigManager configManager_;
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;
@@ -132,32 +132,30 @@ private:
 
     // Concrete Menu Instances
     MainMenu mainMenu_;
-
     CarouselMenu toolsMenu_;
     CarouselMenu gamesMenu_;
-    CarouselMenu utilitiesMenu_;
     UsbDriveMenu usbDriveMenu_;
+    InfoMenu infoMenu_;
 
+    // New Menu Structure
     GridMenu wifiToolsMenu_;
     GridMenu bleToolsMenu_;
-    GridMenu hostToolsMenu_;
+    GridMenu nrfJammerMenu_;
+    GridMenu hostOtherMenu_;
+    GridMenu beaconModeMenu_;
+    GridMenu deauthModeMenu_;
+    GridMenu probeFloodModeMenu_;
+    GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
-    GridMenu jammingToolsMenu_;
-    GridMenu deauthToolsMenu_;
 
-    SettingsMenu settingsMenu_;
     BrightnessMenu brightnessMenu_;
-
-    SplitSelectionMenu probeFloodModeMenu_;
-    SplitSelectionMenu beaconModeMenu_;
-
     TextInputMenu textInputMenu_;
     ConnectionStatusMenu connectionStatusMenu_;
     PopUpMenu popUpMenu_;
-
     OtaStatusMenu otaStatusMenu_;
     ChannelSelectionMenu channelSelectionMenu_;
 
+    // Active Screens
     JammingActiveMenu jammingActiveMenu_;
     BeaconSpamActiveMenu beaconSpamActiveMenu_;
     DeauthActiveMenu deauthActiveMenu_;
@@ -169,23 +167,41 @@ private:
     HandshakeCaptureActiveMenu handshakeCaptureActiveMenu_;
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
+    NowPlayingMenu nowPlayingMenu_;
 
+    // DataSources
     WifiListDataSource wifiListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
     DuckyScriptListDataSource duckyScriptListDataSource_;
+    MusicPlayListDataSource musicPlayListDataSource_;
+    
+    // New Generic DataSources
+    ActionListDataSource wifiAttacksDataSource_;
+    ActionListDataSource wifiSniffDataSource_;
+    ActionListDataSource bleAttacksDataSource_;
+    ActionListDataSource uiSettingsDataSource_;
+    ActionListDataSource hardwareSettingsDataSource_;
+    ActionListDataSource connectivitySettingsDataSource_;
+    ActionListDataSource systemSettingsDataSource_;
 
+    // ListMenu Instances
     ListMenu wifiListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
     ListMenu duckyScriptListMenu_;
-
     ListMenu musicPlayerListMenu_;
-    NowPlayingMenu nowPlayingMenu_;
-
-    MusicPlayListDataSource musicPlayListDataSource_;
+    
+    // New ListMenus using the generic source
+    ListMenu wifiAttacksMenu_;
+    ListMenu wifiSniffMenu_;
+    ListMenu bleAttacksMenu_;
+    ListMenu uiSettingsMenu_;
+    ListMenu hardwareSettingsMenu_;
+    ListMenu connectivitySettingsMenu_;
+    ListMenu systemSettingsMenu_;
 };
 
 #endif
