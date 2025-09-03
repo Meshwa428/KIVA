@@ -190,7 +190,7 @@ void SnakeGameMenu::drawTitleScreen(App* app, U8G2& display) {
     }
     display.drawXBM(60, 44, SnakeSpriteSize::HIGHSCORE_W, SnakeSpriteSize::HIGHSCORE_H, snake_highscore_bits);
     display.setFont(u8g2_font_pressstart2p_8u);
-    printScore(display, 70, 62, highScore_);
+    printScore(display, 70, 61, highScore_);
 }
 
 void SnakeGameMenu::drawGamePlay(App* app, U8G2& display) {
