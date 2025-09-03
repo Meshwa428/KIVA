@@ -1,141 +1,135 @@
 #include "InfoMenu.h"
 #include "App.h"
-#include <WiFi.h>
 #include "UI_Utils.h"
 #include "SdCardManager.h"
 #include "esp_chip_info.h"
 #include "esp_psram.h"
+#include <vector>
+#include <string>
 
-// --- HELPER FUNCTION FOR SMART BYTE FORMATTING ---
+// Helper function for smart byte formatting (compact suffixes)
 static std::string formatBytes(uint64_t bytes) {
     char buffer[20];
     const uint64_t KILO = 1024;
     const uint64_t MEGA = KILO * 1024;
     const uint64_t GIGA = MEGA * 1024;
 
-    // Use GB if size is >= 512 MB
     if (bytes >= (GIGA / 2)) {
         double gb = (double)bytes / GIGA;
-        snprintf(buffer, sizeof(buffer), "%.2f GB", gb);
+        snprintf(buffer, sizeof(buffer), "%.2fG", gb);
     }
-    // Use MB if size is >= 1 MB
     else if (bytes >= MEGA) {
         double mb = (double)bytes / MEGA;
-        snprintf(buffer, sizeof(buffer), "%.1f MB", mb);
+        snprintf(buffer, sizeof(buffer), "%.1fM", mb);
     }
-    // Otherwise, use KB
     else {
         uint64_t kb = bytes / KILO;
-        snprintf(buffer, sizeof(buffer), "%llu KB", kb);
+        snprintf(buffer, sizeof(buffer), "%lluK", kb);
     }
     return std::string(buffer);
 }
 
-
-InfoMenu::InfoMenu() : selectedIndex_(0) {}
+InfoMenu::InfoMenu() : uptimeItemIndex_(-1) {}
 
 void InfoMenu::onEnter(App* app, bool isForwardNav) {
+    // This function now runs only ONCE when the menu is opened.
     infoItems_.clear();
-    selectedIndex_ = 0;
+    uptimeItemIndex_ = -1;
+    char buffer[40];
 
-    // Device & System Info
-    infoItems_.push_back({"Device Name", "KIVA"});
-
-    // CPU & RAM
-    char buffer[32];
+    // CPU Freq
     snprintf(buffer, sizeof(buffer), "%d MHz", getCpuFrequencyMhz());
     infoItems_.push_back({"CPU Freq", buffer});
 
-    // --- USE THE NEW FORMATTING FUNCTION ---
-    infoItems_.push_back({"Free RAM", formatBytes(ESP.getFreeHeap())});
+    // RAM (Used / Total)
+    uint32_t totalHeap = ESP.getHeapSize();
+    uint32_t freeHeap = ESP.getFreeHeap();
+    infoItems_.push_back({"RAM", formatBytes(totalHeap - freeHeap) + "/" + formatBytes(totalHeap)});
+
+    // PSRAM (Used / Total)
     if (psramFound()) {
-        infoItems_.push_back({"Free PSRAM", formatBytes(ESP.getFreePsram())});
+        uint32_t totalPsram = ESP.getPsramSize();
+        uint32_t freePsram = ESP.getFreePsram();
+        infoItems_.push_back({"PSRAM", formatBytes(totalPsram - freePsram) + "/" + formatBytes(totalPsram)});
     }
 
-    // SD Card Info
+    // SD Card (Used / Total)
     if (SdCardManager::isAvailable()) {
         uint64_t totalBytes = SD.cardSize();
         uint64_t usedBytes = SD.usedBytes();
-        std::string sdStr = formatBytes(usedBytes) + "/" + formatBytes(totalBytes);
-        infoItems_.push_back({"SD Card", sdStr});
+        infoItems_.push_back({"SD Card", formatBytes(usedBytes) + "/" + formatBytes(totalBytes)});
     } else {
         infoItems_.push_back({"SD Card", "Not Mounted"});
     }
     
-    // System Uptime
+    // System Uptime (initial value)
     unsigned long seconds = millis() / 1000;
     unsigned long minutes = seconds / 60;
     unsigned long hours = minutes / 60;
     snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
     infoItems_.push_back({"Uptime", buffer});
-
-    animation_.resize(infoItems_.size());
-    animation_.init();
-    animation_.startIntro(selectedIndex_, infoItems_.size());
+    
+    // Store the index of the uptime item so we can update it efficiently.
+    uptimeItemIndex_ = infoItems_.size() - 1;
 }
 
 void InfoMenu::onUpdate(App* app) {
-    animation_.update();
+    // This function is called every frame, but only updates the uptime.
+    if (uptimeItemIndex_ != -1 && uptimeItemIndex_ < infoItems_.size()) {
+        char buffer[40];
+        unsigned long seconds = millis() / 1000;
+        unsigned long minutes = seconds / 60;
+        unsigned long hours = minutes / 60;
+        snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
+        
+        // Update only the value string for the uptime item.
+        infoItems_[uptimeItemIndex_].second = buffer;
+    }
 }
 
-void InfoMenu::onExit(App* app) {}
+void InfoMenu::onExit(App* app) {
+    // Clear data to free memory
+    infoItems_.clear();
+    uptimeItemIndex_ = -1;
+}
 
 void InfoMenu::handleInput(App* app, InputEvent event) {
-    switch (event) {
-        case InputEvent::BTN_BACK_PRESS:
-        case InputEvent::BTN_OK_PRESS:
-            app->changeMenu(MenuType::BACK);
-            break;
-        case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_DOWN_PRESS:
-            selectedIndex_ = (selectedIndex_ + 1) % infoItems_.size();
-            animation_.setTargets(selectedIndex_, infoItems_.size());
-            break;
-        case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_UP_PRESS:
-            selectedIndex_ = (selectedIndex_ - 1 + infoItems_.size()) % infoItems_.size();
-            animation_.setTargets(selectedIndex_, infoItems_.size());
-            break;
-        default:
-            break;
+    // Any button press will exit the info screen.
+    if (event != InputEvent::NONE) {
+        app->changeMenu(MenuType::BACK);
     }
 }
 
 void InfoMenu::draw(App* app, U8G2& display) {
-    const int list_start_y = STATUS_BAR_H + 1;
-    const int item_h = 18;
-
-    display.setClipWindow(0, list_start_y, 127, 63);
-    display.setFont(u8g2_font_6x10_tf);
-
-    for (size_t i = 0; i < infoItems_.size(); ++i) {
-        int item_center_y_rel = (int)animation_.itemOffsetY[i];
-        float scale = animation_.itemScale[i];
-        if (scale <= 0.01f) continue;
-        
-        int item_center_y_abs = (list_start_y + (63 - list_start_y) / 2) + item_center_y_rel;
-        int item_top_y = item_center_y_abs - item_h / 2;
-
-        if (item_top_y > 63 || item_top_y + item_h < list_start_y) continue;
-        
-        bool isSelected = (i == selectedIndex_);
-
-        if (isSelected) {
-            drawRndBox(display, 2, item_top_y, 124, item_h, 2, true);
-            display.setDrawColor(0);
-        } else {
-            display.setDrawColor(1);
-        }
-        
-        // Draw Label
-        display.drawStr(6, item_center_y_abs + 4, infoItems_[i].label.c_str());
-        
-        // Draw Value
-        const char* value_text = infoItems_[i].value.c_str();
-        int value_width = display.getStrWidth(value_text);
-        display.drawStr(128 - value_width - 6, item_center_y_abs + 4, value_text);
-    }
+    // --- Layout Calculation (runs every frame, but is very fast) ---
+    display.setFont(u8g2_font_5x7_tf);
+    const int lineHeight = 9;
+    const int footerHeight = 8;
+    const int totalItemHeight = infoItems_.size() * lineHeight;
+    const int totalContentHeight = totalItemHeight + footerHeight;
     
-    display.setDrawColor(1);
-    display.setMaxClipWindow();
+    const int drawableAreaTopY = STATUS_BAR_H + 1;
+    const int drawableAreaHeight = 63 - drawableAreaTopY;
+    
+    int contentBlockTopY = drawableAreaTopY + (drawableAreaHeight - totalContentHeight) / 2;
+    if (contentBlockTopY < drawableAreaTopY) {
+        contentBlockTopY = drawableAreaTopY;
+    }
+
+    // --- Drawing (now just renders the stored data) ---
+    const int leftColX = 6;
+    const int rightColX = 122;
+    int currentTopY = contentBlockTopY;
+
+    for (const auto& item : infoItems_) {
+        int baselineY = currentTopY + display.getAscent();
+        display.drawStr(leftColX, baselineY, item.first.c_str());
+        display.drawStr(rightColX - display.getStrWidth(item.second.c_str()), baselineY, item.second.c_str());
+        currentTopY += lineHeight;
+    }
+
+    // --- Footer ---
+    int footerY = 63;
+    const char* instruction = "Press any key to exit";
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, footerY, instruction);
 }

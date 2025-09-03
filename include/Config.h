@@ -16,6 +16,11 @@ enum class MenuType
     TOOLS_CAROUSEL,
     GAMES_CAROUSEL,
 
+    // --- GAME LOBBY MENUS ---
+    SNAKE_MENU,
+    SNAKE_GAME,
+    TETRIS_MENU,
+
     // --- Tools Sub-menus ---
     WIFI_TOOLS_GRID,
     BLE_TOOLS_GRID,

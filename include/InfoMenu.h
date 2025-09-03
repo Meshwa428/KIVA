@@ -2,7 +2,8 @@
 #define INFO_MENU_H
 
 #include "IMenu.h"
-#include "Animation.h" // For list animation
+#include <vector>
+#include <string>
 
 class InfoMenu : public IMenu {
 public:
@@ -18,14 +19,8 @@ public:
     MenuType getMenuType() const override { return MenuType::INFO_MENU; }
 
 private:
-    struct InfoItem {
-        std::string label;
-        std::string value;
-    };
-
-    std::vector<InfoItem> infoItems_;
-    int selectedIndex_; // For scrolling
-    VerticalListAnimation animation_;
+    std::vector<std::pair<std::string, std::string>> infoItems_;
+    int uptimeItemIndex_; // To efficiently update the uptime string
 };
 
 #endif // INFO_MENU_H

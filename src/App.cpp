@@ -42,12 +42,8 @@ App::App() :
         MenuItem{"Host/Other", IconType::TOOL_INJECTION, MenuType::HOST_OTHER_GRID},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     gamesMenu_("Games", MenuType::GAMES_CAROUSEL, {
-        MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::NONE, 
-            [](App* app) { LOG(LogLevel::INFO, "GAMES", "Snake placeholder selected."); }
-        },
-        MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::NONE, 
-            [](App* app) { LOG(LogLevel::INFO, "GAMES", "Tetris placeholder selected."); }
-        },
+        MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::SNAKE_MENU},
+        MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::TETRIS_MENU},
         MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
     
     // --- New Menu Structure (Grids) ---
@@ -237,6 +233,7 @@ App::App() :
     // --- Simple Menus (Default Constructed) ---
     usbDriveMenu_(),
     infoMenu_(),
+    snakeGameMenu_(),
     brightnessMenu_(),
     textInputMenu_(), 
     connectionStatusMenu_(),
@@ -330,7 +327,16 @@ App::App() :
         {"System Info", IconType::INFO, MenuType::INFO_MENU},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
-
+    snakeMenuDataSource_({
+        MenuItem{"Play", IconType::PLAY, MenuType::SNAKE_GAME},
+        MenuItem{"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Snake High Score selected."); }},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }),
+    tetrisMenuDataSource_({
+        MenuItem{"Play", IconType::PLAY, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris Play selected."); }},
+        MenuItem{"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris High Score selected."); }},
+        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+    }),
     // --- ListMenu Instances ---
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
     firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
@@ -344,7 +350,9 @@ App::App() :
     uiSettingsMenu_("UI & Interaction", MenuType::UI_SETTINGS_LIST, &uiSettingsDataSource_),
     hardwareSettingsMenu_("Hardware", MenuType::HARDWARE_SETTINGS_LIST, &hardwareSettingsDataSource_),
     connectivitySettingsMenu_("Connectivity", MenuType::CONNECTIVITY_SETTINGS_LIST, &connectivitySettingsDataSource_),
-    systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_)
+    systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_),
+    snakeMenu_("Snake", MenuType::SNAKE_MENU, &snakeMenuDataSource_),
+    tetrisMenu_("Tetris", MenuType::TETRIS_MENU, &tetrisMenuDataSource_)
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -427,6 +435,10 @@ void App::setup()
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
+
+    menuRegistry_[MenuType::SNAKE_MENU] = &snakeMenu_;
+    menuRegistry_[MenuType::SNAKE_GAME] = &snakeGameMenu_;
+    menuRegistry_[MenuType::TETRIS_MENU] = &tetrisMenu_;
 
     // Tools Sub-menus
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;

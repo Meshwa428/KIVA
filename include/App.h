@@ -54,6 +54,7 @@
 #include <HIDForge.h>
 #include "InfoMenu.h" 
 #include "ActionListDataSource.h" // Include our new generic data source
+#include "SnakeGameMenu.h"
 
 class App
 {
@@ -136,6 +137,7 @@ private:
     CarouselMenu gamesMenu_;
     UsbDriveMenu usbDriveMenu_;
     InfoMenu infoMenu_;
+    SnakeGameMenu snakeGameMenu_;
 
     // New Menu Structure
     GridMenu wifiToolsMenu_;
@@ -185,6 +187,9 @@ private:
     ActionListDataSource hardwareSettingsDataSource_;
     ActionListDataSource connectivitySettingsDataSource_;
     ActionListDataSource systemSettingsDataSource_;
+    // --- NEW GAME DATASOURCES ---
+    ActionListDataSource snakeMenuDataSource_;
+    ActionListDataSource tetrisMenuDataSource_;
 
     // ListMenu Instances
     ListMenu wifiListMenu_;
@@ -202,6 +207,10 @@ private:
     ListMenu hardwareSettingsMenu_;
     ListMenu connectivitySettingsMenu_;
     ListMenu systemSettingsMenu_;
+
+    // --- GAME LISTMENUS ---
+    ListMenu snakeMenu_;
+    ListMenu tetrisMenu_;
 };
 
 #endif
