@@ -58,7 +58,6 @@ class SnakeGameMenu : public IMenu {
 public:
     SnakeGameMenu();
 
-    // --- START OF FIX: Moved Constants to Public ---
     // Game Constants
     static constexpr int SPRITE_SIZE = 4;
     static constexpr int ARENA_WIDTH_UNITS = 128 / SPRITE_SIZE;
@@ -66,8 +65,8 @@ public:
     static constexpr int SNAKE_SPEED_START_MS = 166; // approx 6 FPS
     static constexpr int SNAKE_SPEED_END_MS = 83;    // approx 12 FPS
     static constexpr int SNAKE_SPEED_INCREASE_INTERVAL = 30000; // Speed up every 30s
-    // --- END OF FIX ---
 
+    // IMenu Interface Overrides
     void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;
     void onExit(App* app) override;
@@ -80,32 +79,37 @@ public:
 private:
     enum class GameState { TITLE_SCREEN, PLAYING, GAME_OVER };
     
-    // Game Logic Functions
+    // --- Game Logic Functions (Cleaned Up) ---
     void stateLogicTitle(App* app, InputEvent event);
     void stateLogicPlaying(App* app, InputEvent event);
     void stateLogicGameOver(App* app, InputEvent event);
     void initNewGame();
-    void playHaptic(App* app, int duration_ms);
-    void printScore(U8G2& display, int x, int y, uint16_t val);
+    void updateGame(App* app);
+    void createFood();
+    bool isFoodOnSnake(int8_t x, int8_t y);
+    void checkCollisions(App* app);
+    
+    // --- Audio Functions ---
+    void playPressTune(App* app);
+    void playEatTune(App* app);
+    void playDeadTune(App* app);
+    void playWinTune(App* app);
 
-    // Drawing Functions
+    // --- Drawing Functions ---
     void drawTitleScreen(App* app, U8G2& display);
     void drawGamePlay(App* app, U8G2& display);
     void drawGameOverScreen(App* app, U8G2& display);
+    void printScore(U8G2& display, int x, int y, uint16_t val);
 
-    // Game Objects
+    // --- Game Objects & State Variables ---
     GameState gameState_;
     Snake snake_;
     SnakePoint food_;
-    
-    // Game State Variables
     uint16_t score_;
     uint16_t highScore_;
     unsigned long lastUpdateTime_;
     unsigned long speedIncreaseTimer_;
     int currentSpeedMs_;
-    
-    // Animation
     uint8_t animCounter_;
     bool newHighScoreFlag_;
 };

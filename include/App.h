@@ -55,6 +55,7 @@
 #include "InfoMenu.h" 
 #include "ActionListDataSource.h" // Include our new generic data source
 #include "SnakeGameMenu.h"
+#include "GameAudio.h"
 
 class App
 {
@@ -86,6 +87,7 @@ public:
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
+    GameAudio &getGameAudio() { return gameAudio_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -125,6 +127,7 @@ private:
     ConfigManager configManager_;
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;
+    GameAudio gameAudio_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;

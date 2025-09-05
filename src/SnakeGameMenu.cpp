@@ -1,7 +1,7 @@
 #include "SnakeGameMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
-#include "SnakeGameSprites.h" // <-- Include the game's own sprites
+#include "SnakeGameSprites.h"
 #include <cstdlib>
 
 // --- Point Constants ---
@@ -75,12 +75,33 @@ void SnakeGameMenu::onEnter(App* app, bool isForwardNav) {
     lastUpdateTime_ = millis();
     animCounter_ = 0;
 }
-void SnakeGameMenu::onExit(App* app) {}
+void SnakeGameMenu::onExit(App* app) {
+    // Make sure the amplifier is off when we leave the game
+    app->getGameAudio().noTone();
+}
 
-void SnakeGameMenu::playHaptic(App* app, int duration_ms) {
-    app->getHardwareManager().setVibration(true);
-    delay(duration_ms);
-    app->getHardwareManager().setVibration(false);
+void SnakeGameMenu::playPressTune(App* app) {
+    app->getGameAudio().tone(425, 20);
+}
+
+void SnakeGameMenu::playEatTune(App* app) {
+    app->getGameAudio().tone(512, 30);
+}
+
+void SnakeGameMenu::playDeadTune(App* app) {
+    app->getGameAudio().tone(1100, 80);
+    delay(100);
+    app->getGameAudio().tone(1000, 80);
+    delay(100);
+    app->getGameAudio().tone(500, 500);
+}
+
+void SnakeGameMenu::playWinTune(App* app) {
+    app->getGameAudio().tone(500, 50);
+    delay(80);
+    app->getGameAudio().tone(800, 50);
+    delay(80);
+    app->getGameAudio().tone(1100, 100);
 }
 
 void SnakeGameMenu::initNewGame() {
@@ -121,14 +142,15 @@ void SnakeGameMenu::onUpdate(App* app) {
                     food_.x = random(1, ARENA_WIDTH_UNITS - 1);
                     food_.y = random(1, ARENA_HEIGHT_UNITS - 1);
                 } while (snake_.checkOverlap(food_));
-                playHaptic(app, 30);
+                playEatTune(app);
             }
             if (snake_.checkBody() || snake_.checkBorder()) {
-                playHaptic(app, 150);
                 gameState_ = GameState::GAME_OVER;
+                playDeadTune(app);
                 if (score_ > highScore_) {
                     highScore_ = score_;
                     newHighScoreFlag_ = true;
+                    playWinTune(app);
                 } else {
                     newHighScoreFlag_ = false;
                 }
@@ -147,7 +169,7 @@ void SnakeGameMenu::handleInput(App* app, InputEvent event) {
 
 void SnakeGameMenu::stateLogicTitle(App* app, InputEvent event) {
     if (event != InputEvent::NONE) {
-        playHaptic(app, 30);
+        playPressTune(app);
         initNewGame();
     }
 }
@@ -181,9 +203,8 @@ void SnakeGameMenu::printScore(U8G2& display, int x, int y, uint16_t val) {
 }
 
 void SnakeGameMenu::drawTitleScreen(App* app, U8G2& display) {
-    // --- MODIFIED: Use direct drawXBM calls with dimensions from SnakeGameSprites.h ---
     display.drawXBM(52, 0, SnakeSpriteSize::TITLE_W, SnakeSpriteSize::TITLE_H, snake_title_bits);
-    if ((animCounter_ / 15) % 2 == 0) { // Slower animation
+    if ((animCounter_ / 15) % 2 == 0) {
         display.drawXBM(0, 0, SnakeSpriteSize::TITLE_ANIM_W, SnakeSpriteSize::TITLE_ANIM_H, snake_title_anim1_bits);
     } else {
         display.drawXBM(0, 0, SnakeSpriteSize::TITLE_ANIM_W, SnakeSpriteSize::TITLE_ANIM_H, snake_title_anim2_bits);
@@ -195,8 +216,6 @@ void SnakeGameMenu::drawTitleScreen(App* app, U8G2& display) {
 
 void SnakeGameMenu::drawGamePlay(App* app, U8G2& display) {
     display.drawFrame(0, 0, 128, 64);
-    
-    // --- MODIFIED: Use direct drawXBM calls ---
     display.drawXBM(snake_.head.x * SPRITE_SIZE, snake_.head.y * SPRITE_SIZE, SnakeSpriteSize::BODY_W, SnakeSpriteSize::BODY_H, snake_body_bits);
     for (uint8_t i = 0; i < snake_.body.size(); i++) {
         const SnakePoint& p = snake_.body[i];
@@ -206,7 +225,6 @@ void SnakeGameMenu::drawGamePlay(App* app, U8G2& display) {
 }
 
 void SnakeGameMenu::drawGameOverScreen(App* app, U8G2& display) {
-    // --- MODIFIED: Use direct drawXBM calls ---
     display.drawXBM((128 - SnakeSpriteSize::GAMEOVER_W) / 2, 8, SnakeSpriteSize::GAMEOVER_W, SnakeSpriteSize::GAMEOVER_H, snake_gameover_bits);
     
     display.setFont(u8g2_font_10x20_tr);

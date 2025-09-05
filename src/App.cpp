@@ -32,6 +32,7 @@ App::App() :
     configManager_(),
     musicPlayer_(),
     musicLibraryManager_(),
+    gameAudio_(),
 
     // --- Main Navigation Menus ---
     mainMenu_(),
@@ -398,7 +399,8 @@ void App::setup()
         {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
-        {"Music Library",   [&](){ musicLibraryManager_.setup(this); }}
+        {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
+        {"Game Audio",      [&](){ gameAudio_.setup(&hardware_, Pins::AMPLIFIER_PIN); }}
     };
 
     int totalTasks = bootTasks.size();
@@ -507,6 +509,7 @@ void App::loop()
     hardware_.update();
     wifiManager_.update();
     otaManager_.loop();
+    gameAudio_.update();
     jammer_.loop();
     beaconSpammer_.loop();
     deauther_.loop();

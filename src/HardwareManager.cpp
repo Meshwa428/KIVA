@@ -5,6 +5,16 @@
 #include <esp_wifi.h>
 #include "Logger.h"
 
+// --- Define the static instance pointer ---
+HardwareManager* HardwareManager::instance_ = nullptr;
+
+// --- Interrupt Service Routine (ISR) ---
+void IRAM_ATTR HardwareManager::handleButtonInterrupt() {
+    if (instance_) {
+        instance_->buttonInterruptFired_ = true;
+    }
+}
+
 // --- Constructor ---
 HardwareManager::HardwareManager() : 
                                      u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
@@ -14,18 +24,22 @@ HardwareManager::HardwareManager() :
                                      currentRfClient_(RfClient::NONE),
                                      currentHostClient_(HostClient::NONE),
                                      bleStackInitialized_(false),
+                                     buttonInterruptFired_(false),
                                      encPos_(0), lastEncState_(0), encConsecutiveValid_(0),
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false), amplifierOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
                                      isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.5f),
                                      trendBufferIndex_(0), trendBufferFilled_(false), highPerformanceMode_(false)
 {
+    // Initialize the static instance pointer
+    instance_ = this;
+
     // Initialize input button states
     for (int i = 0; i < 8; ++i)
     {
-        prevDbncHState0_[i] = true;
+        prevDbncHState0_[i] = true; // true = released
         lastDbncT0_[i] = 0;
-        prevDbncHState1_[i] = true;
+        prevDbncHState1_[i] = true; // true = released
         lastDbncT1_[i] = 0;
         isBtnHeld1_[i] = false;
         btnHoldStartT1_[i] = 0;
@@ -49,7 +63,7 @@ void HardwareManager::setup()
     setVibration(false);
     setAmplifier(false);
 
-    // Initialize PCF1 for inputs
+    // Initialize PCF1 for inputs (write all 1s to set pins as inputs)
     selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
     writePCF(Pins::PCF1_ADDR, 0xFF);
 
@@ -64,8 +78,56 @@ void HardwareManager::setup()
     lastEncState_ = (encB_val << 1) | encA_val;
     encConsecutiveValid_ = 0;
 
+    // Configure interrupt pin
+    pinMode(Pins::BTN_INTERRUPT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(Pins::BTN_INTERRUPT_PIN), handleButtonInterrupt, FALLING);
+
+    // Startup workaround to clear initial interrupt state
+    LOG(LogLevel::INFO, "HW_MANAGER", "Performing initial PCF read to clear startup interrupt.");
+    selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
+    readPCF(Pins::PCF0_ADDR);
+    selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
+    readPCF(Pins::PCF1_ADDR);
+    buttonInterruptFired_ = false; // Explicitly clear flag after workaround
+
     setupTime_ = millis();
 }
+
+void HardwareManager::update()
+{
+    // Time-based events that must run continuously
+    if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
+        updateBattery();
+    }
+    // Button repeats must be checked continuously to handle the "hold" duration.
+    processButtonRepeats(); 
+
+    // --- PURE INTERRUPT-DRIVEN LOGIC ---
+    if (buttonInterruptFired_) {
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");
+        
+        // 1. Read the state of BOTH modules once. This captures the state
+        //    that caused the interrupt and resets the INT line on both chips.
+        selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
+        uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
+
+        selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
+        uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
+
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF0 (Encoder) Raw: 0x%02X", pcf0State);
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF1 (Nav Btns) Raw: 0x%02X", pcf1State);
+        
+        // 2. Process the captured states. These functions no longer do I2C reads.
+        processEncoder(pcf0State);
+        processButton_PCF0(pcf0State);
+        processButtons_PCF1(pcf1State);
+        
+        // 3. Reset the flag, ready for the next interrupt.
+        buttonInterruptFired_ = false;
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled and reset.");
+    }
+}
+
 
 HardwareManager::RfLock::RfLock(HardwareManager& manager, bool success) 
     : manager_(manager), valid_(success) {}
@@ -90,7 +152,7 @@ void HardwareManager::releaseRfControl() {
         esp_wifi_set_promiscuous(false);
         WiFi.mode(WIFI_OFF);
     
-    } else if (currentRfClient_ == RfClient::ROGUE_AP) { // <-- ADD THIS
+    } else if (currentRfClient_ == RfClient::ROGUE_AP) {
         WiFi.softAPdisconnect(true);
         WiFi.enableAP(false);
         WiFi.mode(WIFI_OFF);
@@ -167,7 +229,7 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
             return std::unique_ptr<RfLock>(new RfLock(*this, false));
         }
     
-    } else if (client == RfClient::ROGUE_AP) { // <-- ADD THIS BLOCK
+    } else if (client == RfClient::ROGUE_AP) {
         WiFi.disconnect(true, true);
         delay(100);
 
@@ -182,7 +244,6 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
     return std::unique_ptr<RfLock>(new RfLock(*this, false));
 }
 
-// --- REVISED AND FINALIZED HOST CONTROL LOGIC ---
 bool HardwareManager::requestHostControl(HostClient client) {
     if (client == currentHostClient_) {
         return true;
@@ -199,9 +260,6 @@ bool HardwareManager::requestHostControl(HostClient client) {
             USB.begin();
             break;
         case HostClient::BLE_HID:
-            // --- REMOVED ---
-            // BLE stack is now fully managed by BleManager's dedicated task.
-            // HardwareManager should not touch it.
             break;
         case HostClient::NONE:
             break;
@@ -216,40 +274,14 @@ void HardwareManager::releaseHostControl() {
     
     switch(currentHostClient_) {
         case HostClient::USB_HID:
-            // USB.end(); // Optional, often better to leave it.
             break;
         case HostClient::BLE_HID:
-            // --- REMOVED ---
-            // BLE stack is now fully managed by BleManager's dedicated task.
             break;
         case HostClient::NONE:
             break;
     }
     
     currentHostClient_ = HostClient::NONE;
-}
-
-
-
-void HardwareManager::update()
-{
-    // --- Define intervals based on performance mode ---
-    static unsigned long lastInputPollTime = 0;
-    const unsigned long currentPollInterval = highPerformanceMode_ 
-                                            ? 500
-                                            : 16;
-
-    if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
-        updateBattery();
-    }
-
-    if (millis() - lastInputPollTime >= currentPollInterval) {
-        processEncoder();
-        processButton_PCF0();
-        processButtons_PCF1();
-        processButtonRepeats();
-        lastInputPollTime = millis();
-    }
 }
 
 void HardwareManager::setPerformanceMode(bool highPerf) {
@@ -274,10 +306,8 @@ void HardwareManager::updateBattery()
     }
     lastBatteryCheckTime_ = currentTime;
 
-    // 1. Get a reliable raw voltage reading
     float rawVoltage = readRawBatteryVoltage();
 
-    // 2. Perform weighted moving average smoothing for a stable display value
     if (!batteryInitialized_)
     {
         for (int i = 0; i < Battery::NUM_SAMPLES; i++)
@@ -302,7 +332,6 @@ void HardwareManager::updateBattery()
         currentSmoothedVoltage_ = (totalWeight > 0) ? (weightedSum / totalWeight) : rawVoltage;
     }
 
-    // 3. Update the trend buffer with the NEWLY SMOOTHED voltage
     voltageTrendBuffer_[trendBufferIndex_] = currentSmoothedVoltage_;
     trendBufferIndex_ = (trendBufferIndex_ + 1) % TREND_SAMPLES;
     if (!trendBufferFilled_ && trendBufferIndex_ == 0)
@@ -310,14 +339,10 @@ void HardwareManager::updateBattery()
         trendBufferFilled_ = true;
     }
 
-    // 4. --- NEW HYBRID CHARGING DETECTION LOGIC ---
-    const float FULLY_CHARGED_THRESHOLD = 4.25f; // A voltage at which charging current typically drops to near zero.
+    const float FULLY_CHARGED_THRESHOLD = 4.25f;
 
     if (trendBufferFilled_)
     {
-        // We have enough data for trend analysis.
-
-        // Calculate the slope of the voltage trend.
         float sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
         for (int i = 0; i < TREND_SAMPLES; ++i)
         {
@@ -336,40 +361,34 @@ void HardwareManager::updateBattery()
             slope = ((TREND_SAMPLES * sum_xy) - (sum_x * sum_y)) / denominator;
         }
 
-        const float chargingSlopeThreshold = 0.0015f;    // A rise of 1.5mV/sec indicates charging
-        const float dischargingSlopeThreshold = -0.001f; // A drop of 1mV/sec indicates discharging
+        const float chargingSlopeThreshold = 0.0015f;
+        const float dischargingSlopeThreshold = -0.001f;
 
-        // Now, apply the hybrid logic
         if (currentSmoothedVoltage_ >= FULLY_CHARGED_THRESHOLD)
         {
-            // If voltage is at or above the 'full' threshold, the charging indicator should
-            // only be on if the voltage is STILL actively rising. Otherwise, it's full and idle.
             if (slope > chargingSlopeThreshold)
             {
-                isCharging_ = true; // Still in the final constant-voltage charging phase
+                isCharging_ = true;
             }
             else
             {
-                isCharging_ = false; // Battery is full and stable, charger has stopped.
+                isCharging_ = false;
             }
         }
         else
         {
-            // If we are below the 'full' threshold, we rely purely on the slope.
             if (slope > chargingSlopeThreshold)
             {
-                isCharging_ = true; // Actively charging
+                isCharging_ = true;
             }
             else if (slope < dischargingSlopeThreshold)
             {
-                isCharging_ = false; // Actively discharging
+                isCharging_ = false;
             }
-            // If in the dead-zone here, state is maintained. This is correct for an idle, partially-charged battery.
         }
     }
     else
     {
-        // Fallback before we have enough data for regression: use a simple voltage threshold.
         isCharging_ = (currentSmoothedVoltage_ > FULLY_CHARGED_THRESHOLD);
     }
 }
@@ -421,11 +440,10 @@ float HardwareManager::readRawBatteryVoltage()
 {
     int rawValue = analogRead(Pins::ADC_PIN);
     float voltageAtADC = (rawValue / (float)Battery::ADC_RESOLUTION) * Battery::ADC_REF_VOLTAGE;
-    // Uses the new, calibrated ratio from Config.h
     float batteryVoltage = voltageAtADC * Battery::VOLTAGE_DIVIDER_RATIO;
 
     if (batteryVoltage < 2.5f || batteryVoltage > 4.4f)
-    { // Widen range slightly
+    {
         return lastValidRawVoltage_;
     }
 
@@ -449,34 +467,12 @@ uint8_t HardwareManager::calculatePercentage(float voltage) const
     return (uint8_t)percentage;
 }
 
-float HardwareManager::getBatteryVoltage() const
-{
-    return currentSmoothedVoltage_;
-}
-
-uint8_t HardwareManager::getBatteryPercentage() const
-{
-    return calculatePercentage(currentSmoothedVoltage_);
-}
-
-bool HardwareManager::isCharging() const
-{
-    return isCharging_;
-}
-
-bool HardwareManager::isLaserOn() const
-{
-    return laserOn_;
-}
-
-bool HardwareManager::isVibrationOn() const
-{
-    return vibrationOn_;
-}
-
-bool HardwareManager::isAmplifierOn() const {
-    return amplifierOn_;
-}
+float HardwareManager::getBatteryVoltage() const { return currentSmoothedVoltage_; }
+uint8_t HardwareManager::getBatteryPercentage() const { return calculatePercentage(currentSmoothedVoltage_); }
+bool HardwareManager::isCharging() const { return isCharging_; }
+bool HardwareManager::isLaserOn() const { return laserOn_; }
+bool HardwareManager::isVibrationOn() const { return vibrationOn_; }
+bool HardwareManager::isAmplifierOn() const { return amplifierOn_; }
 
 U8G2 &HardwareManager::getMainDisplay()
 {
@@ -504,19 +500,14 @@ InputEvent HardwareManager::getNextInputEvent()
 void HardwareManager::clearInputQueue() {
     inputQueue_.clear();
     
-    // --- START OF FIX: Reset the internal state of the input poller ---
     unsigned long currentTime = millis();
     for (int i = 0; i < 8; ++i) {
-        // Reset state for PCF0 (Encoder Button)
-        prevDbncHState0_[i] = true; // true = released state
+        prevDbncHState0_[i] = true;
         lastDbncT0_[i] = currentTime;
-
-        // Reset state for PCF1 (Nav Buttons)
-        prevDbncHState1_[i] = true; // true = released state
+        prevDbncHState1_[i] = true;
         lastDbncT1_[i] = currentTime;
-        isBtnHeld1_[i] = false; // No button is considered held
+        isBtnHeld1_[i] = false;
     }
-    // --- END OF FIX ---
 }
 
 void HardwareManager::selectMux(uint8_t channel)
@@ -550,11 +541,8 @@ uint8_t HardwareManager::readPCF(uint8_t pcfAddress)
     return val;
 }
 
-void HardwareManager::processEncoder()
+void HardwareManager::processEncoder(uint8_t pcf0State)
 {
-    selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER); // <-- MUX selection is INSIDE
-    uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
-
     static const int cwTable[4] = {1, 3, 0, 2};
     static const int ccwTable[4] = {2, 0, 3, 1};
     static const int requiredConsecutive = 2;
@@ -574,14 +562,12 @@ void HardwareManager::processEncoder()
 
     if (validCW)
     {
-        if (encConsecutiveValid_ < 0)
-            encConsecutiveValid_ = 0;
+        if (encConsecutiveValid_ < 0) encConsecutiveValid_ = 0;
         encConsecutiveValid_++;
     }
     else if (validCCW)
     {
-        if (encConsecutiveValid_ > 0)
-            encConsecutiveValid_ = 0;
+        if (encConsecutiveValid_ > 0) encConsecutiveValid_ = 0;
         encConsecutiveValid_--;
     }
     else
@@ -606,47 +592,35 @@ void HardwareManager::processEncoder()
     }
 }
 
-void HardwareManager::processButton_PCF0()
+void HardwareManager::processButton_PCF0(uint8_t pcf0State)
 {
-    selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
-    uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
-
     unsigned long currentTime = millis();
-    static bool lastRawHState0[8] = {true, true, true, true, true, true, true, true};
 
-    if (millis() - setupTime_ < 300)
-        return;
+    if (millis() - setupTime_ < 300) return;
 
-    bool rawStateEncBtn = (pcf0State & (1 << Pins::ENC_BTN));
-    if (rawStateEncBtn != lastRawHState0[Pins::ENC_BTN])
-    {
-        lastDbncT0_[Pins::ENC_BTN] = currentTime;
-    }
-    lastRawHState0[Pins::ENC_BTN] = rawStateEncBtn;
+    // This is the bit for the encoder button on PCF0
+    int pin = Pins::ENC_BTN; 
+    bool rawState = (pcf0State & (1 << pin));
 
-    if ((currentTime - lastDbncT0_[Pins::ENC_BTN]) > DEBOUNCE_DELAY_MS)
-    {
-        if (rawStateEncBtn != prevDbncHState0_[Pins::ENC_BTN])
-        {
-            prevDbncHState0_[Pins::ENC_BTN] = rawStateEncBtn;
-            if (rawStateEncBtn == false)
-            { // Pressed
+    // Simple debouncing timer check
+    if (currentTime - lastDbncT0_[pin] > DEBOUNCE_DELAY_MS) {
+        // If the debounced state is different from the last stable state...
+        if (rawState != prevDbncHState0_[pin]) {
+            // Update the last stable state
+            prevDbncHState0_[pin] = rawState;
+            // If the new state is PRESSED (LOW, which is false)...
+            if (rawState == false) {
                 inputQueue_.push_back(InputEvent::BTN_ENCODER_PRESS);
             }
         }
     }
 }
 
-void HardwareManager::processButtons_PCF1()
+void HardwareManager::processButtons_PCF1(uint8_t pcf1State)
 {
-    selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
-    uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
-
     unsigned long currentTime = millis();
-    static bool lastRawHState1[8] = {true, true, true, true, true, true, true, true};
 
-    if (millis() - setupTime_ < 300)
-        return;
+    if (millis() - setupTime_ < 300) return;
 
     const int pcf1Pins[] = {Pins::NAV_OK, Pins::NAV_BACK, Pins::NAV_A, Pins::NAV_B, Pins::NAV_UP, Pins::NAV_DOWN, Pins::NAV_LEFT, Pins::NAV_RIGHT};
 
@@ -655,32 +629,26 @@ void HardwareManager::processButtons_PCF1()
         int pin = pcf1Pins[i];
         bool rawState = (pcf1State & (1 << pin));
 
-        if (rawState != lastRawHState1[pin])
-        {
-            lastDbncT1_[pin] = currentTime;
-        }
-        lastRawHState1[pin] = rawState;
-
-        if ((currentTime - lastDbncT1_[pin]) > DEBOUNCE_DELAY_MS)
-        {
-            if (rawState != prevDbncHState1_[pin])
-            {
+        // Simple debouncing timer check
+        if (currentTime - lastDbncT1_[pin] > DEBOUNCE_DELAY_MS) {
+            // If the debounced state is different from the last stable state...
+            if (rawState != prevDbncHState1_[pin]) {
+                // Update the last stable state
                 prevDbncHState1_[pin] = rawState;
-                if (rawState == false)
-                { // Pressed
+
+                if (rawState == false) { // PRESSED
                     inputQueue_.push_back(mapPcf1PinToEvent(pin));
                     isBtnHeld1_[pin] = true;
                     btnHoldStartT1_[pin] = currentTime;
                     lastRepeatT1_[pin] = currentTime;
-                }
-                else
-                { // Released
+                } else { // RELEASED
                     isBtnHeld1_[pin] = false;
                 }
             }
         }
     }
 }
+
 
 void HardwareManager::processButtonRepeats()
 {

@@ -85,10 +85,10 @@ public:
 private:
     void releaseRfControl(); // <-- NEW private helper
 
-    // Input methods
-    void processEncoder();
-    void processButton_PCF0();
-    void processButtons_PCF1();
+    // --- MODIFIED: Input methods now take state as a parameter ---
+    void processEncoder(uint8_t pcf0State);
+    void processButton_PCF0(uint8_t pcf0State);
+    void processButtons_PCF1(uint8_t pcf1State);
     void processButtonRepeats(); 
     InputEvent mapPcf1PinToEvent(int pin);
     
@@ -101,6 +101,10 @@ private:
     void updateBattery();
     uint8_t calculatePercentage(float voltage) const;
     float readRawBatteryVoltage();
+
+    // --- Interrupt Service Routine ---
+    static void IRAM_ATTR handleButtonInterrupt();
+    static HardwareManager* instance_;
 
     // Displays
     U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2_main_;
@@ -116,6 +120,7 @@ private:
     bool bleStackInitialized_;
 
     // Input state
+    volatile bool buttonInterruptFired_;
     bool prevDbncHState0_[8];
     unsigned long lastDbncT0_[8];
     bool prevDbncHState1_[8];
