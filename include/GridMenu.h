@@ -7,7 +7,8 @@
 
 class GridMenu : public IMenu {
 public:
-    GridMenu(std::string title, std::vector<MenuItem> items, int columns = 2);
+    // --- CONSTRUCTOR MODIFIED ---
+    GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> items, int columns = 2);
 
     void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;

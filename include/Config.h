@@ -9,48 +9,71 @@ enum class MenuType
 {
     NONE,
     BACK,
-    MAIN,
     POPUP,
+
+    // --- Main Navigation ---
+    MAIN,
     TOOLS_CAROUSEL,
     GAMES_CAROUSEL,
-    SETTINGS,
-    BRIGHTNESS_MENU,
-    UTILITIES_CAROUSEL,
+
+    // --- GAME LOBBY MENUS ---
+    SNAKE_MENU,
+    SNAKE_GAME,
+    TETRIS_MENU,
+
+    // --- Tools Sub-menus ---
     WIFI_TOOLS_GRID,
-    JAMMING_TOOLS_GRID,
-    WIFI_LIST,
-    TEXT_INPUT,
-    WIFI_CONNECTION_STATUS,
+    BLE_TOOLS_GRID,
+    NRF_JAMMER_GRID,
+    HOST_OTHER_GRID,
+
+    WIFI_ATTACKS_LIST,
+    WIFI_SNIFF_LIST,
+    BLE_ATTACKS_LIST,
+
+    BEACON_MODE_GRID,
+    DEAUTH_MODE_GRID,
+    PROBE_FLOOD_MODE_GRID,
+
+    // --- Core Attack/Tool Screens ---
+    WIFI_LIST, // Re-used for multiple purposes
+    BEACON_FILE_LIST,
+    PORTAL_LIST,
+    DUCKY_SCRIPT_LIST,
+    CHANNEL_SELECTION,
+    HANDSHAKE_CAPTURE_MENU, // This is a GridMenu
+
+    BEACON_SPAM_ACTIVE,
+    DEAUTH_ACTIVE,
+    EVIL_TWIN_ACTIVE,
+    PROBE_FLOOD_ACTIVE,
+    KARMA_ACTIVE,
+    PROBE_ACTIVE, // Probe Sniffer
+    HANDSHAKE_CAPTURE_ACTIVE,
+    BLE_SPAM_ACTIVE,
+    DUCKY_SCRIPT_ACTIVE,
+    JAMMING_ACTIVE,
+
+    // --- Settings Sub-menus ---
+    SETTINGS_GRID,
+    UI_SETTINGS_LIST,
+    HARDWARE_SETTINGS_LIST,
+    CONNECTIVITY_SETTINGS_LIST,
+    SYSTEM_SETTINGS_LIST,
+    BRIGHTNESS_MENU, // The advanced twin-dial menu
+
+    // --- Firmware Update Menus ---
     FIRMWARE_UPDATE_GRID,
     FIRMWARE_LIST_SD,
     OTA_STATUS,
-    CHANNEL_SELECTION,
-    JAMMING_ACTIVE,
-    BEACON_MODE_SELECTION,
-    BEACON_FILE_LIST,
-    BEACON_SPAM_ACTIVE,
-    DEAUTH_TOOLS_GRID,
-    DEAUTH_ACTIVE,
-    EVIL_TWIN_PORTAL_SELECTION,
-    EVIL_TWIN_ACTIVE,
-    PROBE_ACTIVE,
-    KARMA_ACTIVE,
-    PROBE_FLOOD_MODE_SELECTION,
-    PROBE_FLOOD_ACTIVE,
-    BLE_TOOLS_GRID,
-    HOST_TOOLS_GRID,
-    BLE_SPAM_ACTIVE,
-    DUCKY_SCRIPT_LIST,
-    DUCKY_SCRIPT_ACTIVE,
-    BLE_KEYBOARD_MAPPER_ACTIVE,
-    BLE_MEDIA_CONTROLLER_ACTIVE,
-    BLE_SCROLL_HELPER_ACTIVE,
+
+    // --- Utilities/Misc ---
     USB_DRIVE_MODE,
-    HANDSHAKE_CAPTURE_MENU,
-    HANDSHAKE_CAPTURE_ACTIVE,
-    // --- NEW MUSIC PLAYER MENU TYPES ---
+    TEXT_INPUT,
+    WIFI_CONNECTION_STATUS,
     MUSIC_PLAYER_LIST,
-    NOW_PLAYING
+    NOW_PLAYING,
+    INFO_MENU
 };
 
 // Input Event System
@@ -105,6 +128,9 @@ namespace Pins
     static constexpr uint8_t NAV_RIGHT = 7;
 
     static constexpr uint8_t ADC_PIN = 3;
+
+    // --- NEW: Interrupt Pin for PCF Modules ---
+    static constexpr uint8_t BTN_INTERRUPT_PIN = 39;
 
     static constexpr uint8_t SD_CS_PIN = 21;
     static constexpr uint8_t AMPLIFIER_PIN = 4;

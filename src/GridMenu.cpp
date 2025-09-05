@@ -4,21 +4,18 @@
 #include <Arduino.h>
 #include <algorithm> // For std::min
 
-GridMenu::GridMenu(std::string title, std::vector<MenuItem> items, int columns) : 
+// --- CONSTRUCTOR MODIFIED ---
+GridMenu::GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> items, int columns) : 
     title_(title),
     menuItems_(items),
+    menuType_(menuType), // Set type from parameter
     columns_(columns),
     selectedIndex_(0),
     gridAnimatingIn_(false),
     marqueeActive_(false),
     marqueeScrollLeft_(true)
 {
-    // Infer MenuType from title
-    if (title == "WiFi Tools") menuType_ = MenuType::WIFI_TOOLS_GRID;
-    else if (title == "Update") menuType_ = MenuType::FIRMWARE_UPDATE_GRID;
-    else if (title == "Jammer") menuType_ = MenuType::JAMMING_TOOLS_GRID;
-    else if (title == "Deauth Attack") menuType_ = MenuType::DEAUTH_TOOLS_GRID;
-    else menuType_ = MenuType::NONE;
+    // REMOVED all the fragile "if (title == ...)" logic
 }
 
 void GridMenu::onEnter(App *app, bool isForwardNav)
@@ -160,8 +157,7 @@ void GridMenu::scroll(int direction)
 
     selectedIndex_ = newIndex;
 
-    // --- Scrolling animation logic ---
-    const int itemRowHeight = 28 + 4; // Updated for taller items with icons
+    const int itemRowHeight = 28 + 4; 
     const int gridVisibleAreaH = 64 - (STATUS_BAR_H + 1) - 4;
     const int visibleRows = gridVisibleAreaH / itemRowHeight;
 
@@ -193,7 +189,7 @@ void GridMenu::startGridAnimation()
 
 void GridMenu::draw(App* app, U8G2& display) {
     const int itemBaseW = (128 - (columns_ + 1) * 4) / columns_;
-    const int itemBaseH = 28; // Increased height for icon + text
+    const int itemBaseH = 28;
     const int gridStartY = STATUS_BAR_H + 1 + 4;
     
     const int clip_y_start = STATUS_BAR_H + 1;
@@ -227,18 +223,16 @@ void GridMenu::draw(App* app, U8G2& display) {
         }
         
         if (scale > 0.7f) {
-            // --- NEW: Icon Drawing Logic ---
             int icon_y = box_y + 2;
             int icon_x = box_x + (itemW - IconSize::LARGE_WIDTH) / 2;
             drawCustomIcon(display, icon_x, icon_y, menuItems_[i].icon);
 
-            // --- Text Drawing Logic (Adjusted for position) ---
             const int text_padding = 2;
             int innerW = itemW - (2 * text_padding);
-            int text_y = box_y + itemH - 3; // Position text at the bottom of the box
+            int text_y = box_y + itemH - 3;
 
             int text_clip_x1 = box_x + text_padding;
-            int text_clip_y1 = box_y + IconSize::LARGE_HEIGHT + 2; // Clip below icon
+            int text_clip_y1 = box_y + IconSize::LARGE_HEIGHT + 2;
             int text_clip_x2 = box_x + itemW - text_padding;
             int text_clip_y2 = box_y + itemH - 1;
 
