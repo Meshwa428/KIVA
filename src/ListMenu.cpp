@@ -57,19 +57,29 @@ void ListMenu::handleInput(App* app, InputEvent event) {
     if (!dataSource_) return;
 
     if (event == InputEvent::BTN_BACK_PRESS) {
-        // Delegate back press to data source first. If it returns false,
-        // then perform the default action of going back in the menu stack.
         if (!dataSource_->onBackPress(app, this)) {
             app->changeMenu(MenuType::BACK);
         }
-        return; // Back press is handled, either by source or by us.
+        return;
     }
 
-    // If the list is empty, we only handle BTN_BACK_PRESS (done above).
-    // No other input should do anything.
     if (totalItems_ == 0) {
         return;
     }
+    
+    // --- NEW: Handle slider adjustments ---
+    const MenuItem* item = dataSource_->getItem(selectedIndex_);
+    if (item && item->isInteractive && item->adjustValue) {
+        if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
+            item->adjustValue(app, -1); // -1 for decrease
+            return; // Consume the event
+        }
+        if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
+            item->adjustValue(app, 1); // 1 for increase
+            return; // Consume the event
+        }
+    }
+    // --- END NEW ---
 
     switch(event) {
         case InputEvent::ENCODER_CW:
@@ -84,7 +94,6 @@ void ListMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::BTN_OK_PRESS:
             dataSource_->onItemSelected(app, this, selectedIndex_);
             break;
-        // BTN_BACK_PRESS is now handled at the top of the function.
         default: break;
     }
 }
@@ -103,11 +112,8 @@ void ListMenu::scroll(int direction) {
 void ListMenu::draw(App* app, U8G2& display) {
     if (!dataSource_) return;
 
-    // --- FIX: Handle empty/loading state ---
     if (totalItems_ == 0) {
-        // Allow data source to draw a custom message (e.g., "Scanning...")
         if (!dataSource_->drawCustomEmptyMessage(app, display)) {
-            // If it doesn't, draw the default message
             const char *msg = "No items";
             display.setFont(u8g2_font_6x10_tf);
             display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
@@ -137,7 +143,6 @@ void ListMenu::draw(App* app, U8G2& display) {
             drawRndBox(display, 2, item_top_y, 124, item_h, 2, true);
         }
 
-        // Delegate drawing to the data source, passing a non-const 'this'
         dataSource_->drawItem(app, display, this, i, 2, item_top_y, 124, item_h, isSelected);
     }
 
@@ -145,14 +150,13 @@ void ListMenu::draw(App* app, U8G2& display) {
     display.setMaxClipWindow();
 }
 
-// --- NEW: Implementation of the marquee helper function ---
 void ListMenu::updateAndDrawText(U8G2& display, const char* text, int x, int y, int availableWidth, bool isSelected) {
     if (isSelected) {
         updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                       marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
                       marqueeText_, marqueeTextLenPx_, text, availableWidth, display);
 
-        display.setClipWindow(x, y - 8, x + availableWidth, y + 8); // Clip tightly around the text line
+        display.setClipWindow(x, y - 8, x + availableWidth, y + 8);
         
         if (marqueeActive_) {
             display.drawStr(x + (int)marqueeOffset_, y, marqueeText_);

@@ -17,10 +17,10 @@ struct MenuItem {
     MenuType targetMenu; 
     std::function<void(App*)> action;
 
-    // --- ADD THIS CONSTRUCTOR ---
-    // It has a default argument for the action, making it optional.
-    MenuItem(const char* l, IconType i, MenuType t, std::function<void(App*)> a = nullptr)
-        : label(l), icon(i), targetMenu(t), action(a) {}
+    // --- NEW: Optional members for sliders/interactive items ---
+    bool isInteractive = false;
+    std::function<std::string(App*)> getValue = nullptr;
+    std::function<void(App*, int)> adjustValue = nullptr;
 };
 
 class IMenu {

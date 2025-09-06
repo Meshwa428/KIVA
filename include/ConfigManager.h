@@ -47,7 +47,7 @@ private:
     bool isEepromValid_;
 
     std::vector<std::pair<std::string, std::string>> keyboardLayouts_;
-    static const uint32_t EEPROM_MAGIC_NUMBER = 0xDEADBEEF;
+    static const uint32_t EEPROM_MAGIC_NUMBER = 0xBAD1DEA5;
 };
 
 #endif // CONFIG_MANAGER_H
