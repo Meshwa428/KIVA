@@ -8,7 +8,7 @@
 HandshakeCaptureActiveMenu::HandshakeCaptureActiveMenu() : startTime_(0) {}
 
 void HandshakeCaptureActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     HandshakeCapture& capture = app->getHandshakeCapture();
     if (capture.getConfig().type == HandshakeCaptureType::SCANNER) {
         capture.startScanner();
@@ -18,7 +18,7 @@ void HandshakeCaptureActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void HandshakeCaptureActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getHandshakeCapture().stop();
 }
 

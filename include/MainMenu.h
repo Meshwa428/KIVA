@@ -13,7 +13,7 @@ public:
     void onUpdate(App* app) override;
     void onExit(App* app) override;
     void draw(App* app, U8G2& display) override;
-    void handleInput(App* app, InputEvent event) override;
+    void handleInput(InputEvent event, App* app) override;
     
     // --- IMPLEMENTING THE NEW METHOD ---
     const char* getTitle() const override { return "KivaOS"; } // Main menu has a special title

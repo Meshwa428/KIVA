@@ -8,7 +8,7 @@
 // --- Event Types ---
 enum class EventType {
     // Input System
-    INPUT,
+    APP_INPUT, // Renamed from INPUT to avoid macro collision with Arduino framework
 
     // Navigation System
     NAVIGATE_TO_MENU,
@@ -37,7 +37,7 @@ struct Event {
 // --- Specific Event Payloads ---
 struct InputEventData : public Event {
     InputEvent input;
-    InputEventData(InputEvent ev) : input(ev) { type = EventType::INPUT; }
+    InputEventData(InputEvent ev) : input(ev) { type = EventType::APP_INPUT; }
 };
 
 struct NavigateToMenuEvent : public Event {

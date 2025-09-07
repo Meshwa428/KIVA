@@ -4,7 +4,7 @@
 
 // The onEvent method filters events and calls the specific handler.
 void IMenu::onEvent(const Event& event) {
-    if (event.type == EventType::INPUT) {
+    if (event.type == EventType::APP_INPUT) {
         // We know App is valid because a menu can't exist without it.
         // We need a way to get the App context. For now, we assume a global or service locator.
         // Let's assume App provides a static getInstance() for simplicity here.

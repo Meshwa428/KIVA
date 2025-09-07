@@ -22,7 +22,7 @@ GridMenu::GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> i
 
 void GridMenu::onEnter(App *app, bool isForwardNav)
 {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
 
     if (isForwardNav) {
         selectedIndex_ = 0;
@@ -81,7 +81,7 @@ void GridMenu::onUpdate(App *app)
 
 void GridMenu::onExit(App *app)
 {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false;
 }
 

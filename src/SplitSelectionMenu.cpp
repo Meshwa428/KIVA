@@ -25,7 +25,7 @@ SplitSelectionMenu::SplitSelectionMenu(std::string title, MenuType menuType, con
 }
 
 void SplitSelectionMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -70,7 +70,7 @@ void SplitSelectionMenu::onUpdate(App* app) {
 }
 
 void SplitSelectionMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
 }
 
 void SplitSelectionMenu::handleInput(InputEvent event, App* app) {

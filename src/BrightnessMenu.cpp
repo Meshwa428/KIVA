@@ -10,7 +10,7 @@ BrightnessMenu::BrightnessMenu() :
 {}
 
 void BrightnessMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -26,7 +26,7 @@ void BrightnessMenu::onUpdate(App* app) {
 }
 
 void BrightnessMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
 }
 
 void BrightnessMenu::handleInput(InputEvent event, App* app) {

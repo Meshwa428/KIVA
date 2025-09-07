@@ -36,7 +36,7 @@ void ListMenu::reloadData(App* app, bool resetSelection) {
 }
 
 void ListMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (!dataSource_) return;
     dataSource_->onEnter(app, this, isForwardNav);
     reloadData(app, isForwardNav); // Pass the flag to reloadData
@@ -50,7 +50,7 @@ void ListMenu::onUpdate(App* app) {
 }
 
 void ListMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     if (dataSource_) {
         dataSource_->onExit(app, this);
     }

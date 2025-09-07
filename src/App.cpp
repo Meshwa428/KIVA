@@ -80,7 +80,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::BLE);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
@@ -90,7 +90,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
                     JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
@@ -100,7 +100,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Wide Spec", IconType::TOOL_JAMMING, MenuType::NONE,
@@ -110,7 +110,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
                     JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, 
@@ -120,7 +120,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::ZIGBEE);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
@@ -129,12 +129,12 @@ App::App() :
         {"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
-                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
             }},
         {"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
-                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
             }},
         {"IR Blaster", IconType::UI_LASER, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "HOST", "IR Blaster placeholder selected."); }
@@ -147,7 +147,7 @@ App::App() :
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (menu) {
                     menu->setAttackParameters(BeaconSsidMode::RANDOM);
-                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BEACON_SPAM_ACTIVE));
                 }
             }
         },
@@ -160,7 +160,7 @@ App::App() :
                         return;
                     }
                     menu->setAttackParameters(BeaconSsidMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_CUMULATIVE);
-                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BEACON_SPAM_ACTIVE));
                 }
             }
         },
@@ -177,7 +177,7 @@ App::App() :
                     else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
-                app->changeMenu(MenuType::WIFI_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }},
         {"Broadcast", IconType::SKULL, MenuType::NONE, 
             [](App *app) {
@@ -188,7 +188,7 @@ App::App() :
                      else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
-                app->changeMenu(MenuType::WIFI_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
@@ -198,7 +198,7 @@ App::App() :
                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
                     menu->setAttackParameters(ProbeFloodMode::RANDOM);
-                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
             }
         },
@@ -211,7 +211,7 @@ App::App() :
                         return;
                     }
                     menu->setAttackParameters(ProbeFloodMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_SESSION);
-                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
@@ -226,7 +226,7 @@ App::App() :
     firmwareUpdateGrid_("Update", MenuType::FIRMWARE_UPDATE_GRID, {
         {"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App *app) {
-                if (app->getOtaManager().startWebUpdate()) app->changeMenu(MenuType::OTA_STATUS);
+                if (app->getOtaManager().startWebUpdate()) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
                 else app->showPopUp("Error", "Failed to start Web AP.", nullptr, "OK", "", true);
             }
         },
@@ -285,27 +285,27 @@ App::App() :
     bleAttacksDataSource_({
         {"Apple Juice", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Sour Apple", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Android", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Samsung", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Swift Pair", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Tutti-Frutti", IconType::SKULL, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
@@ -408,7 +408,7 @@ App::App() :
                         }
                     }, false, app->getConfigManager().getSettings().otaPassword
                 );
-                app->changeMenu(MenuType::TEXT_INPUT);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
             }
         },
         {"Back", IconType::NAV_BACK, MenuType::BACK}

@@ -9,7 +9,7 @@
 DeauthActiveMenu::DeauthActiveMenu() {}
 
 void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
@@ -21,7 +21,7 @@ void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void DeauthActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getDeauther().stop();
 }
 

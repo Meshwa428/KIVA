@@ -11,7 +11,7 @@ void ProbeFloodActiveMenu::setAttackParameters(ProbeFloodMode mode, const std::s
 }
 
 void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(true);
     auto& flooder = app->getProbeFlooder();
     auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
@@ -25,7 +25,7 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void ProbeFloodActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(false);
     app->getProbeFlooder().stop();
 }

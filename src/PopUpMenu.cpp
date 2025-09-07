@@ -24,7 +24,7 @@ void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallb
 }
 
 void PopUpMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     // If there is no "Cancel" button, default the selection to "Confirm" (option 1).
     // Otherwise, default to "Cancel" (option 0).
     bool hasCancelButton = !cancelText_.empty();
@@ -44,7 +44,7 @@ void PopUpMenu::onUpdate(App* app) {
 }
 
 void PopUpMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // Clear the configuration to prevent old data from being used
     title_ = "";
     message_ = "";

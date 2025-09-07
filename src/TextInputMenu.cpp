@@ -30,7 +30,7 @@ void TextInputMenu::configure(std::string title, OnSubmitCallback callback, bool
 }
 
 void TextInputMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     currentLayer_ = KeyboardLayer::LOWERCASE;
     capsLock_ = false;
     focusRow_ = 0;
@@ -40,7 +40,7 @@ void TextInputMenu::onEnter(App* app, bool isForwardNav) {
 void TextInputMenu::onUpdate(App* app) {}
 
 void TextInputMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     memset(inputBuffer_, 0, sizeof(inputBuffer_));
     onSubmit_ = nullptr;
 }

@@ -11,7 +11,7 @@
 UsbDriveMenu::UsbDriveMenu() : isEjected(false) {}
 
 void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     isEjected = false; // Reset the flag on entry
     LOG(LogLevel::INFO, "USB_DRIVE", "Entering USB Mass Storage Mode.");
 
@@ -45,7 +45,7 @@ void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void UsbDriveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     LOG(LogLevel::INFO, "USB_DRIVE", "Exiting USB Mass Storage Mode.");
     
     storage_->end();

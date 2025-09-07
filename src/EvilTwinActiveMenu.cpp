@@ -13,7 +13,7 @@ EvilTwinActiveMenu::EvilTwinActiveMenu() :
 {}
 
 void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         // Reset list state when the menu is entered
         topDisplayIndex_ = 0;
@@ -23,7 +23,7 @@ void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void EvilTwinActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getEvilTwin().stop();
 }
 

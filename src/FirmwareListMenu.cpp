@@ -12,7 +12,7 @@ FirmwareListMenu::FirmwareListMenu() :
 {}
 
 void FirmwareListMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -42,7 +42,7 @@ void FirmwareListMenu::onUpdate(App* app) {
 }
 
 void FirmwareListMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false; // Ensure marquee is off on exit
 }
 

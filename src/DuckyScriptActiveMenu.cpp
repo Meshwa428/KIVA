@@ -8,13 +8,13 @@
 DuckyScriptActiveMenu::DuckyScriptActiveMenu() : entryTime_(0) {}
 
 void DuckyScriptActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     entryTime_ = millis();
     app->getHardwareManager().setPerformanceMode(true);
 }
 
 void DuckyScriptActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // Stop the script runner, which will release HID interfaces.
     if(app->getDuckyRunner().isActive()) {
         app->getDuckyRunner().stopScript();

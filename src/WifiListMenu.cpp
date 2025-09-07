@@ -23,7 +23,7 @@ void WifiListMenu::setBackNavOverride(bool override) {
 }
 
 void WifiListMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) selectedIndex_ = 0;
     WifiManager& wifi = app->getWifiManager();
 
@@ -59,7 +59,7 @@ void WifiListMenu::onUpdate(App* app) {
 }
 
 void WifiListMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     scanOnEnter_ = true;
     isScanning_ = false;
     marqueeActive_ = false;

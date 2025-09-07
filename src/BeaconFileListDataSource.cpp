@@ -4,6 +4,8 @@
 #include "ListMenu.h"
 #include "UI_Utils.h"
 #include "BeaconSpammer.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     fileNames_.clear();
@@ -38,7 +40,7 @@ void BeaconFileListDataSource::onItemSelected(App* app, ListMenu* menu, int inde
 
     std::string selectedFile = fileNames_[index];
     if (selectedFile == "Back") {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
         return;
     }
 
@@ -52,7 +54,7 @@ void BeaconFileListDataSource::onItemSelected(App* app, ListMenu* menu, int inde
     BeaconSpamActiveMenu* activeMenu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
     if (activeMenu) {
         activeMenu->setAttackParameters(BeaconSsidMode::FILE_BASED, fullPath);
-        app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BEACON_SPAM_ACTIVE));
     }
 }
 

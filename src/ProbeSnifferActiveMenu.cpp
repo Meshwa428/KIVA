@@ -14,7 +14,7 @@ ProbeSnifferActiveMenu::ProbeSnifferActiveMenu() :
 {}
 
 void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     topDisplayIndex_ = 0;
     selectedIndex_ = 0;
     lastKnownSsidCount_ = 0;
@@ -27,7 +27,7 @@ void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void ProbeSnifferActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getProbeSniffer().stop();
 }
 

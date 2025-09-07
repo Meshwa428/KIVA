@@ -10,7 +10,7 @@ OtaStatusMenu::OtaStatusMenu() {
 }
 
 void OtaStatusMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     // The OtaManager should already be in an active state.
     // We just display its current status.
 }
@@ -21,7 +21,7 @@ void OtaStatusMenu::onUpdate(App* app) {
 }
 
 void OtaStatusMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // When the user explicitly leaves this screen (e.g. presses back on error),
     // we should stop any active OTA process.
     app->getOtaManager().stop();

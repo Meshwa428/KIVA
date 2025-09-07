@@ -17,7 +17,7 @@ NowPlayingMenu::NowPlayingMenu() :
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     // Allocate resources when entering the player screen
     if (!app->getMusicPlayer().allocateResources()) {
         app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
@@ -69,7 +69,7 @@ void NowPlayingMenu::onUpdate(App* app) {
 }
 
 void NowPlayingMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // When leaving the "Now Playing" screen, stop the current song.
     app->getMusicPlayer().stop();
     // Release resources when leaving the player screen entirely.

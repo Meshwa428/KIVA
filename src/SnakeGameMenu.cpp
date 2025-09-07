@@ -73,13 +73,13 @@ bool SnakeGameMenu::drawCustomStatusBar(App* app, U8G2& display) { return true; 
 MenuType SnakeGameMenu::getMenuType() const { return MenuType::SNAKE_GAME; }
 
 void SnakeGameMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     gameState_ = GameState::TITLE_SCREEN;
     lastUpdateTime_ = millis();
     animCounter_ = 0;
 }
 void SnakeGameMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // Make sure the amplifier is off when we leave the game
     app->getGameAudio().noTone();
 }

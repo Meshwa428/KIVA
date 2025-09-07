@@ -9,7 +9,7 @@
 ConnectionStatusMenu::ConnectionStatusMenu() : entryTime_(0) {}
 
 void ConnectionStatusMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     entryTime_ = millis();
 }
 
@@ -30,7 +30,7 @@ void ConnectionStatusMenu::onUpdate(App* app) {
 }
 
 void ConnectionStatusMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     WifiListDataSource& wifiDataSource = app->getWifiListDataSource();
     WifiManager& wifi = app->getWifiManager();
     if (wifi.getState() == WifiState::CONNECTED) {

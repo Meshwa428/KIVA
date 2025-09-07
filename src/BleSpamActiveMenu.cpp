@@ -10,7 +10,7 @@ void BleSpamActiveMenu::setSpamModeToStart(BleSpamMode mode) {
 }
 
 void BleSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(true);
     app->getBleSpammer().start(modeToStart_);
 }
@@ -20,7 +20,7 @@ void BleSpamActiveMenu::onUpdate(App* app) {
 }
 
 void BleSpamActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getBleSpammer().stop();
     app->getHardwareManager().setPerformanceMode(false);
 }

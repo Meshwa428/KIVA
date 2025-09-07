@@ -14,7 +14,7 @@ void JammingActiveMenu::setJammingConfig(const JammerConfig& config) {
 }
 
 void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (modeToStart_ != JammingMode::IDLE) {
         app->getHardwareManager().setPerformanceMode(true);
 
@@ -39,7 +39,7 @@ void JammingActiveMenu::onUpdate(App* app) {
 }
 
 void JammingActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // This now correctly triggers the RAII cleanup.
     if (app->getJammer().isActive()) {
         app->getJammer().stop();

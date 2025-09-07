@@ -13,7 +13,7 @@ KarmaActiveMenu::KarmaActiveMenu() :
 {}
 
 void KarmaActiveMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         topDisplayIndex_ = 0;
         selectedIndex_ = 0;
@@ -24,7 +24,7 @@ void KarmaActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void KarmaActiveMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     auto& karma = app->getKarmaAttacker();
     // Stop whichever mode is active
     if (karma.isSniffing()) {

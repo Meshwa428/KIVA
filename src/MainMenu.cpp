@@ -14,7 +14,7 @@ MainMenu::MainMenu() : selectedIndex_(0) {
 
 void MainMenu::onEnter(App* app, bool isForwardNav) {
     // When the menu becomes active, it subscribes to input events.
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
 
     if (isForwardNav) {
         selectedIndex_ = 0;
@@ -31,7 +31,7 @@ void MainMenu::onUpdate(App* app) {
 void MainMenu::onExit(App* app) {
     // When the menu is no longer active, it unsubscribes.
     // This is CRITICAL for preventing inactive menus from handling input.
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
 }
 
 // The old handleInput logic moves here, with the new signature.

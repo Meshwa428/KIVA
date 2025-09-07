@@ -18,7 +18,7 @@ ChannelSelectionMenu::ChannelSelectionMenu() :
 }
 
 void ChannelSelectionMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
         targetScrollOffset_Y_ = 0.0f;
@@ -37,7 +37,7 @@ void ChannelSelectionMenu::onUpdate(App* app) {
 }
 
 void ChannelSelectionMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // No specific cleanup needed
 }
 

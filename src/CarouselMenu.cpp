@@ -18,7 +18,7 @@ CarouselMenu::CarouselMenu(std::string title, MenuType menuType, std::vector<Men
 }
 
 void CarouselMenu::onEnter(App* app, bool isForwardNav) {
-    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
         marqueeScrollLeft_ = true; // Reset marquee direction
@@ -33,7 +33,7 @@ void CarouselMenu::onUpdate(App* app) {
 }
 
 void CarouselMenu::onExit(App* app) {
-    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false;
 }
 
