@@ -139,7 +139,8 @@ HardwareManager::RfLock::~RfLock() {
 }
 
 void HardwareManager::releaseRfControl() {
-    Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
+    // Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
+    LOG(LogLevel::INFO, "HW_RF", false, "Releasing RF lock from client %d", (int)currentRfClient_);
     if (currentRfClient_ == RfClient::NRF_JAMMER) {
         if (radio1_.isChipConnected()) radio1_.powerDown();
         if (radio2_.isChipConnected()) radio2_.powerDown();

@@ -1,18 +1,21 @@
 #include "GameAudio.h"
+#include "App.h" // <-- ADD this include
+#include "ConfigManager.h" // <-- ADD this include
 #include "HardwareManager.h"
 #include "Logger.h"
 #include <Arduino.h>
+#include <algorithm> // for std::min
 #include <esp32-hal-ledc.h> // The ESP32's hardware timer/PWM library
 #include <driver/gpio.h>     // Required for gpio_hold_dis/en to resolve hardware conflicts
 
 // --- TUNING PARAMETERS ---
-const int FADE_TIME_MS = 8;
+const int FADE_TIME_MS = 50;
 const int LEDC_BASE_FREQ = 5000;
 const int LEDC_RESOLUTION = 12;
-const int DUTY_CYCLE_50_PERCENT = (1 << (LEDC_RESOLUTION - 1)); // 2048 for 12-bit
+const int DUTY_CYCLE_MAX = (1 << (LEDC_RESOLUTION - 1)); // 2048 for 12-bit (50% duty is max for a tone)
 
 GameAudio::GameAudio() :
-    hw_(nullptr),
+    app_(nullptr), // <-- MODIFIED
     pin_(-1),
     isPlaying_(false),
     stopTime_(0)
@@ -24,68 +27,60 @@ GameAudio::~GameAudio() {
     }
 }
 
-void GameAudio::setup(HardwareManager* hw, int pin) {
-    hw_ = hw;
+void GameAudio::setup(App* app, int pin) { // <-- MODIFIED signature
+    app_ = app; // <-- MODIFIED
     pin_ = pin;
-    
+
     pinMode(pin_, OUTPUT);
     digitalWrite(pin_, LOW); // Ensure it starts off quiet
 
-    LOG(LogLevel::INFO, "GAME_AUDIO", "LEDC GameAudio initialized for pin %d.", pin_);
+    LOG(LogLevel::INFO, "GAME_AUDIO", "LEDC GameAudio initialized for pin %d on channel 0.", pin_);
 }
 
 void GameAudio::tone(uint32_t frequency, uint32_t duration) {
-    if (!hw_ || pin_ < 0 || frequency == 0) return;
+    if (!app_ || pin_ < 0 || frequency == 0) return;
+
+    // --- NEW: Read volume from ConfigManager and calculate target duty cycle ---
+    uint8_t volume_percent = app_->getConfigManager().getSettings().volume;
+    // Clamp at 100% for tones, as going beyond 50% duty cycle distorts the wave without increasing volume.
+    uint8_t effective_volume = std::min(volume_percent, (uint8_t)100);
+    // Map the 0-100% volume to our 0-2048 duty cycle range.
+    uint32_t target_duty = (DUTY_CYCLE_MAX * effective_volume) / 100;
+    
+    // If volume is zero, do nothing.
+    if (target_duty == 0) return;
 
     // --- RAMPED SOFT-START SEQUENCE ---
-    // 1. Release any 'hold' on the amplifier pin.
     gpio_hold_dis((gpio_num_t)pin_);
+    app_->getHardwareManager().setAmplifier(true);
     
-    // 2. Turn on the physical amplifier.
-    hw_->setAmplifier(true);
-    
-    // 3. Attach the pin to an automatically assigned LEDC channel.
+    // We now use a fixed channel (0) for simplicity.
     ledcAttach(pin_, LEDC_BASE_FREQ, LEDC_RESOLUTION);
-    
-    // 4. Set ONLY the frequency. The duty cycle remains 0% (silent).
     ledcChangeFrequency(pin_, frequency, LEDC_RESOLUTION);
     
-    // 5. Start a hardware-managed fade from 0% duty up to 50%.
-    ledcFade(pin_, 0, DUTY_CYCLE_50_PERCENT, FADE_TIME_MS);
+    // Fade in to the calculated target duty cycle.
+    ledcFade(pin_, 0, target_duty, FADE_TIME_MS);
 
     isPlaying_ = true;
     stopTime_ = millis() + duration;
 }
 
 void GameAudio::noTone() {
-    if (!isPlaying_ || !hw_ || pin_ < 0) return;
+    if (!isPlaying_ || !app_ || pin_ < 0) return;
 
     // --- GRACEFUL FADE-OUT SHUTDOWN ---
-    // 1. Start a hardware fade from the current duty down to 0% (silence).
     ledcFade(pin_, ledcRead(pin_), 0, FADE_TIME_MS);
-    
-    // 2. Wait for the short fade to complete. This is a small blocking delay,
-    //    but it's acceptable for stopping a sound.
     delay(FADE_TIME_MS + 1);
     
-    // 3. Detach the pin from the LEDC peripheral.
     ledcDetach(pin_);
-
-    // 4. Drive the pin LOW manually.
     digitalWrite(pin_, LOW);
-    
-    // 5. Turn off the physical amplifier now that the signal is gone.
-    hw_->setAmplifier(false);
-    
-    // 6. Latch the pin in the LOW state to prevent noise.
+    app_->getHardwareManager().setAmplifier(false);
     gpio_hold_en((gpio_num_t)pin_);
     
     isPlaying_ = false;
 }
 
 void GameAudio::update() {
-    // This is called from the main App::loop() to handle tone durations
-    // in a non-blocking way.
     if (isPlaying_ && millis() >= stopTime_) {
         noTone();
     }

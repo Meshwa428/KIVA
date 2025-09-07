@@ -495,7 +495,7 @@ void App::setup()
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
-        {"Game Audio",      [&](){ gameAudio_.setup(&hardware_, Pins::AMPLIFIER_PIN); }}
+        {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
     int totalTasks = bootTasks.size();

@@ -3,7 +3,8 @@
 
 #include <cstdint>
 
-// Forward declaration
+// Forward declarations
+class App; // <-- ADD this
 class HardwareManager;
 
 class GameAudio {
@@ -13,10 +14,10 @@ public:
 
     /**
      * @brief Prepares the GameAudio manager.
-     * @param hw A pointer to the HardwareManager to control the amplifier.
+     * @param app A pointer to the main App object to access settings.
      * @param pin The GPIO pin connected to the speaker/amplifier's audio input.
      */
-    void setup(HardwareManager* hw, int pin);
+    void setup(App* app, int pin); // <-- MODIFIED signature
 
     /**
      * @brief Plays a tone of a given frequency for a specific duration with a pop-free fade-in.
@@ -36,7 +37,7 @@ public:
     void update();
 
 private:
-    HardwareManager* hw_;
+    App* app_; // <-- MODIFIED from HardwareManager* to App*
     int pin_;
     bool isPlaying_;
     unsigned long stopTime_;

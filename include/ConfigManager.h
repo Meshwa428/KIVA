@@ -32,7 +32,7 @@ public:
     // Accessors
     DeviceSettings& getSettings();
     const std::vector<std::pair<std::string, std::string>>& getKeyboardLayouts() const;
-    const uint8_t* getSelectedKeyboardLayout() const; // <-- ADD THIS
+    const uint8_t* getSelectedKeyboardLayout() const;
 
 private:
     void applySettings();
@@ -44,10 +44,11 @@ private:
 
     App* app_;
     DeviceSettings settings_;
+    DeviceSettings lastAppliedSettings_; // <-- ADD THIS LINE
     bool isEepromValid_;
 
     std::vector<std::pair<std::string, std::string>> keyboardLayouts_;
-    static const uint32_t EEPROM_MAGIC_NUMBER = 0xBAD1DEA5;
+    static const uint32_t EEPROM_MAGIC_NUMBER = 0xDEADBEEF;
 };
 
 #endif // CONFIG_MANAGER_H
