@@ -1,6 +1,8 @@
 #include "MainMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "Event.h"           // For event types
+#include "EventDispatcher.h" // For subscribing
 #include <algorithm> // For std::max
 
 MainMenu::MainMenu() : selectedIndex_(0) {
@@ -11,6 +13,9 @@ MainMenu::MainMenu() : selectedIndex_(0) {
 }
 
 void MainMenu::onEnter(App* app, bool isForwardNav) {
+    // When the menu becomes active, it subscribes to input events.
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
+
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -24,10 +29,13 @@ void MainMenu::onUpdate(App* app) {
 }
 
 void MainMenu::onExit(App* app) {
-    // Nothing to clean up
+    // When the menu is no longer active, it unsubscribes.
+    // This is CRITICAL for preventing inactive menus from handling input.
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
 }
 
-void MainMenu::handleInput(App* app, InputEvent event) {
+// The old handleInput logic moves here, with the new signature.
+void MainMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_DOWN_PRESS:
@@ -47,7 +55,8 @@ void MainMenu::handleInput(App* app, InputEvent event) {
                 if (selected.action) {
                     selected.action(app);
                 } else {
-                    app->changeMenu(selected.targetMenu);
+                    // NEW: Publish a navigation event. The App (acting as UI state machine) will catch it.
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;

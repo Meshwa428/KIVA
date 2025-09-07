@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "OtaStatusMenu.h"
 #include "App.h"
 #include "OtaManager.h" // To get status
@@ -8,6 +10,7 @@ OtaStatusMenu::OtaStatusMenu() {
 }
 
 void OtaStatusMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     // The OtaManager should already be in an active state.
     // We just display its current status.
 }
@@ -18,12 +21,13 @@ void OtaStatusMenu::onUpdate(App* app) {
 }
 
 void OtaStatusMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     // When the user explicitly leaves this screen (e.g. presses back on error),
     // we should stop any active OTA process.
     app->getOtaManager().stop();
 }
 
-void OtaStatusMenu::handleInput(App* app, InputEvent event) {
+void OtaStatusMenu::handleInput(InputEvent event, App* app) {
     if (event != InputEvent::BTN_BACK_PRESS) return;
 
     OtaManager& ota = app->getOtaManager();
@@ -35,7 +39,7 @@ void OtaStatusMenu::handleInput(App* app, InputEvent event) {
     // 2. The process is idle (shouldn't happen, but safe).
     // 3. Web OTA is active but the upload hasn't started yet.
     if (state == OtaState::ERROR || state == OtaState::IDLE || (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0) || state == OtaState::BASIC_ACTIVE) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 }
 

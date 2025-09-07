@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "EvilTwinActiveMenu.h"
 #include "App.h"
 #include "EvilTwin.h" 
@@ -11,6 +13,7 @@ EvilTwinActiveMenu::EvilTwinActiveMenu() :
 {}
 
 void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (isForwardNav) {
         // Reset list state when the menu is entered
         topDisplayIndex_ = 0;
@@ -20,6 +23,7 @@ void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void EvilTwinActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     app->getEvilTwin().stop();
 }
 
@@ -37,7 +41,7 @@ void EvilTwinActiveMenu::onUpdate(App* app) {
     }
 }
 
-void EvilTwinActiveMenu::handleInput(App* app, InputEvent event) {
+void EvilTwinActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
         app->returnToMenu(MenuType::WIFI_ATTACKS_LIST);
         return;

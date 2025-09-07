@@ -6,10 +6,16 @@
 #include "ProbeFlooder.h"
 #include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
+#include "Event.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
+
+App& App::getInstance() {
+    static App instance;
+    return instance;
+}
 
 App::App() : 
     // --- Core Managers & Hardware ---
@@ -592,6 +598,10 @@ void App::setup()
     // Music Player
     menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
     menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
+
+    // Subscribe to the events the App cares about
+    EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_TO_MENU, this);
+    EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_BACK, this);
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -653,13 +663,7 @@ void App::loop()
         wifiManager_.setHardwareState(false);
     }
 
-    InputEvent event = hardware_.getNextInputEvent();
-    if (event != InputEvent::NONE) {
-        LOG(LogLevel::DEBUG, "Input", false, "Event: %s", DebugUtils::inputEventToString(event));
-        if (currentMenu_ != nullptr) {
-            currentMenu_->handleInput(this, event);
-        }
-    }
+    // Input is now handled by the event system. The old polling logic is removed.
 
     if (currentMenu_)
     {
@@ -705,6 +709,23 @@ void App::loop()
 
     mainDisplay.sendBuffer();
     drawSecondaryDisplay();
+}
+
+void App::onEvent(const Event& event) {
+    switch (event.type) {
+        case EventType::NAVIGATE_TO_MENU: {
+            const auto& navEvent = static_cast<const NavigateToMenuEvent&>(event);
+            changeMenu(navEvent.menuType, navEvent.isForwardNav);
+            break;
+        }
+        case EventType::NAVIGATE_BACK: {
+            changeMenu(MenuType::BACK, false);
+            break;
+        }
+        default:
+            // App doesn't handle other events
+            break;
+    }
 }
 
 void App::changeMenu(MenuType type, bool isForwardNav) {

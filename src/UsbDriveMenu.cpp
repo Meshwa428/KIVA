@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "USBCDC.h"
 #include "UsbDriveMenu.h"
 #include "App.h"
@@ -9,6 +11,7 @@
 UsbDriveMenu::UsbDriveMenu() : isEjected(false) {}
 
 void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     isEjected = false; // Reset the flag on entry
     LOG(LogLevel::INFO, "USB_DRIVE", "Entering USB Mass Storage Mode.");
 
@@ -42,6 +45,7 @@ void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void UsbDriveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     LOG(LogLevel::INFO, "USB_DRIVE", "Exiting USB Mass Storage Mode.");
     
     storage_->end();
@@ -63,7 +67,7 @@ void UsbDriveMenu::onExit(App* app) {
 
 void UsbDriveMenu::onUpdate(App* app) {}
 
-void UsbDriveMenu::handleInput(App* app, InputEvent event) {
+void UsbDriveMenu::handleInput(InputEvent event, App* app) {
     if (event != InputEvent::NONE) {
         if (isEjected) {
             app->showPopUp(

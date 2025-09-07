@@ -3,6 +3,7 @@
 
 #include "Config.h"
 #include "Icons.h"
+#include "EventDispatcher.h" // Include the dispatcher
 #include <vector>
 #include <string>
 #include <functional> // For std::function
@@ -23,7 +24,8 @@ struct MenuItem {
     std::function<void(App*, int)> adjustValue = nullptr;
 };
 
-class IMenu {
+// A menu is now also an ISubscriber
+class IMenu : public ISubscriber {
 public:
     virtual ~IMenu() {}
 
@@ -33,7 +35,9 @@ public:
     virtual void onExit(App* app) = 0;
 
     virtual void draw(App* app, U8G2& display) = 0;
-    virtual void handleInput(App* app, InputEvent event) = 0;
+
+    // The onEvent method from ISubscriber interface
+    void onEvent(const Event& event) override;
     
     /**
      * @brief [NEW] Draws a custom status bar for this menu.
@@ -43,6 +47,10 @@ public:
 
     virtual const char* getTitle() const = 0;
     virtual MenuType getMenuType() const = 0;
+
+protected:
+    // A new helper method for menus to implement
+    virtual void handleInput(InputEvent event, App* app) = 0;
 };
 
 #endif // I_MENU_H

@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "InfoMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -32,6 +34,7 @@ static std::string formatBytes(uint64_t bytes) {
 InfoMenu::InfoMenu() : uptimeItemIndex_(-1) {}
 
 void InfoMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     // This function now runs only ONCE when the menu is opened.
     infoItems_.clear();
     uptimeItemIndex_ = -1;
@@ -88,15 +91,16 @@ void InfoMenu::onUpdate(App* app) {
 }
 
 void InfoMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     // Clear data to free memory
     infoItems_.clear();
     uptimeItemIndex_ = -1;
 }
 
-void InfoMenu::handleInput(App* app, InputEvent event) {
+void InfoMenu::handleInput(InputEvent event, App* app) {
     // Any button press will exit the info screen.
     if (event != InputEvent::NONE) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 }
 

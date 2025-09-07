@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "TextInputMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -28,6 +30,7 @@ void TextInputMenu::configure(std::string title, OnSubmitCallback callback, bool
 }
 
 void TextInputMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     currentLayer_ = KeyboardLayer::LOWERCASE;
     capsLock_ = false;
     focusRow_ = 0;
@@ -37,11 +40,12 @@ void TextInputMenu::onEnter(App* app, bool isForwardNav) {
 void TextInputMenu::onUpdate(App* app) {}
 
 void TextInputMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     memset(inputBuffer_, 0, sizeof(inputBuffer_));
     onSubmit_ = nullptr;
 }
 
-void TextInputMenu::handleInput(App* app, InputEvent event) {
+void TextInputMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_RIGHT_PRESS:
@@ -80,7 +84,7 @@ void TextInputMenu::handleInput(App* app, InputEvent event) {
             break;
         case InputEvent::BTN_BACK_PRESS:
             {
-                app->changeMenu(MenuType::BACK);
+                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             }
             break;
         default:

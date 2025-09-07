@@ -1,5 +1,7 @@
 #include "BleSpamActiveMenu.h"
 #include "App.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 BleSpamActiveMenu::BleSpamActiveMenu() : modeToStart_(BleSpamMode::ALL) {}
 
@@ -8,6 +10,7 @@ void BleSpamActiveMenu::setSpamModeToStart(BleSpamMode mode) {
 }
 
 void BleSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     app->getHardwareManager().setPerformanceMode(true);
     app->getBleSpammer().start(modeToStart_);
 }
@@ -17,13 +20,14 @@ void BleSpamActiveMenu::onUpdate(App* app) {
 }
 
 void BleSpamActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     app->getBleSpammer().stop();
     app->getHardwareManager().setPerformanceMode(false);
 }
 
-void BleSpamActiveMenu::handleInput(App* app, InputEvent event) {
+void BleSpamActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 }
 

@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ProbeSnifferActiveMenu.h"
 #include "App.h"
 #include "ProbeSniffer.h"
@@ -12,6 +14,7 @@ ProbeSnifferActiveMenu::ProbeSnifferActiveMenu() :
 {}
 
 void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     topDisplayIndex_ = 0;
     selectedIndex_ = 0;
     lastKnownSsidCount_ = 0;
@@ -24,6 +27,7 @@ void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void ProbeSnifferActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     app->getProbeSniffer().stop();
 }
 
@@ -42,9 +46,9 @@ void ProbeSnifferActiveMenu::onUpdate(App* app) {
     }
 }
 
-void ProbeSnifferActiveMenu::handleInput(App* app, InputEvent event) {
+void ProbeSnifferActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
         return;
     }
 

@@ -1,6 +1,8 @@
 #include "CarouselMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include <Arduino.h>
 
 // --- CONSTRUCTOR MODIFIED ---
@@ -16,6 +18,7 @@ CarouselMenu::CarouselMenu(std::string title, MenuType menuType, std::vector<Men
 }
 
 void CarouselMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
         marqueeScrollLeft_ = true; // Reset marquee direction
@@ -30,11 +33,12 @@ void CarouselMenu::onUpdate(App* app) {
 }
 
 void CarouselMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     marqueeActive_ = false;
 }
 
 
-void CarouselMenu::handleInput(App* app, InputEvent event) {
+void CarouselMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_RIGHT_PRESS:
@@ -53,12 +57,12 @@ void CarouselMenu::handleInput(App* app, InputEvent event) {
                 if (selected.action) {
                     selected.action(app);
                 } else {
-                    app->changeMenu(selected.targetMenu);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             break;
         default:
             break;

@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "FirmwareListMenu.h"
 #include "App.h"
 #include "OtaManager.h"
@@ -10,6 +12,7 @@ FirmwareListMenu::FirmwareListMenu() :
 {}
 
 void FirmwareListMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -39,10 +42,11 @@ void FirmwareListMenu::onUpdate(App* app) {
 }
 
 void FirmwareListMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     marqueeActive_ = false; // Ensure marquee is off on exit
 }
 
-void FirmwareListMenu::handleInput(App* app, InputEvent event) {
+void FirmwareListMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_DOWN_PRESS:
@@ -57,18 +61,18 @@ void FirmwareListMenu::handleInput(App* app, InputEvent event) {
         {
             const auto& selected = displayItems_[selectedIndex_];
             if (selected.isBackButton) {
-                app->changeMenu(MenuType::BACK);
+                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             } else {
                 const auto& firmwares = app->getOtaManager().getAvailableFirmwares();
                 if(selected.firmwareIndex >= 0 && (size_t)selected.firmwareIndex < firmwares.size()) {
                     app->getOtaManager().startSdUpdate(firmwares[selected.firmwareIndex]);
-                    app->changeMenu(MenuType::OTA_STATUS);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
                 }
             }
         }
         break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             break;
         default: break;
     }

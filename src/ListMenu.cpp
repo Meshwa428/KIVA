@@ -1,6 +1,8 @@
 #include "ListMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 ListMenu::ListMenu(std::string title, MenuType menuType, IListMenuDataSource* dataSource) : 
     title_(title),
@@ -34,6 +36,7 @@ void ListMenu::reloadData(App* app, bool resetSelection) {
 }
 
 void ListMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (!dataSource_) return;
     dataSource_->onEnter(app, this, isForwardNav);
     reloadData(app, isForwardNav); // Pass the flag to reloadData
@@ -47,18 +50,19 @@ void ListMenu::onUpdate(App* app) {
 }
 
 void ListMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     if (dataSource_) {
         dataSource_->onExit(app, this);
     }
     marqueeActive_ = false;
 }
 
-void ListMenu::handleInput(App* app, InputEvent event) {
+void ListMenu::handleInput(InputEvent event, App* app) {
     if (!dataSource_) return;
 
     if (event == InputEvent::BTN_BACK_PRESS) {
         if (!dataSource_->onBackPress(app, this)) {
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
         }
         return;
     }

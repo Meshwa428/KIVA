@@ -56,17 +56,22 @@
 #include "ActionListDataSource.h" // Include our new generic data source
 #include "SnakeGameMenu.h"
 #include "GameAudio.h"
+#include "EventDispatcher.h"
 
-class App
+
+class App : public ISubscriber
 {
 public:
-    App();
+    static App& getInstance();
+
+    // Deleted copy constructor and assignment operator
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
+
     void setup();
     void loop();
 
-    void changeMenu(MenuType type, bool isForwardNav = true);
-    void replaceMenu(MenuType type);
-    void returnToMenu(MenuType type);
+    void onEvent(const Event& event) override;
 
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
                    const std::string &confirmText = "OK", const std::string &cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
@@ -94,11 +99,16 @@ public:
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
 
     MenuType getPreviousMenuType() const;
-    void clearInputQueue() { hardware_.clearInputQueue(); }
 
     void drawStatusBar();
 
 private:
+    App(); // Private constructor
+
+    void changeMenu(MenuType type, bool isForwardNav = true);
+    void replaceMenu(MenuType type);
+    void returnToMenu(MenuType type);
+
     void drawSecondaryDisplay();
 
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);

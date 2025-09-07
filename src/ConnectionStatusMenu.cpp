@@ -1,4 +1,6 @@
 
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ConnectionStatusMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -7,6 +9,7 @@
 ConnectionStatusMenu::ConnectionStatusMenu() : entryTime_(0) {}
 
 void ConnectionStatusMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     entryTime_ = millis();
 }
 
@@ -17,16 +20,17 @@ void ConnectionStatusMenu::onUpdate(App* app) {
     // --- THE CORRECT LOGIC ---
     // On SUCCESS, return to the list automatically after a short delay.
     if (state == WifiState::CONNECTED && millis() - entryTime_ > 2000) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 
     // On FAILURE, also return automatically after a longer delay.
     if (state == WifiState::CONNECTION_FAILED && millis() - entryTime_ > 4000) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 }
 
 void ConnectionStatusMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     WifiListDataSource& wifiDataSource = app->getWifiListDataSource();
     WifiManager& wifi = app->getWifiManager();
     if (wifi.getState() == WifiState::CONNECTED) {
@@ -36,10 +40,10 @@ void ConnectionStatusMenu::onExit(App* app) {
     }
 }
 
-void ConnectionStatusMenu::handleInput(App* app, InputEvent event) {
+void ConnectionStatusMenu::handleInput(InputEvent event, App* app) {
     // Allow user to press back to dismiss the screen immediately.
     if (event != InputEvent::NONE) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
     }
 }
 

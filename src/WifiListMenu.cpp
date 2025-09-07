@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "WifiListMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -21,6 +23,7 @@ void WifiListMenu::setBackNavOverride(bool override) {
 }
 
 void WifiListMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (isForwardNav) selectedIndex_ = 0;
     WifiManager& wifi = app->getWifiManager();
 
@@ -56,6 +59,7 @@ void WifiListMenu::onUpdate(App* app) {
 }
 
 void WifiListMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     scanOnEnter_ = true;
     isScanning_ = false;
     marqueeActive_ = false;
@@ -103,9 +107,9 @@ void WifiListMenu::rebuildDisplayItems(App* app) {
     selectedIndex_ = 0;
 }
 
-void WifiListMenu::handleInput(App* app, InputEvent event) {
+void WifiListMenu::handleInput(InputEvent event, App* app) {
     if (isScanning_) {
-        if (event == InputEvent::BTN_BACK_PRESS) { app->changeMenu(MenuType::BACK); }
+        if (event == InputEvent::BTN_BACK_PRESS) { EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK}); }
         return;
     }
 
@@ -153,19 +157,19 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
 
                         if (netInfo.isSecure) {
                             if (wifi.tryConnectKnown(netInfo.ssid)) {
-                                app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
+                                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                             } else {
                                 TextInputMenu& textMenu = app->getTextInputMenu();
                                 textMenu.configure("Enter Password",
                                     [](App* cb_app, const char* password) {
                                         cb_app->getWifiManager().connectWithPassword(password);
-                                        cb_app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
+                                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                                     }, true);
-                                app->changeMenu(MenuType::TEXT_INPUT);
+                                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
                             }
                         } else {
                             wifi.connectOpen(netInfo.ssid);
-                            app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
+                            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                         }
                     }
                     break;
@@ -182,7 +186,7 @@ void WifiListMenu::handleInput(App* app, InputEvent event) {
                 backNavOverride_ = false; // <-- ADD THIS LINE to consume the flag
             } else {
                 // Normal behavior
-                app->changeMenu(MenuType::BACK);
+                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             }
             break;
         default: break;

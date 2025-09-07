@@ -1,4 +1,6 @@
 #include "HardwareManager.h"
+#include "EventDispatcher.h" // For publishing events
+#include "Event.h"           // For event data structures
 #include <Arduino.h>
 #include <numeric>
 #include <WiFi.h>
@@ -493,30 +495,6 @@ U8G2 &HardwareManager::getSmallDisplay()
     return u8g2_small_;
 }
 
-InputEvent HardwareManager::getNextInputEvent()
-{
-    if (inputQueue_.empty())
-    {
-        return InputEvent::NONE;
-    }
-    InputEvent event = inputQueue_.front();
-    inputQueue_.erase(inputQueue_.begin());
-    return event;
-}
-
-void HardwareManager::clearInputQueue() {
-    inputQueue_.clear();
-    
-    unsigned long currentTime = millis();
-    for (int i = 0; i < 8; ++i) {
-        prevDbncHState0_[i] = true;
-        lastDbncT0_[i] = currentTime;
-        prevDbncHState1_[i] = true;
-        lastDbncT1_[i] = currentTime;
-        isBtnHeld1_[i] = false;
-    }
-}
-
 void HardwareManager::selectMux(uint8_t channel)
 {
     static uint8_t lastSelectedChannel = 255;
@@ -589,12 +567,12 @@ void HardwareManager::processEncoder(uint8_t pcf0State)
 
     if (encConsecutiveValid_ >= requiredConsecutive)
     {
-        inputQueue_.push_back(InputEvent::ENCODER_CW);
+        EventDispatcher::getInstance().publish(InputEventData(InputEvent::ENCODER_CW));
         encConsecutiveValid_ = 0;
     }
     else if (encConsecutiveValid_ <= -requiredConsecutive)
     {
-        inputQueue_.push_back(InputEvent::ENCODER_CCW);
+        EventDispatcher::getInstance().publish(InputEventData(InputEvent::ENCODER_CCW));
         encConsecutiveValid_ = 0;
     }
 }
@@ -617,7 +595,7 @@ void HardwareManager::processButton_PCF0(uint8_t pcf0State)
             prevDbncHState0_[pin] = rawState;
             // If the new state is PRESSED (LOW, which is false)...
             if (rawState == false) {
-                inputQueue_.push_back(InputEvent::BTN_ENCODER_PRESS);
+                EventDispatcher::getInstance().publish(InputEventData(InputEvent::BTN_ENCODER_PRESS));
             }
         }
     }
@@ -644,7 +622,7 @@ void HardwareManager::processButtons_PCF1(uint8_t pcf1State)
                 prevDbncHState1_[pin] = rawState;
 
                 if (rawState == false) { // PRESSED
-                    inputQueue_.push_back(mapPcf1PinToEvent(pin));
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
                     isBtnHeld1_[pin] = true;
                     btnHoldStartT1_[pin] = currentTime;
                     lastRepeatT1_[pin] = currentTime;
@@ -669,8 +647,7 @@ void HardwareManager::processButtonRepeats()
             if (currentTime - btnHoldStartT1_[pin] > REPEAT_INIT_DELAY_MS &&
                 currentTime - lastRepeatT1_[pin] > REPEAT_INTERVAL_MS)
             {
-
-                inputQueue_.push_back(mapPcf1PinToEvent(pin));
+                EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
                 lastRepeatT1_[pin] = currentTime;
             }
         }

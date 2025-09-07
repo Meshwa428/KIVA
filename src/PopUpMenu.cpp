@@ -1,6 +1,8 @@
 #include "PopUpMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include <Arduino.h>
 #include <algorithm> // for std::max, std::min
 
@@ -22,6 +24,7 @@ void PopUpMenu::configure(std::string title, std::string message, OnConfirmCallb
 }
 
 void PopUpMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     // If there is no "Cancel" button, default the selection to "Confirm" (option 1).
     // Otherwise, default to "Cancel" (option 0).
     bool hasCancelButton = !cancelText_.empty();
@@ -41,6 +44,7 @@ void PopUpMenu::onUpdate(App* app) {
 }
 
 void PopUpMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     // Clear the configuration to prevent old data from being used
     title_ = "";
     message_ = "";
@@ -49,7 +53,7 @@ void PopUpMenu::onExit(App* app) {
     executeOnConfirmBeforeExit_ = false;
 }
 
-void PopUpMenu::handleInput(App* app, InputEvent event) {
+void PopUpMenu::handleInput(InputEvent event, App* app) {
     bool hasCancelButton = !cancelText_.empty();
 
     switch(event) {
@@ -73,21 +77,21 @@ void PopUpMenu::handleInput(App* app, InputEvent event) {
                     // If the callback is NOT responsible for navigating away,
                     // then the popup must dismiss itself. This is for simple confirm dialogs.
                     if (executeOnConfirmBeforeExit_) {
-                        app->changeMenu(MenuType::BACK);
+                        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
                     }
                     // If executeOnConfirmBeforeExit_ is false, we assume the callback
                     // handled navigation, so the pop-up does nothing more, preventing a double-navigation issue.
                 } else {
                     // If there's no callback, OK just acts like Cancel/Back.
-                    app->changeMenu(MenuType::BACK);
+                    EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
                 }
             } else { // Cancel button pressed (only possible if hasCancelButton is true)
-                app->changeMenu(MenuType::BACK); // Dismiss the popup
+                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK}); // Dismiss the popup
             }
             break;
 
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             break;
 
         default:

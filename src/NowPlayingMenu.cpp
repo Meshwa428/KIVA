@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "MusicPlayer.h"
@@ -15,6 +17,7 @@ NowPlayingMenu::NowPlayingMenu() :
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     // Allocate resources when entering the player screen
     if (!app->getMusicPlayer().allocateResources()) {
         app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
@@ -66,6 +69,7 @@ void NowPlayingMenu::onUpdate(App* app) {
 }
 
 void NowPlayingMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     // When leaving the "Now Playing" screen, stop the current song.
     app->getMusicPlayer().stop();
     // Release resources when leaving the player screen entirely.
@@ -74,7 +78,7 @@ void NowPlayingMenu::onExit(App* app) {
     app->getMusicPlayer().setSongFinishedCallback(nullptr);
 }
 
-void NowPlayingMenu::handleInput(App* app, InputEvent event) {
+void NowPlayingMenu::handleInput(InputEvent event, App* app) {
     auto& player = app->getMusicPlayer();
     switch (event) {
         case InputEvent::BTN_OK_PRESS:
@@ -120,7 +124,7 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
             player.toggleShuffle();
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             break;
         default:
             break;

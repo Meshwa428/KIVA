@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "DuckyScriptActiveMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -6,11 +8,13 @@
 DuckyScriptActiveMenu::DuckyScriptActiveMenu() : entryTime_(0) {}
 
 void DuckyScriptActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     entryTime_ = millis();
     app->getHardwareManager().setPerformanceMode(true);
 }
 
 void DuckyScriptActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
     // Stop the script runner, which will release HID interfaces.
     if(app->getDuckyRunner().isActive()) {
         app->getDuckyRunner().stopScript();
@@ -26,7 +30,7 @@ void DuckyScriptActiveMenu::onUpdate(App* app) {
     }
 }
 
-void DuckyScriptActiveMenu::handleInput(App* app, InputEvent event) {
+void DuckyScriptActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
         app->returnToMenu(MenuType::DUCKY_SCRIPT_LIST);
     }

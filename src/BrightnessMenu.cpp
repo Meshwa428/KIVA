@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "BrightnessMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -8,6 +10,7 @@ BrightnessMenu::BrightnessMenu() :
 {}
 
 void BrightnessMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -22,9 +25,11 @@ void BrightnessMenu::onUpdate(App* app) {
     animation_.update();
 }
 
-void BrightnessMenu::onExit(App* app) {}
+void BrightnessMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::INPUT, this);
+}
 
-void BrightnessMenu::handleInput(App* app, InputEvent event) {
+void BrightnessMenu::handleInput(InputEvent event, App* app) {
     // Handle adjustment for the currently selected item
     if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
         changeBrightness(app, -13); // Decrease by ~5%
@@ -42,7 +47,7 @@ void BrightnessMenu::handleInput(App* app, InputEvent event) {
             selectedIndex_ = 1 - selectedIndex_; // Toggle between 0 and 1
             break;
         case InputEvent::BTN_BACK_PRESS: 
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
             break;
         default: 
             break;
