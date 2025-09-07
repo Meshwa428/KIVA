@@ -1,47 +1,82 @@
 #include "GameAudio.h"
+#include "App.h" // <-- ADD this include
+#include "ConfigManager.h" // <-- ADD this include
 #include "HardwareManager.h"
-#include <Arduino.h> // For millis()
-#include <esp32-hal-ledc.h> // For ledc functions
+#include "Logger.h"
+#include <Arduino.h>
+#include <algorithm> // for std::min
+#include <esp32-hal-ledc.h> // The ESP32's hardware timer/PWM library
+#include <driver/gpio.h>     // Required for gpio_hold_dis/en to resolve hardware conflicts
+
+// --- TUNING PARAMETERS ---
+const int FADE_TIME_MS = 50;
+const int LEDC_BASE_FREQ = 5000;
+const int LEDC_RESOLUTION = 12;
+const int DUTY_CYCLE_MAX = (1 << (LEDC_RESOLUTION - 1)); // 2048 for 12-bit (50% duty is max for a tone)
 
 GameAudio::GameAudio() :
-    hw_(nullptr),
+    app_(nullptr), // <-- MODIFIED
     pin_(-1),
-    channel_(0),
     isPlaying_(false),
     stopTime_(0)
 {}
 
-void GameAudio::setup(HardwareManager* hw, int pin, int channel) {
-    hw_ = hw;
-    pin_ = pin;
-    channel_ = channel;
+GameAudio::~GameAudio() {
+    if (isPlaying_ && pin_ >= 0) {
+        ledcDetach(pin_);
+    }
+}
 
-    ledcAttach(pin_, 5000, 12);
-    ledcWrite(channel_, 0); // Start with duty 0 (off)
+void GameAudio::setup(App* app, int pin) { // <-- MODIFIED signature
+    app_ = app; // <-- MODIFIED
+    pin_ = pin;
+
+    pinMode(pin_, OUTPUT);
+    digitalWrite(pin_, LOW); // Ensure it starts off quiet
+
+    LOG(LogLevel::INFO, "GAME_AUDIO", "LEDC GameAudio initialized for pin %d on channel 0.", pin_);
 }
 
 void GameAudio::tone(uint32_t frequency, uint32_t duration) {
-    if (!hw_) return;
+    if (!app_ || pin_ < 0 || frequency == 0) return;
 
-    hw_->setAmplifier(true);
-
-    if (frequency == 0) { // A frequency of 0 is a rest
-        ledcWrite(channel_, 0);
-    } else {
-        ledcWriteTone(channel_, frequency);
-        // Set duty to 50% for a standard square wave. 12-bit res = 4096. 50% = 2048
-        ledcWrite(channel_, 2048); 
-    }
+    // --- NEW: Read volume from ConfigManager and calculate target duty cycle ---
+    uint8_t volume_percent = app_->getConfigManager().getSettings().volume;
+    // Clamp at 100% for tones, as going beyond 50% duty cycle distorts the wave without increasing volume.
+    uint8_t effective_volume = std::min(volume_percent, (uint8_t)100);
+    // Map the 0-100% volume to our 0-2048 duty cycle range.
+    uint32_t target_duty = (DUTY_CYCLE_MAX * effective_volume) / 100;
     
+    // If volume is zero, do nothing.
+    if (target_duty == 0) return;
+
+    // --- RAMPED SOFT-START SEQUENCE ---
+    gpio_hold_dis((gpio_num_t)pin_);
+    app_->getHardwareManager().setAmplifier(true);
+    
+    // We now use a fixed channel (0) for simplicity.
+    ledcAttach(pin_, LEDC_BASE_FREQ, LEDC_RESOLUTION);
+    ledcChangeFrequency(pin_, frequency, LEDC_RESOLUTION);
+    
+    // Fade in to the calculated target duty cycle.
+    ledcFade(pin_, 0, target_duty, FADE_TIME_MS);
+
     isPlaying_ = true;
     stopTime_ = millis() + duration;
 }
 
 void GameAudio::noTone() {
-    if (!hw_) return;
+    if (!isPlaying_ || !app_ || pin_ < 0) return;
+
+    // --- GRACEFUL FADE-OUT SHUTDOWN ---
+    ledcFade(pin_, ledcRead(pin_), 0, FADE_TIME_MS);
+    delay(FADE_TIME_MS + 1);
     
-    ledcWrite(channel_, 0); // Set duty cycle to 0 to stop sound
-    hw_->setAmplifier(false);
+    ledcDetach(pin_);
+    digitalWrite(pin_, LOW);
+    app_->getHardwareManager().setAmplifier(false);
+    gpio_hold_en((gpio_num_t)pin_);
+    
     isPlaying_ = false;
 }
 

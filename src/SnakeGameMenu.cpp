@@ -168,7 +168,9 @@ void SnakeGameMenu::handleInput(App* app, InputEvent event) {
 }
 
 void SnakeGameMenu::stateLogicTitle(App* app, InputEvent event) {
-    if (event != InputEvent::NONE) {
+    if (event == InputEvent::BTN_BACK_PRESS) {
+        app->changeMenu(MenuType::BACK);
+    } else {
         playPressTune(app);
         initNewGame();
     }

@@ -37,37 +37,37 @@ App::App() :
     // --- Main Navigation Menus ---
     mainMenu_(),
     toolsMenu_("Tools", MenuType::TOOLS_CAROUSEL, {
-        MenuItem{"WIFI", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
-        MenuItem{"BLE", IconType::NET_BLUETOOTH, MenuType::BLE_TOOLS_GRID},
-        MenuItem{"NRF24 Jammer", IconType::TOOL_JAMMING, MenuType::NRF_JAMMER_GRID},
-        MenuItem{"Host/Other", IconType::TOOL_INJECTION, MenuType::HOST_OTHER_GRID},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
+        {"WIFI", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
+        {"BLE", IconType::NET_BLUETOOTH, MenuType::BLE_TOOLS_GRID},
+        {"NRF24 Jammer", IconType::TOOL_JAMMING, MenuType::NRF_JAMMER_GRID},
+        {"Host/Other", IconType::TOOL_INJECTION, MenuType::HOST_OTHER_GRID},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}}),
     gamesMenu_("Games", MenuType::GAMES_CAROUSEL, {
-        MenuItem{"Snake", IconType::GAME_SNAKE, MenuType::SNAKE_MENU},
-        MenuItem{"Tetris", IconType::GAME_TETRIS, MenuType::TETRIS_MENU},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}),
+        {"Snake", IconType::GAME_SNAKE, MenuType::SNAKE_MENU},
+        {"Tetris", IconType::GAME_TETRIS, MenuType::TETRIS_MENU},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}}),
     
     // --- New Menu Structure (Grids) ---
     wifiToolsMenu_("WiFi Tools", MenuType::WIFI_TOOLS_GRID, {
-        MenuItem{"Attacks", IconType::SKULL, MenuType::WIFI_ATTACKS_LIST},
-        MenuItem{"Sniff/Capture", IconType::TOOL_PROBE, MenuType::WIFI_SNIFF_LIST},
-        MenuItem{"Analyze", IconType::INFO, MenuType::NONE, 
+        {"Attacks", IconType::SKULL, MenuType::WIFI_ATTACKS_LIST},
+        {"Sniff/Capture", IconType::TOOL_PROBE, MenuType::WIFI_SNIFF_LIST},
+        {"Analyze", IconType::INFO, MenuType::NONE, 
             [](App* app) { LOG(LogLevel::INFO, "WIFI", "Analyze placeholder selected."); }
         },
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     bleToolsMenu_("BLE Tools", MenuType::BLE_TOOLS_GRID, {
-        MenuItem{"Attacks", IconType::SKULL, MenuType::BLE_ATTACKS_LIST},
-        MenuItem{"Sniff/Capture", IconType::TOOL_PROBE, MenuType::NONE,
+        {"Attacks", IconType::SKULL, MenuType::BLE_ATTACKS_LIST},
+        {"Sniff/Capture", IconType::TOOL_PROBE, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "BLE", "Sniff placeholder selected."); }
         },
-        MenuItem{"Analyze", IconType::INFO, MenuType::NONE,
+        {"Analyze", IconType::INFO, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "BLE", "Analyze placeholder selected."); }
         },
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     nrfJammerMenu_("NRF24 Jammer", MenuType::NRF_JAMMER_GRID, {
-        MenuItem{"BLE Jam", IconType::NET_BLUETOOTH, MenuType::NONE,
+        {"BLE Jam", IconType::NET_BLUETOOTH, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -77,7 +77,7 @@ App::App() :
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
+        {"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -87,7 +87,7 @@ App::App() :
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
+        {"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -97,7 +97,7 @@ App::App() :
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"Wide Spec", IconType::TOOL_JAMMING, MenuType::NONE,
+        {"Wide Spec", IconType::TOOL_JAMMING, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -107,7 +107,7 @@ App::App() :
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, 
+        {"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, 
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -117,26 +117,26 @@ App::App() :
                     app->changeMenu(MenuType::JAMMING_ACTIVE);
                 }
             }},
-        MenuItem{"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}}, 2),
+        {"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}}, 2),
     hostOtherMenu_("Host / Other Tools", MenuType::HOST_OTHER_GRID, {
-        MenuItem{"USB Ducky", IconType::USB, MenuType::NONE, 
+        {"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
-        MenuItem{"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
+        {"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
                 app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
             }},
-        MenuItem{"IR Blaster", IconType::UI_LASER, MenuType::NONE,
+        {"IR Blaster", IconType::UI_LASER, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "HOST", "IR Blaster placeholder selected."); }
         },
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     beaconModeMenu_("Beacon Spam Mode", MenuType::BEACON_MODE_GRID, {
-        MenuItem{"Random", IconType::BEACON, MenuType::NONE, 
+        {"Random", IconType::BEACON, MenuType::NONE, 
             [](App *app) {
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (menu) {
@@ -145,7 +145,7 @@ App::App() :
                 }
             }
         },
-        MenuItem{"From Probes", IconType::UI_REFRESH, MenuType::NONE,
+        {"From Probes", IconType::UI_REFRESH, MenuType::NONE,
             [](App* app) {
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (menu) {
@@ -158,11 +158,11 @@ App::App() :
                 }
             }
         },
-        MenuItem{"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     deauthModeMenu_("Deauth Type", MenuType::DEAUTH_MODE_GRID, {
-        MenuItem{"Rogue AP", IconType::BEACON, MenuType::NONE, 
+        {"Rogue AP", IconType::BEACON, MenuType::NONE, 
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
@@ -173,7 +173,7 @@ App::App() :
                 ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
-        MenuItem{"Broadcast", IconType::SKULL, MenuType::NONE, 
+        {"Broadcast", IconType::SKULL, MenuType::NONE, 
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
@@ -184,10 +184,10 @@ App::App() :
                 ds.setScanOnEnter(true);
                 app->changeMenu(MenuType::WIFI_LIST);
             }},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     probeFloodModeMenu_("Probe Flood Mode", MenuType::PROBE_FLOOD_MODE_GRID, {
-        MenuItem{"Random Flood", IconType::TOOL_JAMMING, MenuType::NONE, 
+        {"Random Flood", IconType::TOOL_JAMMING, MenuType::NONE, 
             [](App *app) {
                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
@@ -196,7 +196,7 @@ App::App() :
                 }
             }
         },
-        MenuItem{"Sniffed List", IconType::SD_CARD, MenuType::NONE,
+        {"Sniffed List", IconType::SD_CARD, MenuType::NONE,
             [](App *app) {
                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
@@ -208,27 +208,27 @@ App::App() :
                     app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
                 }
             }},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
-        MenuItem{"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
-        MenuItem{"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
-        MenuItem{"Connectivity", IconType::NET_WIFI, MenuType::CONNECTIVITY_SETTINGS_LIST},
-        MenuItem{"System", IconType::SETTING_SYSTEM, MenuType::SYSTEM_SETTINGS_LIST},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
+        {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
+        {"Connectivity", IconType::NET_WIFI, MenuType::CONNECTIVITY_SETTINGS_LIST},
+        {"System", IconType::SETTING_SYSTEM, MenuType::SYSTEM_SETTINGS_LIST},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     firmwareUpdateGrid_("Update", MenuType::FIRMWARE_UPDATE_GRID, {
-        MenuItem{"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
+        {"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App *app) {
                 if (app->getOtaManager().startWebUpdate()) app->changeMenu(MenuType::OTA_STATUS);
                 else app->showPopUp("Error", "Failed to start Web AP.", nullptr, "OK", "", true);
             }
         },
-        MenuItem{"SD Card", IconType::SD_CARD, MenuType::FIRMWARE_LIST_SD}, 
-        MenuItem{"Basic OTA", IconType::BASIC_OTA, MenuType::NONE,
+        {"SD Card", IconType::SD_CARD, MenuType::FIRMWARE_LIST_SD}, 
+        {"Basic OTA", IconType::BASIC_OTA, MenuType::NONE,
             [](App *app) { app->getOtaManager().startBasicOta(); }
         },
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     
     // --- Simple Menus (Default Constructed) ---
@@ -303,21 +303,111 @@ App::App() :
         }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
+    
+    // --- START: REPLACEMENT OF SETTINGS DATA SOURCES ---
     uiSettingsDataSource_({
-        {"Brightness", IconType::SETTING_DISPLAY, MenuType::BRIGHTNESS_MENU},
-        {"Encoder Direction", IconType::UI_REFRESH, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "SETTINGS", "Encoder Direction placeholder selected."); }},
+        MenuItem{
+            "Brightness", IconType::SETTING_DISPLAY, MenuType::BRIGHTNESS_MENU, nullptr, true,
+            [](App* app) -> std::string {
+                int percent = map(app->getConfigManager().getSettings().mainDisplayBrightness, 0, 255, 0, 100);
+                char buf[16]; snprintf(buf, sizeof(buf), "< %d%% >", percent); return std::string(buf);
+            },
+            [](App* app, int dir) {
+                auto& settings = app->getConfigManager().getSettings();
+                int newVal = settings.mainDisplayBrightness + (dir * 13);
+                if (newVal < 0) newVal = 0; if (newVal > 255) newVal = 255;
+                settings.mainDisplayBrightness = newVal;
+                settings.auxDisplayBrightness = newVal; // Unified control
+                app->getConfigManager().saveSettings();
+            }
+        },
+        MenuItem{
+            "KB Layout", IconType::USB, MenuType::NONE, nullptr, true,
+            [](App* app) -> std::string {
+                auto& cfg = app->getConfigManager();
+                const auto& layouts = cfg.getKeyboardLayouts();
+                int idx = cfg.getSettings().keyboardLayoutIndex;
+                return "< " + layouts[idx].first + " >";
+            },
+            [](App* app, int dir) {
+                auto& cfg = app->getConfigManager();
+                auto& settings = cfg.getSettings();
+                int numLayouts = cfg.getKeyboardLayouts().size();
+                settings.keyboardLayoutIndex = (settings.keyboardLayoutIndex + dir + numLayouts) % numLayouts;
+                cfg.saveSettings();
+            }
+        },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     hardwareSettingsDataSource_({
-        {"Vibration", IconType::UI_VIBRATION, MenuType::NONE, [](App* app){ app->getHardwareManager().setVibration(!app->getHardwareManager().isVibrationOn()); }},
-        {"Laser", IconType::UI_LASER, MenuType::NONE, [](App* app){ app->getHardwareManager().setLaser(!app->getHardwareManager().isLaserOn()); }},
+        MenuItem{
+            "Volume", IconType::SETTING_SOUND, MenuType::NONE, nullptr, true,
+            [](App* app) -> std::string {
+                char buf[16]; snprintf(buf, sizeof(buf), "< %d%% >", app->getConfigManager().getSettings().volume); return std::string(buf);
+            },
+            [](App* app, int dir) {
+                auto& settings = app->getConfigManager().getSettings();
+                int newVol = settings.volume + (dir * 5);
+                if (newVol < 0) newVol = 0; if (newVol > 200) newVol = 200;
+                settings.volume = newVol;
+                app->getConfigManager().saveSettings();
+            }
+        },
+        MenuItem{
+            "Vibration", IconType::UI_VIBRATION, MenuType::NONE, nullptr, true,
+            [](App* app) -> std::string { return app->getHardwareManager().isVibrationOn() ? "< ON >" : "< OFF >"; },
+            [](App* app, int dir) {
+                auto& hw = app->getHardwareManager();
+                hw.setVibration(!hw.isVibrationOn());
+            }
+        },
+        MenuItem{
+            "Laser", IconType::UI_LASER, MenuType::NONE, nullptr, true,
+            [](App* app) -> std::string { return app->getHardwareManager().isLaserOn() ? "< ON >" : "< OFF >"; },
+            [](App* app, int dir) {
+                auto& hw = app->getHardwareManager();
+                hw.setLaser(!hw.isLaserOn());
+            }
+        },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     connectivitySettingsDataSource_({
         {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST},
-        {"OTA Password", IconType::FIRMWARE_UPDATE, MenuType::TEXT_INPUT},
+        MenuItem{
+            "Hop Delay", IconType::UI_REFRESH, MenuType::NONE, nullptr, true,
+            [](App* app) -> std::string {
+                char buf[16]; snprintf(buf, sizeof(buf), "< %dms >", app->getConfigManager().getSettings().channelHopDelayMs); return std::string(buf);
+            },
+            [](App* app, int dir) {
+                auto& settings = app->getConfigManager().getSettings();
+                int newDelay = settings.channelHopDelayMs + (dir * 100);
+                if (newDelay < 100) newDelay = 100; if (newDelay > 5000) newDelay = 5000;
+                settings.channelHopDelayMs = newDelay;
+                app->getConfigManager().saveSettings();
+            }
+        },
+        {"OTA Password", IconType::FIRMWARE_UPDATE, MenuType::NONE, 
+            [](App* app) {
+                TextInputMenu& textMenu = app->getTextInputMenu();
+                textMenu.configure("New OTA Password", 
+                    [](App* cb_app, const char* new_password) {
+                        if (strlen(new_password) > 0 && strlen(new_password) < Firmware::MIN_AP_PASSWORD_LEN) {
+                            cb_app->showPopUp("Error", "Pass must be > 8 chars.", nullptr, "OK", "", true);
+                        } else {
+                            auto& settings = cb_app->getConfigManager().getSettings();
+                            strlcpy(settings.otaPassword, new_password, sizeof(settings.otaPassword));
+                            cb_app->getConfigManager().saveSettings();
+                            cb_app->replaceMenu(MenuType::CONNECTIVITY_SETTINGS_LIST);
+                            cb_app->showPopUp("Success", "Password Saved.", nullptr, "OK", "", true);
+                        }
+                    }, false, app->getConfigManager().getSettings().otaPassword
+                );
+                app->changeMenu(MenuType::TEXT_INPUT);
+            }
+        },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
+    // --- END: REPLACEMENT OF SETTINGS DATA SOURCES ---
     systemSettingsDataSource_({
         {"Firmware Update", IconType::FIRMWARE_UPDATE, MenuType::FIRMWARE_UPDATE_GRID},
         {"USB Drive Mode", IconType::USB, MenuType::USB_DRIVE_MODE},
@@ -328,15 +418,16 @@ App::App() :
         {"System Info", IconType::INFO, MenuType::INFO_MENU},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
+    // --- NEW GAME DATASOURCES ---
     snakeMenuDataSource_({
-        MenuItem{"Play", IconType::PLAY, MenuType::SNAKE_GAME},
-        MenuItem{"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Snake High Score selected."); }},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Play", IconType::PLAY, MenuType::SNAKE_GAME},
+        {"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Snake High Score selected."); }},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     tetrisMenuDataSource_({
-        MenuItem{"Play", IconType::PLAY, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris Play selected."); }},
-        MenuItem{"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris High Score selected."); }},
-        MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
+        {"Play", IconType::PLAY, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris Play selected."); }},
+        {"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris High Score selected."); }},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     // --- ListMenu Instances ---
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
@@ -345,6 +436,8 @@ App::App() :
     portalListMenu_("Select Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
     duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
     musicPlayerListMenu_("Music Player", MenuType::MUSIC_PLAYER_LIST, &musicPlayListDataSource_),
+    
+    // New ListMenus using the generic source
     wifiAttacksMenu_("WiFi Attacks", MenuType::WIFI_ATTACKS_LIST, &wifiAttacksDataSource_),
     wifiSniffMenu_("Sniff/Capture", MenuType::WIFI_SNIFF_LIST, &wifiSniffDataSource_),
     bleAttacksMenu_("BLE Attacks", MenuType::BLE_ATTACKS_LIST, &bleAttacksDataSource_),
@@ -352,6 +445,8 @@ App::App() :
     hardwareSettingsMenu_("Hardware", MenuType::HARDWARE_SETTINGS_LIST, &hardwareSettingsDataSource_),
     connectivitySettingsMenu_("Connectivity", MenuType::CONNECTIVITY_SETTINGS_LIST, &connectivitySettingsDataSource_),
     systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_),
+
+    // --- GAME LISTMENUS ---
     snakeMenu_("Snake", MenuType::SNAKE_MENU, &snakeMenuDataSource_),
     tetrisMenu_("Tetris", MenuType::TETRIS_MENU, &tetrisMenuDataSource_)
 {
@@ -400,7 +495,7 @@ void App::setup()
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
-        {"Game Audio",      [&](){ gameAudio_.setup(&hardware_, Pins::AMPLIFIER_PIN); }}
+        {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
     int totalTasks = bootTasks.size();

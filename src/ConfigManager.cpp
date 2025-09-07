@@ -14,6 +14,10 @@ ConfigManager::ConfigManager() :
     app_(nullptr),
     isEepromValid_(false)
 {
+    // Initialize both structs to a known state
+    memset(&settings_, 0, sizeof(DeviceSettings));
+    memset(&lastAppliedSettings_, 0, sizeof(DeviceSettings));
+
     // Define the available keyboard layouts
     keyboardLayouts_ = {
         {"US", "en_US"},
@@ -30,10 +34,12 @@ void ConfigManager::setup(App* app) {
     EEPROM.begin(EEPROM_SIZE);
     loadSettings();
     applySettings();
+    // After the first load and apply, sync the shadow copy
+    lastAppliedSettings_ = settings_;
 }
 
 const uint8_t* ConfigManager::getSelectedKeyboardLayout() const {
-    if (settings_.keyboardLayoutIndex < 0 || settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
+    if (settings_.keyboardLayoutIndex < 0 || (size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         return KeyboardLayout_en_US; // Safe default
     }
 
@@ -68,16 +74,36 @@ void ConfigManager::loadSettings() {
 }
 
 void ConfigManager::saveSettings() {
+    applySettings(); // Apply changes first
     saveToEEPROM();
     saveToSdCard();
-    applySettings();
+    // After saving and applying, update the shadow copy to the new state
+    lastAppliedSettings_ = settings_;
 }
 
 void ConfigManager::applySettings() {
-    // Apply settings that need to be pushed to hardware
-    app_->getHardwareManager().setMainBrightness(settings_.mainDisplayBrightness);
-    app_->getHardwareManager().setAuxBrightness(settings_.auxDisplayBrightness);
-    app_->getMusicPlayer().setVolume(settings_.volume);
+    // --- START: NEW INTELLIGENT APPLY LOGIC ---
+    LOG(LogLevel::DEBUG, "CONFIG", false, "Checking for settings changes to apply...");
+
+    // Compare and apply brightness settings
+    if (settings_.mainDisplayBrightness != lastAppliedSettings_.mainDisplayBrightness) {
+        LOG(LogLevel::INFO, "CONFIG", "Applying new Main Brightness: %d", settings_.mainDisplayBrightness);
+        app_->getHardwareManager().setMainBrightness(settings_.mainDisplayBrightness);
+    }
+    if (settings_.auxDisplayBrightness != lastAppliedSettings_.auxDisplayBrightness) {
+        LOG(LogLevel::INFO, "CONFIG", "Applying new Aux Brightness: %d", settings_.auxDisplayBrightness);
+        app_->getHardwareManager().setAuxBrightness(settings_.auxDisplayBrightness);
+    }
+
+    // Compare and apply volume setting
+    if (settings_.volume != lastAppliedSettings_.volume) {
+        LOG(LogLevel::INFO, "CONFIG", "Applying new Volume: %d%%", settings_.volume);
+        app_->getMusicPlayer().setVolume(settings_.volume);
+    }
+
+    // Settings like keyboard layout, passwords, and hop delay don't need an explicit "apply" function
+    // as they are read by other modules when needed. No action is required here for them.
+    // --- END: NEW INTELLIGENT APPLY LOGIC ---
 }
 
 void ConfigManager::loadFromEEPROM() {
@@ -122,7 +148,7 @@ void ConfigManager::loadFromSdCard() {
     strlcpy(settings_.otaPassword, doc["ota_password"] | "KIVA_PASS", sizeof(settings_.otaPassword));
     settings_.channelHopDelayMs = doc["channel_hop_delay_ms"] | 500;
     
-    if (settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
+    if ((size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         settings_.keyboardLayoutIndex = 0;
     }
     
@@ -154,19 +180,16 @@ void ConfigManager::useDefaultSettings() {
 }
 
 bool ConfigManager::reloadFromSdCard() {
-    // Attempt to load settings from the SD card.
-    // The private loadFromSdCard() function sets the isEepromValid_ flag on success.
     loadFromSdCard();
     
     if (isEepromValid_) {
-        // If the load was successful, sync the newly loaded settings to the EEPROM.
         LOG(LogLevel::INFO, "CONFIG", "Manually reloaded from SD. Syncing to EEPROM.");
         saveToEEPROM();
-        // And apply them immediately to the hardware (e.g., brightness).
         applySettings();
-        return true; // Report success
+        // After applying, re-sync the shadow copy.
+        lastAppliedSettings_ = settings_;
+        return true;
     } else {
-        // If the load failed (e.g., file not found or corrupt), report failure.
         LOG(LogLevel::WARN, "CONFIG", "Manual reload from SD failed. File might be invalid.");
         return false;
     }

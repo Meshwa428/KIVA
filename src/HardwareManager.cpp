@@ -139,7 +139,8 @@ HardwareManager::RfLock::~RfLock() {
 }
 
 void HardwareManager::releaseRfControl() {
-    Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
+    // Serial.printf("[HW-RF] Releasing RF lock from client %d\n", (int)currentRfClient_);
+    LOG(LogLevel::INFO, "HW_RF", false, "Releasing RF lock from client %d", (int)currentRfClient_);
     if (currentRfClient_ == RfClient::NRF_JAMMER) {
         if (radio1_.isChipConnected()) radio1_.powerDown();
         if (radio2_.isChipConnected()) radio2_.powerDown();
@@ -426,12 +427,18 @@ void HardwareManager::setVibration(bool on)
 void HardwareManager::setAmplifier(bool on) {
     pinMode(Pins::AMPLIFIER_PIN, OUTPUT);
     if (on) {
-        amplifierOn_ = true;
+        // --- CRITICAL FIX ---
+        // Before turning the amplifier ON, we MUST release any hold on the pin.
         gpio_hold_dis((gpio_num_t)Pins::AMPLIFIER_PIN);
+        // This line is now redundant as AudioOutputPDM will control the pin signal, but it's safe.
+        digitalWrite(Pins::AMPLIFIER_PIN, HIGH); 
+        amplifierOn_ = true;
     }
     else {
         amplifierOn_ = false;
+        // Drive the pin low to ensure silence.
         digitalWrite(Pins::AMPLIFIER_PIN, LOW);
+        // Latch the pin in the LOW state to prevent noise after audio stops.
         gpio_hold_en((gpio_num_t)Pins::AMPLIFIER_PIN);
     }
 }

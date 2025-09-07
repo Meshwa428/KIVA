@@ -2,6 +2,7 @@
 #define I_LIST_MENU_DATA_SOURCE_H
 
 #include <U8g2lib.h>
+#include "IMenu.h" // <-- ADD THIS INCLUDE
 
 // Forward declarations to avoid circular dependencies
 class App;
@@ -76,6 +77,11 @@ public:
      * @return true if the event was handled, false to let the menu perform its default action.
      */
     virtual bool onBackPress(App* app, ListMenu* menu) { return false; }
+
+    /**
+     * @brief [NEW] Allows the ListMenu to get the properties of an item.
+     */
+    virtual const MenuItem* getItem(int index) const { return nullptr; }
 };
 
 #endif // I_LIST_MENU_DATA_SOURCE_H
