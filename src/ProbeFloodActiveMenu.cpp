@@ -1,5 +1,7 @@
 #include "Event.h"
 #include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ProbeFloodActiveMenu.h"
 #include "App.h"
 
@@ -19,7 +21,7 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
     if (!flooder.start(std::move(rfLock), modeToStart_, filePathToUse_)) {
         app->getHardwareManager().setPerformanceMode(false);
         app->showPopUp("Error", "Failed to start attack.", [](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
     }
 }

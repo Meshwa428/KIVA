@@ -25,7 +25,7 @@ void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
         LOG(LogLevel::ERROR, "USB_DRIVE", "SD Card initialization failed via HIDForge.");
         app->showPopUp("Error", "SD Card init failed.", [app](App* app_cb) {
             USB.begin();
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
         return;
     }

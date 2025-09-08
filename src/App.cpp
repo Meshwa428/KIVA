@@ -173,7 +173,7 @@ App::App() :
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
                     else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
@@ -184,7 +184,7 @@ App::App() :
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
                      else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
@@ -403,7 +403,7 @@ App::App() :
                             auto& settings = cb_app->getConfigManager().getSettings();
                             strlcpy(settings.otaPassword, new_password, sizeof(settings.otaPassword));
                             cb_app->getConfigManager().saveSettings();
-                            cb_app->replaceMenu(MenuType::CONNECTIVITY_SETTINGS_LIST);
+                            EventDispatcher::getInstance().publish(ReplaceMenuEvent(MenuType::CONNECTIVITY_SETTINGS_LIST));
                             cb_app->showPopUp("Success", "Password Saved.", nullptr, "OK", "", true);
                         }
                     }, false, app->getConfigManager().getSettings().otaPassword
@@ -603,6 +603,7 @@ void App::setup()
     EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_TO_MENU, this);
     EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_BACK, this);
     EventDispatcher::getInstance().subscribe(EventType::RETURN_TO_MENU, this);
+    EventDispatcher::getInstance().subscribe(EventType::REPLACE_MENU, this);
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -726,6 +727,11 @@ void App::onEvent(const Event& event) {
         case EventType::RETURN_TO_MENU: {
             const auto& navEvent = static_cast<const ReturnToMenuEvent&>(event);
             returnToMenu(navEvent.menuType);
+            break;
+        }
+        case EventType::REPLACE_MENU: {
+            const auto& navEvent = static_cast<const ReplaceMenuEvent&>(event);
+            replaceMenu(navEvent.menuType);
             break;
         }
         default:

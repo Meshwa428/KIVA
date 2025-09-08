@@ -1,5 +1,7 @@
 #include "Event.h"
 #include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "MusicPlayer.h"
@@ -21,7 +23,7 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     // Allocate resources when entering the player screen
     if (!app->getMusicPlayer().allocateResources()) {
         app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
         return;
     }

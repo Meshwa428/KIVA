@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "OtaManager.h"
 #include "App.h"
 #include "WifiManager.h"
@@ -228,7 +230,7 @@ void OtaManager::startBasicOta() {
                 WifiListDataSource& wifiDataSource = app_cb->getWifiListDataSource();
                 wifiDataSource.setBackNavOverride(true);
                 wifiDataSource.setScanOnEnter(true);
-                app_cb->changeMenu(MenuType::WIFI_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }, 
             "OK", "Cancel", false);
         return;
@@ -243,7 +245,7 @@ void OtaManager::startBasicOta() {
     ArduinoOTA.begin();
     Serial.println("[OTA-LOG] Basic OTA (IDE) started.");
     
-    app_->changeMenu(MenuType::OTA_STATUS);
+    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
 }
 
 void OtaManager::startSdUpdate(const FirmwareInfo& fwInfo) {

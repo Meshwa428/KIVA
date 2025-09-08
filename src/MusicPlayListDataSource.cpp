@@ -5,6 +5,8 @@
 #include "ListMenu.h"
 #include "UI_Utils.h"
 #include "Config.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 MusicPlayListDataSource::MusicPlayListDataSource() :
     currentPath_(SD_ROOT::USER_MUSIC),
@@ -116,7 +118,7 @@ void MusicPlayListDataSource::onItemSelected(App* app, ListMenu* menu, int index
             std::string playlistName = (lastSlash != std::string::npos) ? parentPath.substr(lastSlash + 1) : "Music";
 
             app->getMusicPlayer().queuePlaylist(playlistName, playlistTracks, currentTrackIndexInPlaylist);
-            app->changeMenu(MenuType::NOW_PLAYING);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::NOW_PLAYING));
             break;
         }
         case ItemType::REINDEX: {

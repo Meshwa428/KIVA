@@ -1,5 +1,7 @@
 #include "Event.h"
 #include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "HandshakeCaptureActiveMenu.h"
 #include "App.h"
 #include "HandshakeCapture.h"
@@ -30,7 +32,7 @@ void HandshakeCaptureActiveMenu::onUpdate(App* app) {
 void HandshakeCaptureActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS) {
         // Use returnToMenu to reliably get back to the grid menu
-        app->returnToMenu(MenuType::HANDSHAKE_CAPTURE_MENU);
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::HANDSHAKE_CAPTURE_MENU));
     }
 }
 

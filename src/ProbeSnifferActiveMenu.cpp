@@ -1,5 +1,7 @@
 #include "Event.h"
 #include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ProbeSnifferActiveMenu.h"
 #include "App.h"
 #include "ProbeSniffer.h"
@@ -21,7 +23,7 @@ void ProbeSnifferActiveMenu::onEnter(App* app, bool isForwardNav) {
     displaySsids_.clear();
     if (!app->getProbeSniffer().start()) {
         app->showPopUp("Error", "Failed to start sniffer.", [app](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
     }
 }

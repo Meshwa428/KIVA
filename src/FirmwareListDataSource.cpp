@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "FirmwareListDataSource.h"
 #include "App.h"
 #include "OtaManager.h"
@@ -39,14 +41,14 @@ void FirmwareListDataSource::onItemSelected(App* app, ListMenu* menu, int index)
     const auto& selected = displayItems_[index];
     if (selected.isBackButton) {
         if (selected.label == "Back") {
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }
         // "No firmware" item is also a back button, but does nothing on click.
     } else {
         const auto& firmwares = app->getOtaManager().getAvailableFirmwares();
         if(selected.firmwareIndex >= 0 && (size_t)selected.firmwareIndex < firmwares.size()) {
             app->getOtaManager().startSdUpdate(firmwares[selected.firmwareIndex]);
-            app->changeMenu(MenuType::OTA_STATUS);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
         }
     }
 }

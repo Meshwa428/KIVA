@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "PortalListDataSource.h"
 #include "App.h"
 #include "SdCardManager.h"
@@ -41,7 +43,7 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
 
     std::string selectedPortal = portalNames_[index];
     if (selectedPortal == "Back") {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
         return;
     }
 
@@ -52,7 +54,7 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     // --- RENAMED ---
     ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork) {
         if (app_cb->getEvilTwin().start(selectedNetwork)) {
-            app_cb->changeMenu(MenuType::EVIL_TWIN_ACTIVE);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::EVIL_TWIN_ACTIVE));
         } else {
             app_cb->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
         }
@@ -60,7 +62,7 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
 
     ds.setScanOnEnter(true);
     ds.setBackNavOverride(false);
-    app->changeMenu(MenuType::WIFI_LIST);
+    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
 }
 
 void PortalListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
