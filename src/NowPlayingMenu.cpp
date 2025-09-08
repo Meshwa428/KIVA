@@ -92,13 +92,11 @@ void NowPlayingMenu::handleInput(InputEvent event, App* app) {
         case InputEvent::ENCODER_CCW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); 
             player.prevTrack();
-            app->clearInputQueue();
             break;
         case InputEvent::BTN_RIGHT_PRESS:
         case InputEvent::ENCODER_CW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()");
             player.nextTrack();
-            app->clearInputQueue();
             break;
         case InputEvent::BTN_UP_PRESS:
         case InputEvent::BTN_DOWN_PRESS:
