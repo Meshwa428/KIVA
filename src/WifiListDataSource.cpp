@@ -142,7 +142,7 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                         textMenu.configure("Enter Password",
                             [](App* cb_app, const char* password) {
                                 cb_app->getWifiManager().connectWithPassword(password);
-                                cb_EventDispatcher::getInstance().publish(ReplaceMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
+                                EventDispatcher::getInstance().publish(ReplaceMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                             }, true);
                         EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
                     }

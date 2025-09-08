@@ -136,7 +136,7 @@ void WifiListMenu::handleInput(InputEvent event, App* app) {
                     break;
                 case ListItemType::BACK:
                     // Treat list item "Back" like the physical button
-                    handleInput(app, InputEvent::BTN_BACK_PRESS);
+                    handleInput(InputEvent::BTN_BACK_PRESS, app);
                     break;
                 case ListItemType::NETWORK:
                 {
@@ -179,7 +179,7 @@ void WifiListMenu::handleInput(InputEvent event, App* app) {
         break;
         case InputEvent::BTN_BACK_PRESS:
             if (backNavOverride_) {
-                app->returnToMenu(MenuType::FIRMWARE_UPDATE_GRID);
+                EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::FIRMWARE_UPDATE_GRID));
                 // Special OTA behavior
                 Serial.println("[WIFI-LIST-LOG] Overriding BACK press for OTA.");
                 app->getOtaManager().startBasicOta();
