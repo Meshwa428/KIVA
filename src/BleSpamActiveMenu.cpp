@@ -27,7 +27,7 @@ void BleSpamActiveMenu::onExit(App* app) {
 
 void BleSpamActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 

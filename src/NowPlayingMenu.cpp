@@ -124,7 +124,7 @@ void NowPlayingMenu::handleInput(InputEvent event, App* app) {
             player.toggleShuffle();
             break;
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

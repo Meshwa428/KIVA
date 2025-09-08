@@ -88,7 +88,7 @@ void SplitSelectionMenu::handleInput(InputEvent event, App* app) {
             {
                 const auto& selected = menuItems_[selectedIndex_];
                 if (selected.targetMenu == MenuType::BACK) {
-                    EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+                    EventDispatcher::getInstance().publish(NavigateBackEvent());
                 } else if (selected.action) {
                     selected.action(app);
                 } else {
@@ -97,7 +97,7 @@ void SplitSelectionMenu::handleInput(InputEvent event, App* app) {
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

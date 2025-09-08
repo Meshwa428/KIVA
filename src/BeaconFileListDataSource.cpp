@@ -40,7 +40,7 @@ void BeaconFileListDataSource::onItemSelected(App* app, ListMenu* menu, int inde
 
     std::string selectedFile = fileNames_[index];
     if (selectedFile == "Back") {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
         return;
     }
 

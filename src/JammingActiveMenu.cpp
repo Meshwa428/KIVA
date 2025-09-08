@@ -28,7 +28,7 @@ void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
         } else {
             // If starting failed, immediately go back and show an error.
             app->getHardwareManager().setPerformanceMode(false);
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             app->showPopUp("Error", "Failed to start jammer.", nullptr, "OK", "", true);
         }
     }
@@ -55,7 +55,7 @@ void JammingActiveMenu::handleInput(InputEvent event, App* app) {
     // Only care about the back button to stop the process.
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS || event == InputEvent::BTN_ENCODER_PRESS) {
         // onExit will handle the actual stopping.
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 

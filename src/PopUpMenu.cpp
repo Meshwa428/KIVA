@@ -77,21 +77,21 @@ void PopUpMenu::handleInput(InputEvent event, App* app) {
                     // If the callback is NOT responsible for navigating away,
                     // then the popup must dismiss itself. This is for simple confirm dialogs.
                     if (executeOnConfirmBeforeExit_) {
-                        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+                        EventDispatcher::getInstance().publish(NavigateBackEvent());
                     }
                     // If executeOnConfirmBeforeExit_ is false, we assume the callback
                     // handled navigation, so the pop-up does nothing more, preventing a double-navigation issue.
                 } else {
                     // If there's no callback, OK just acts like Cancel/Back.
-                    EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+                    EventDispatcher::getInstance().publish(NavigateBackEvent());
                 }
             } else { // Cancel button pressed (only possible if hasCancelButton is true)
-                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK}); // Dismiss the popup
+                EventDispatcher::getInstance().publish(NavigateBackEvent()); // Dismiss the popup
             }
             break;
 
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
 
         default:

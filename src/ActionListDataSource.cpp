@@ -2,6 +2,8 @@
 #include "App.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 ActionListDataSource::ActionListDataSource(const std::vector<MenuItem>& items) : items_(items) {}
 
@@ -21,8 +23,10 @@ void ActionListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     const auto& item = items_[index];
     if (item.action) {
         item.action(app);
+    } else if (item.targetMenu == MenuType::BACK) {
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     } else {
-        app->changeMenu(item.targetMenu);
+        EventDispatcher::getInstance().publish(NavigateToMenuEvent(item.targetMenu));
     }
 }
 

@@ -109,7 +109,7 @@ void WifiListMenu::rebuildDisplayItems(App* app) {
 
 void WifiListMenu::handleInput(InputEvent event, App* app) {
     if (isScanning_) {
-        if (event == InputEvent::BTN_BACK_PRESS) { EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK}); }
+        if (event == InputEvent::BTN_BACK_PRESS) { EventDispatcher::getInstance().publish(NavigateBackEvent()); }
         return;
     }
 
@@ -186,7 +186,7 @@ void WifiListMenu::handleInput(InputEvent event, App* app) {
                 backNavOverride_ = false; // <-- ADD THIS LINE to consume the flag
             } else {
                 // Normal behavior
-                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+                EventDispatcher::getInstance().publish(NavigateBackEvent());
             }
             break;
         default: break;

@@ -47,7 +47,7 @@ void BrightnessMenu::handleInput(InputEvent event, App* app) {
             selectedIndex_ = 1 - selectedIndex_; // Toggle between 0 and 1
             break;
         case InputEvent::BTN_BACK_PRESS: 
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default: 
             break;

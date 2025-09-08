@@ -53,14 +53,14 @@ void KarmaActiveMenu::handleInput(InputEvent event, App* app) {
     auto& karma = app->getKarmaAttacker();
 
     if (event == InputEvent::BTN_BACK_PRESS) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
         return;
     }
     
     if (karma.isAttacking()) {
         // In attack mode, any other button also stops the attack
         if (event != InputEvent::NONE) {
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }
         return;
     }

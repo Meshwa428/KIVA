@@ -100,7 +100,7 @@ void InfoMenu::onExit(App* app) {
 void InfoMenu::handleInput(InputEvent event, App* app) {
     // Any button press will exit the info screen.
     if (event != InputEvent::NONE) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 

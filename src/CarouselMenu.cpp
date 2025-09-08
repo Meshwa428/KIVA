@@ -62,7 +62,7 @@ void CarouselMenu::handleInput(InputEvent event, App* app) {
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

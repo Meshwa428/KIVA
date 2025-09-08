@@ -46,4 +46,8 @@ struct NavigateToMenuEvent : public Event {
     NavigateToMenuEvent(MenuType mt, bool isFwd = true) : menuType(mt), isForwardNav(isFwd) { type = EventType::NAVIGATE_TO_MENU; }
 };
 
+struct NavigateBackEvent : public Event {
+    NavigateBackEvent() { type = EventType::NAVIGATE_BACK; }
+};
+
 #endif // EVENT_H

@@ -62,7 +62,7 @@ void ListMenu::handleInput(InputEvent event, App* app) {
 
     if (event == InputEvent::BTN_BACK_PRESS) {
         if (!dataSource_->onBackPress(app, this)) {
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }
         return;
     }

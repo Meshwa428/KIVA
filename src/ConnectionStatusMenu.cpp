@@ -20,12 +20,12 @@ void ConnectionStatusMenu::onUpdate(App* app) {
     // --- THE CORRECT LOGIC ---
     // On SUCCESS, return to the list automatically after a short delay.
     if (state == WifiState::CONNECTED && millis() - entryTime_ > 2000) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 
     // On FAILURE, also return automatically after a longer delay.
     if (state == WifiState::CONNECTION_FAILED && millis() - entryTime_ > 4000) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 
@@ -43,7 +43,7 @@ void ConnectionStatusMenu::onExit(App* app) {
 void ConnectionStatusMenu::handleInput(InputEvent event, App* app) {
     // Allow user to press back to dismiss the screen immediately.
     if (event != InputEvent::NONE) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 

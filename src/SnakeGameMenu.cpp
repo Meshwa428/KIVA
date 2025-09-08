@@ -173,7 +173,7 @@ void SnakeGameMenu::handleInput(InputEvent event, App* app) {
 
 void SnakeGameMenu::stateLogicTitle(App* app, InputEvent event) {
     if (event == InputEvent::BTN_BACK_PRESS) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     } else {
         playPressTune(app);
         initNewGame();
@@ -185,7 +185,7 @@ void SnakeGameMenu::stateLogicPlaying(App* app, InputEvent event) {
     else if (event == InputEvent::BTN_DOWN_PRESS && snake_.direction != DIR_UP) snake_.direction = DIR_DOWN;
     else if (event == InputEvent::BTN_LEFT_PRESS && snake_.direction != DIR_RIGHT) snake_.direction = DIR_LEFT;
     else if (event == InputEvent::BTN_RIGHT_PRESS && snake_.direction != DIR_LEFT) snake_.direction = DIR_RIGHT;
-    else if (event == InputEvent::BTN_BACK_PRESS) EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+    else if (event == InputEvent::BTN_BACK_PRESS) EventDispatcher::getInstance().publish(NavigateBackEvent());
 }
 
 void SnakeGameMenu::stateLogicGameOver(App* app, InputEvent event) {

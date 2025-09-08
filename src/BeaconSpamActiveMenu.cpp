@@ -23,7 +23,7 @@ void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
         app->getHardwareManager().setPerformanceMode(false);
         // This popup will now only show if there's a hardware-level problem.
         app->showPopUp("Error", "Failed to acquire RF lock.", [](App* app_cb){
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
     }
 }
@@ -39,7 +39,7 @@ void BeaconSpamActiveMenu::onUpdate(App* app) {}
 void BeaconSpamActiveMenu::handleInput(InputEvent event, App* app) {
     switch (event) {
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

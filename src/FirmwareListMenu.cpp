@@ -61,7 +61,7 @@ void FirmwareListMenu::handleInput(InputEvent event, App* app) {
         {
             const auto& selected = displayItems_[selectedIndex_];
             if (selected.isBackButton) {
-                EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+                EventDispatcher::getInstance().publish(NavigateBackEvent());
             } else {
                 const auto& firmwares = app->getOtaManager().getAvailableFirmwares();
                 if(selected.firmwareIndex >= 0 && (size_t)selected.firmwareIndex < firmwares.size()) {
@@ -72,7 +72,7 @@ void FirmwareListMenu::handleInput(InputEvent event, App* app) {
         }
         break;
         case InputEvent::BTN_BACK_PRESS:
-            EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default: break;
     }

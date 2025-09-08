@@ -39,7 +39,7 @@ void OtaStatusMenu::handleInput(InputEvent event, App* app) {
     // 2. The process is idle (shouldn't happen, but safe).
     // 3. Web OTA is active but the upload hasn't started yet.
     if (state == OtaState::ERROR || state == OtaState::IDLE || (state == OtaState::WEB_ACTIVE && progress.totalBytes == 0) || state == OtaState::BASIC_ACTIVE) {
-        EventDispatcher::getInstance().publish(Event{EventType::NAVIGATE_BACK});
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 
