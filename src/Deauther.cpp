@@ -2,6 +2,8 @@
 #include "App.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include "Event.h"
+#include "EventDispatcher.h"
 
 // The bypass function for broadcast deauth
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
@@ -113,7 +115,7 @@ void Deauther::loop() {
             allTargets_ = app_->getWifiManager().getScannedNetworks();
             if (allTargets_.empty()) {
                 app_->showPopUp("Error", "No networks found.", nullptr, "OK", "", true);
-                app_->returnToMenu(MenuType::WIFI_ATTACKS_LIST);
+                EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
                 return;
             }
             currentTargetIndex_ = -1;

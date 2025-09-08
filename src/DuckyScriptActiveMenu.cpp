@@ -26,13 +26,13 @@ void DuckyScriptActiveMenu::onExit(App* app) {
 void DuckyScriptActiveMenu::onUpdate(App* app) {
     auto& ducky = app->getDuckyRunner();
     if (ducky.getState() == DuckyScriptRunner::State::FINISHED && millis() - entryTime_ > 1500) {
-        app->returnToMenu(MenuType::DUCKY_SCRIPT_LIST);
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
     }
 }
 
 void DuckyScriptActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->returnToMenu(MenuType::DUCKY_SCRIPT_LIST);
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
     }
 }
 

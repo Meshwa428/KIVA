@@ -13,6 +13,7 @@ enum class EventType {
     // Navigation System
     NAVIGATE_TO_MENU,
     NAVIGATE_BACK,
+    RETURN_TO_MENU,
 
     // WiFi Service
     WIFI_SCAN_REQUESTED,
@@ -48,6 +49,11 @@ struct NavigateToMenuEvent : public Event {
 
 struct NavigateBackEvent : public Event {
     NavigateBackEvent() { type = EventType::NAVIGATE_BACK; }
+};
+
+struct ReturnToMenuEvent : public Event {
+    MenuType menuType;
+    ReturnToMenuEvent(MenuType mt) : menuType(mt) { type = EventType::RETURN_TO_MENU; }
 };
 
 #endif // EVENT_H

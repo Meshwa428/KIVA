@@ -602,6 +602,7 @@ void App::setup()
     // Subscribe to the events the App cares about
     EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_TO_MENU, this);
     EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_BACK, this);
+    EventDispatcher::getInstance().subscribe(EventType::RETURN_TO_MENU, this);
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -720,6 +721,11 @@ void App::onEvent(const Event& event) {
         }
         case EventType::NAVIGATE_BACK: {
             changeMenu(MenuType::BACK, false);
+            break;
+        }
+        case EventType::RETURN_TO_MENU: {
+            const auto& navEvent = static_cast<const ReturnToMenuEvent&>(event);
+            returnToMenu(navEvent.menuType);
             break;
         }
         default:
