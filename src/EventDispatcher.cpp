@@ -1,4 +1,6 @@
 #include "EventDispatcher.h"
+#include "DebugUtils.h" // For logging
+#include "Logger.h"     // For logging
 #include <algorithm>
 
 EventDispatcher& EventDispatcher::getInstance() {

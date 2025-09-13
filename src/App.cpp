@@ -268,7 +268,8 @@ App::App() :
     beaconFileListDataSource_(),
     portalListDataSource_(),
     duckyScriptListDataSource_(),
-    musicPlayListDataSource_(),
+    musicLibraryDataSource_(),
+    songListDataSource_(),
     wifiAttacksDataSource_({
         {"Beacon Spam", IconType::BEACON, MenuType::BEACON_MODE_GRID},
         {"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_MODE_GRID},
@@ -441,7 +442,8 @@ App::App() :
     beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
     portalListMenu_("Select Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
     duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
-    musicPlayerListMenu_("Music Player", MenuType::MUSIC_PLAYER_LIST, &musicPlayListDataSource_),
+    musicLibraryMenu_("Music Library", MenuType::MUSIC_LIBRARY, &musicLibraryDataSource_),
+    songListMenu_("Songs", MenuType::SONG_LIST, &songListDataSource_),
     
     // New ListMenus using the generic source
     wifiAttacksMenu_("WiFi Attacks", MenuType::WIFI_ATTACKS_LIST, &wifiAttacksDataSource_),
@@ -596,7 +598,8 @@ void App::setup()
     menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
     
     // Music Player
-    menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
+    menuRegistry_[MenuType::MUSIC_LIBRARY] = &musicLibraryMenu_;
+    menuRegistry_[MenuType::SONG_LIST] = &songListMenu_;
     menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
 
     // Subscribe to the events the App cares about

@@ -5,3 +5,5 @@
 .vscode/launch.json
 .vscode/ipch
 sd_card
+lib
+test

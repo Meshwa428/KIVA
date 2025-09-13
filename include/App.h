@@ -47,13 +47,14 @@
 #include "ConfigManager.h"
 #include "UsbDriveMenu.h"
 #include "MusicPlayer.h"
-#include "MusicPlayListDataSource.h"
+#include "MusicLibraryDataSource.h"
+#include "SongListDataSource.h"
 #include "NowPlayingMenu.h"
 #include "MusicLibraryManager.h"
 #include "Logger.h"
 #include <HIDForge.h>
 #include "InfoMenu.h" 
-#include "ActionListDataSource.h" // Include our new generic data source
+#include "ActionListDataSource.h"
 #include "SnakeGameMenu.h"
 #include "GameAudio.h"
 #include "EventDispatcher.h"
@@ -92,6 +93,8 @@ public:
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
+    MusicLibraryDataSource& getMusicLibraryDataSource() { return musicLibraryDataSource_; }
+    SongListDataSource& getSongListDataSource() { return songListDataSource_; }
     GameAudio &getGameAudio() { return gameAudio_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
@@ -190,7 +193,8 @@ private:
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
     DuckyScriptListDataSource duckyScriptListDataSource_;
-    MusicPlayListDataSource musicPlayListDataSource_;
+    MusicLibraryDataSource musicLibraryDataSource_; // Renamed
+    SongListDataSource songListDataSource_;
     
     // New Generic DataSources
     ActionListDataSource wifiAttacksDataSource_;
@@ -210,7 +214,8 @@ private:
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
     ListMenu duckyScriptListMenu_;
-    ListMenu musicPlayerListMenu_;
+    ListMenu musicLibraryMenu_; // Renamed
+    ListMenu songListMenu_;     // Renamed
     
     // New ListMenus using the generic source
     ListMenu wifiAttacksMenu_;
