@@ -104,12 +104,20 @@ void HardwareManager::update()
     // Button repeats must be checked continuously to handle the "hold" duration.
     processButtonRepeats(); 
 
-    // --- PURE INTERRUPT-DRIVEN LOGIC ---
-    if (buttonInterruptFired_) {
+    // --- MODIFICATION START: Change 'if' to 'while' ---
+    // This is the complete fix. By using a 'while' loop, we ensure that if another
+    // interrupt fires while we are processing the first one (e.g., during a slow
+    // menu change), we will immediately loop again to process the newest button state.
+    // This prevents any interrupts from being lost.
+    while (buttonInterruptFired_) {
+    // --- MODIFICATION END ---
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");
         
-        // 1. Read the state of BOTH modules once. This captures the state
-        //    that caused the interrupt and resets the INT line on both chips.
+        // 1. Atomically clear the flag at the START of processing.
+        // This is crucial for detecting new interrupts that occur during processing.
+        buttonInterruptFired_ = false;
+
+        // 2. Read the state of BOTH modules once.
         selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
         uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
 
@@ -119,14 +127,13 @@ void HardwareManager::update()
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF0 (Encoder) Raw: 0x%02X", pcf0State);
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF1 (Nav Btns) Raw: 0x%02X", pcf1State);
         
-        // 2. Process the captured states. These functions no longer do I2C reads.
+        // 3. Process the captured states.
         processEncoder(pcf0State);
         processButton_PCF0(pcf0State);
         processButtons_PCF1(pcf1State);
         
-        // 3. Reset the flag, ready for the next interrupt.
-        buttonInterruptFired_ = false;
-        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled and reset.");
+        // The flag is no longer cleared at the end of the block.
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled. Re-checking flag for new events.");
     }
 }
 

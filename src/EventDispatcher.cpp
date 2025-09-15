@@ -19,8 +19,15 @@ void EventDispatcher::unsubscribe(EventType type, ISubscriber* subscriber) {
 
 void EventDispatcher::publish(const Event& event) {
     if (subscribers_.count(event.type)) {
-        for (auto* subscriber : subscribers_[event.type]) {
+        // --- MODIFICATION START: Create a safe copy of the subscriber list ---
+        // This prevents iterator invalidation if a handler calls subscribe() or unsubscribe().
+        auto subscribers_copy = subscribers_[event.type];
+        // --- MODIFICATION END ---
+
+        // --- MODIFICATION START: Iterate over the safe copy ---
+        for (auto* subscriber : subscribers_copy) {
             subscriber->onEvent(event);
         }
+        // --- MODIFICATION END ---
     }
 }

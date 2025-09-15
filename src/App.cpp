@@ -617,6 +617,24 @@ void App::setup()
 void App::loop()
 {
     hardware_.update();
+
+    // --- MODIFICATION START: Deferred Navigation Handling ---
+    // This block checks for pending navigation requests *after* hardware updates are complete.
+    if (pendingMenuChange_ != MenuType::NONE) {
+        changeMenu(pendingMenuChange_, isForwardNavPending_);
+        pendingMenuChange_ = MenuType::NONE;
+    } else if (backNavPending_) {
+        changeMenu(MenuType::BACK, false);
+        backNavPending_ = false;
+    } else if (pendingReturnMenu_ != MenuType::NONE) {
+        returnToMenu(pendingReturnMenu_);
+        pendingReturnMenu_ = MenuType::NONE;
+    } else if (pendingReplaceMenu_ != MenuType::NONE) {
+        replaceMenu(pendingReplaceMenu_);
+        pendingReplaceMenu_ = MenuType::NONE;
+    }
+    // --- MODIFICATION END ---
+
     wifiManager_.update();
     otaManager_.loop();
     gameAudio_.update();

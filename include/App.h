@@ -117,6 +117,14 @@ private:
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
     void logToSmallDisplay(const char *message, const char *status = nullptr);
 
+    // --- MODIFICATION START: Add pending navigation state variables ---
+    MenuType pendingMenuChange_{MenuType::NONE};
+    MenuType pendingReturnMenu_{MenuType::NONE};
+    MenuType pendingReplaceMenu_{MenuType::NONE};
+    bool isForwardNavPending_{true};
+    bool backNavPending_{false};
+    // --- MODIFICATION END ---
+
     float currentProgressBarFillPx_;
 
     static const int MAX_LOG_LINES_SMALL_DISPLAY = 4;
