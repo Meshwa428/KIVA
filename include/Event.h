@@ -2,7 +2,7 @@
 #define EVENT_H
 
 #include "Config.h" // For InputEvent and MenuType
-#include "WifiManager.h" // For WifiNetworkInfo
+
 #include <string>
 
 // --- Event Types ---

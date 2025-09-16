@@ -53,6 +53,7 @@ enum class MenuType
     BLE_SPAM_ACTIVE,
     DUCKY_SCRIPT_ACTIVE,
     JAMMING_ACTIVE,
+    ASSOCIATION_SLEEP_ACTIVE,
 
     // --- Settings Sub-menus ---
     SETTINGS_GRID,

@@ -8,7 +8,7 @@
 static void WiFiEventCallback(WiFiEvent_t event, WiFiEventInfo_t info);
 
 // Global pointer to the single WifiManager instance
-static WifiManager* wifiManagerInstance = nullptr;
+WifiManager* WifiManager::instance_ = nullptr;
 
 WifiManager::WifiManager() : 
     app_(nullptr),
@@ -18,7 +18,7 @@ WifiManager::WifiManager() :
     connectionStartTime_(0),
     scanCompletionCount_(0)
 {
-    wifiManagerInstance = this;
+    WifiManager::instance_ = this;
     ssidToConnect_[0] = '\0';
 }
 
@@ -191,6 +191,10 @@ uint32_t WifiManager::getScanCompletionCount() const {
     return scanCompletionCount_;
 }
 
+WifiManager* WifiManager::getInstance() {
+    return instance_;
+}
+
 void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     switch (event) {
         case ARDUINO_EVENT_WIFI_SCAN_DONE: {
@@ -325,7 +329,7 @@ void WifiManager::addOrUpdateKnownNetwork(const char* ssid, const char* password
 }
 
 void WiFiEventCallback(WiFiEvent_t event, WiFiEventInfo_t info) {
-    if (wifiManagerInstance) {
-        wifiManagerInstance->onWifiEvent(event, info);
+    if (WifiManager::getInstance()) {
+        WifiManager::getInstance()->onWifiEvent(event, info);
     }
 }

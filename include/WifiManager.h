@@ -60,6 +60,9 @@ public:
     void connectOpen(const char* ssid);
     void disconnect();
 
+    bool startStationScan(const WifiNetworkInfo& targetNetwork);
+    void stopStationScan();
+
     void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 
     // --- State Getters ---
@@ -71,6 +74,8 @@ public:
     String getCurrentSsid() const;
     String getStatusMessage() const;
     uint32_t getScanCompletionCount() const;
+
+    static WifiManager* getInstance();
 
 private:
     void loadKnownNetworks();
@@ -89,6 +94,7 @@ private:
     bool networksLoaded_ = false;
     char ssidToConnect_[33];
     String statusMessage_;
+    static WifiManager* instance_;
 };
 
 #endif // WIFI_MANAGER_H

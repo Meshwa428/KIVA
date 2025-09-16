@@ -5,6 +5,7 @@
 #include "WifiManager.h"
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
+#include <WiFi.h>
 #include <memory>
 #include <string>
 #include <vector> // Add vector include

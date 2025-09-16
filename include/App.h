@@ -58,6 +58,9 @@
 #include "SnakeGameMenu.h"
 #include "GameAudio.h"
 #include "EventDispatcher.h"
+#include "StationSniffer.h"
+#include "AssociationSleeper.h"
+#include "AssociationSleepActiveMenu.h"
 
 
 class App : public ISubscriber
@@ -96,6 +99,8 @@ public:
     MusicLibraryDataSource& getMusicLibraryDataSource() { return musicLibraryDataSource_; }
     SongListDataSource& getSongListDataSource() { return songListDataSource_; }
     GameAudio &getGameAudio() { return gameAudio_; }
+    StationSniffer &getStationSniffer() { return stationSniffer_; }
+    AssociationSleeper &getAssociationSleeper() { return associationSleeper_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -149,6 +154,8 @@ private:
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;
     GameAudio gameAudio_;
+    StationSniffer stationSniffer_;
+    AssociationSleeper associationSleeper_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -194,6 +201,7 @@ private:
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
     NowPlayingMenu nowPlayingMenu_;
+    AssociationSleepActiveMenu associationSleepActiveMenu_;
 
     // DataSources
     WifiListDataSource wifiListDataSource_;

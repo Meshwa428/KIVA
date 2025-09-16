@@ -39,6 +39,8 @@ App::App() :
     musicPlayer_(),
     musicLibraryManager_(),
     gameAudio_(),
+    stationSniffer_(),
+    associationSleeper_(),
 
     // --- Main Navigation Menus ---
     mainMenu_(),
@@ -261,6 +263,7 @@ App::App() :
     bleSpamActiveMenu_(),
     duckyScriptActiveMenu_(),
     nowPlayingMenu_(),
+    associationSleepActiveMenu_(),
 
     // --- DataSources ---
     wifiListDataSource_(),
@@ -276,6 +279,7 @@ App::App() :
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
+        {"Assoc Sleep", IconType::SKULL, MenuType::NONE},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiSniffDataSource_({
@@ -503,6 +507,8 @@ void App::setup()
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
+        {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
+        {"Assoc Sleeper",   [&](){ associationSleeper_.setup(this); }},
         {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
@@ -587,6 +593,7 @@ void App::setup()
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
+    menuRegistry_[MenuType::ASSOCIATION_SLEEP_ACTIVE] = &associationSleepActiveMenu_;
 
     // Utilities / Misc
     menuRegistry_[MenuType::USB_DRIVE_MODE] = &usbDriveMenu_;
@@ -648,6 +655,7 @@ void App::loop()
     probeFlooder_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
+    associationSleeper_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)
