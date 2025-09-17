@@ -9,7 +9,7 @@ public:
     void onEnter(App* app, bool isForwardNav) override;
     void onExit(App* app) override;
     void onUpdate(App* app) override;
-    void handleInput(App* app, InputEvent event) override;
+    void handleInput(InputEvent event, App* app) override;
     void draw(App* app, U8G2& display) override;
 
     const char* getTitle() const override { return "Sniffing..."; }

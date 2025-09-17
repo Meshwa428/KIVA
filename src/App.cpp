@@ -6,10 +6,16 @@
 #include "ProbeFlooder.h"
 #include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
+#include "Event.h"
 #include <algorithm>
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
+
+App& App::getInstance() {
+    static App instance;
+    return instance;
+}
 
 App::App() : 
     // --- Core Managers & Hardware ---
@@ -33,6 +39,8 @@ App::App() :
     musicPlayer_(),
     musicLibraryManager_(),
     gameAudio_(),
+    stationSniffer_(),
+    associationSleeper_(),
 
     // --- Main Navigation Menus ---
     mainMenu_(),
@@ -74,7 +82,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::BLE);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
@@ -84,7 +92,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
                     JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
@@ -94,7 +102,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::WIFI_NARROWBAND);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Wide Spec", IconType::TOOL_JAMMING, MenuType::NONE,
@@ -104,7 +112,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
                     JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, 
@@ -114,7 +122,7 @@ App::App() :
                     jammerMenu->setJammingModeToStart(JammingMode::ZIGBEE);
                     JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
                     jammerMenu->setJammingConfig(cfg);
-                    app->changeMenu(MenuType::JAMMING_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
         {"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
@@ -123,12 +131,12 @@ App::App() :
         {"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::USB);
-                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
             }},
         {"BLE Ducky", IconType::NET_BLUETOOTH, MenuType::NONE, 
             [](App* app){
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
-                app->changeMenu(MenuType::DUCKY_SCRIPT_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
             }},
         {"IR Blaster", IconType::UI_LASER, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "HOST", "IR Blaster placeholder selected."); }
@@ -141,7 +149,7 @@ App::App() :
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (menu) {
                     menu->setAttackParameters(BeaconSsidMode::RANDOM);
-                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BEACON_SPAM_ACTIVE));
                 }
             }
         },
@@ -154,7 +162,7 @@ App::App() :
                         return;
                     }
                     menu->setAttackParameters(BeaconSsidMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_CUMULATIVE);
-                    app->changeMenu(MenuType::BEACON_SPAM_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BEACON_SPAM_ACTIVE));
                 }
             }
         },
@@ -167,22 +175,22 @@ App::App() :
                 app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
                     else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
-                app->changeMenu(MenuType::WIFI_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }},
         {"Broadcast", IconType::SKULL, MenuType::NONE, 
             [](App *app) {
                 app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
                 auto& ds = app->getWifiListDataSource();
                 ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) app_cb->changeMenu(MenuType::DEAUTH_ACTIVE);
+                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
                      else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
                 });
                 ds.setScanOnEnter(true);
-                app->changeMenu(MenuType::WIFI_LIST);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
@@ -192,7 +200,7 @@ App::App() :
                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
                     menu->setAttackParameters(ProbeFloodMode::RANDOM);
-                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
             }
         },
@@ -205,11 +213,37 @@ App::App() :
                         return;
                     }
                     menu->setAttackParameters(ProbeFloodMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_SESSION);
-                    app->changeMenu(MenuType::PROBE_FLOOD_ACTIVE);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    associationSleepModeMenu_("Association Sleep Mode", MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL, {
+        {"Targeted", IconType::TARGET, MenuType::NONE, 
+            [](App* app) {
+                auto& ds = app->getWifiListDataSource();
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getAssociationSleeper().start(selectedNetwork)) {
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+            }
+        },
+        {"Broadcast", IconType::SKULL, MenuType::NONE, 
+            [](App* app) {
+                if (app->getAssociationSleeper().start()) {
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+                } else {
+                    app->showPopUp("Error", "Failed to start broadcast attack.", nullptr, "OK", "", true);
+                }
+            }
+        },
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
         {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
         {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
@@ -220,7 +254,7 @@ App::App() :
     firmwareUpdateGrid_("Update", MenuType::FIRMWARE_UPDATE_GRID, {
         {"Web Update", IconType::FIRMWARE_UPDATE, MenuType::NONE,
             [](App *app) {
-                if (app->getOtaManager().startWebUpdate()) app->changeMenu(MenuType::OTA_STATUS);
+                if (app->getOtaManager().startWebUpdate()) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
                 else app->showPopUp("Error", "Failed to start Web AP.", nullptr, "OK", "", true);
             }
         },
@@ -255,6 +289,7 @@ App::App() :
     bleSpamActiveMenu_(),
     duckyScriptActiveMenu_(),
     nowPlayingMenu_(),
+    associationSleepActiveMenu_(),
 
     // --- DataSources ---
     wifiListDataSource_(),
@@ -262,13 +297,15 @@ App::App() :
     beaconFileListDataSource_(),
     portalListDataSource_(),
     duckyScriptListDataSource_(),
-    musicPlayListDataSource_(),
+    musicLibraryDataSource_(),
+    songListDataSource_(),
     wifiAttacksDataSource_({
         {"Beacon Spam", IconType::BEACON, MenuType::BEACON_MODE_GRID},
         {"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_MODE_GRID},
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiSniffDataSource_({
@@ -279,27 +316,27 @@ App::App() :
     bleAttacksDataSource_({
         {"Apple Juice", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::APPLE_JUICE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Sour Apple", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::SOUR_APPLE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Android", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::GOOGLE); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Samsung", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::SAMSUNG); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Swift Pair", IconType::BEACON, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::MICROSOFT); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Tutti-Frutti", IconType::SKULL, MenuType::NONE, [](App* app){
             auto* menu = static_cast<BleSpamActiveMenu*>(app->getMenu(MenuType::BLE_SPAM_ACTIVE));
-            if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); app->changeMenu(MenuType::BLE_SPAM_ACTIVE); }
+            if(menu) { menu->setSpamModeToStart(BleSpamMode::ALL); EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BLE_SPAM_ACTIVE)); }
         }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
@@ -375,14 +412,75 @@ App::App() :
         {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST},
         MenuItem{
             "Hop Delay", IconType::UI_REFRESH, MenuType::NONE, nullptr, true,
+            // --- THIS IS THE MODIFIED LAMBDA ---
             [](App* app) -> std::string {
-                char buf[16]; snprintf(buf, sizeof(buf), "< %dms >", app->getConfigManager().getSettings().channelHopDelayMs); return std::string(buf);
+                // Get the value in milliseconds
+                int ms = app->getConfigManager().getSettings().channelHopDelayMs;
+                // Convert to a float for seconds
+                float seconds = (float)ms / 1000.0f;
+                char buf[16];
+                // Use "%.1f" to format with one decimal place
+                snprintf(buf, sizeof(buf), "< %.1fs >", seconds); 
+                return std::string(buf);
             },
+            // The adjustValue lambda remains the same, as it operates on the raw millisecond value
             [](App* app, int dir) {
                 auto& settings = app->getConfigManager().getSettings();
-                int newDelay = settings.channelHopDelayMs + (dir * 100);
-                if (newDelay < 100) newDelay = 100; if (newDelay > 5000) newDelay = 5000;
+                // We'll adjust the step to be 50ms for finer control
+                int newDelay = settings.channelHopDelayMs + (dir * 50);
+                if (newDelay < 50) newDelay = 50;     // Minimum 0.05s
+                if (newDelay > 5000) newDelay = 5000; // Maximum 5.0s
                 settings.channelHopDelayMs = newDelay;
+                app->getConfigManager().saveSettings();
+            }
+        },
+        // --- NEW SLIDER FOR ATTACK COOLDOWN ---
+        MenuItem{
+            "Atk Cooldown", IconType::SKULL, MenuType::NONE, nullptr, true,
+            // The display lambda is already correct and does not need changes.
+            [](App* app) -> std::string {
+                int ms = app->getConfigManager().getSettings().attackCooldownMs;
+                char buf[16];
+                if (ms < 1000) {
+                    float seconds = (float)ms / 1000.0f;
+                    snprintf(buf, sizeof(buf), "< %.1fs >", seconds);
+                } 
+                else {
+                    int seconds = ms / 1000;
+                    snprintf(buf, sizeof(buf), "< %ds >", seconds);
+                }
+                return std::string(buf);
+            },
+            // This adjustValue lambda now implements the correct symmetrical stepping logic.
+            [](App* app, int dir) {
+                auto& settings = app->getConfigManager().getSettings();
+                int currentCooldown = settings.attackCooldownMs;
+                int newCooldown = currentCooldown;
+
+                const int minVal = 100;    // 0.1s
+                const int maxVal = 30000;  // 30s
+                const int smallStep = 100; // 0.1s
+                const int largeStep = 1000; // 1.0s
+
+                if (dir > 0) { // Increasing value
+                    if (currentCooldown < 1000) {
+                        newCooldown += smallStep;
+                    } else {
+                        newCooldown += largeStep;
+                    }
+                } else { // Decreasing value
+                    if (currentCooldown > 1000) {
+                        newCooldown -= largeStep;
+                    } else {
+                        newCooldown -= smallStep;
+                    }
+                }
+                
+                // Clamp the new value within the min/max bounds
+                if (newCooldown < minVal) newCooldown = minVal;
+                if (newCooldown > maxVal) newCooldown = maxVal;
+                
+                settings.attackCooldownMs = newCooldown;
                 app->getConfigManager().saveSettings();
             }
         },
@@ -397,12 +495,12 @@ App::App() :
                             auto& settings = cb_app->getConfigManager().getSettings();
                             strlcpy(settings.otaPassword, new_password, sizeof(settings.otaPassword));
                             cb_app->getConfigManager().saveSettings();
-                            cb_app->replaceMenu(MenuType::CONNECTIVITY_SETTINGS_LIST);
+                            EventDispatcher::getInstance().publish(ReplaceMenuEvent(MenuType::CONNECTIVITY_SETTINGS_LIST));
                             cb_app->showPopUp("Success", "Password Saved.", nullptr, "OK", "", true);
                         }
                     }, false, app->getConfigManager().getSettings().otaPassword
                 );
-                app->changeMenu(MenuType::TEXT_INPUT);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
             }
         },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
@@ -435,7 +533,8 @@ App::App() :
     beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
     portalListMenu_("Select Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
     duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
-    musicPlayerListMenu_("Music Player", MenuType::MUSIC_PLAYER_LIST, &musicPlayListDataSource_),
+    musicLibraryMenu_("Music Library", MenuType::MUSIC_LIBRARY, &musicLibraryDataSource_),
+    songListMenu_("Songs", MenuType::SONG_LIST, &songListDataSource_),
     
     // New ListMenus using the generic source
     wifiAttacksMenu_("WiFi Attacks", MenuType::WIFI_ATTACKS_LIST, &wifiAttacksDataSource_),
@@ -495,6 +594,8 @@ void App::setup()
         {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
         {"Music Player",    [&](){ musicPlayer_.setup(this); }},
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
+        {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
+        {"Assoc Sleeper",   [&](){ associationSleeper_.setup(this); }},
         {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
@@ -550,6 +651,7 @@ void App::setup()
     menuRegistry_[MenuType::BEACON_MODE_GRID] = &beaconModeMenu_;
     menuRegistry_[MenuType::DEAUTH_MODE_GRID] = &deauthModeMenu_;
     menuRegistry_[MenuType::PROBE_FLOOD_MODE_GRID] = &probeFloodModeMenu_;
+    menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL] = &associationSleepModeMenu_;
 
     // Settings Sub-menus
     menuRegistry_[MenuType::SETTINGS_GRID] = &settingsGridMenu_;
@@ -579,6 +681,7 @@ void App::setup()
     menuRegistry_[MenuType::BLE_SPAM_ACTIVE] = &bleSpamActiveMenu_;
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
+    menuRegistry_[MenuType::ASSOCIATION_SLEEP_ACTIVE] = &associationSleepActiveMenu_;
 
     // Utilities / Misc
     menuRegistry_[MenuType::USB_DRIVE_MODE] = &usbDriveMenu_;
@@ -590,8 +693,15 @@ void App::setup()
     menuRegistry_[MenuType::WIFI_CONNECTION_STATUS] = &connectionStatusMenu_;
     
     // Music Player
-    menuRegistry_[MenuType::MUSIC_PLAYER_LIST] = &musicPlayerListMenu_;
+    menuRegistry_[MenuType::MUSIC_LIBRARY] = &musicLibraryMenu_;
+    menuRegistry_[MenuType::SONG_LIST] = &songListMenu_;
     menuRegistry_[MenuType::NOW_PLAYING] = &nowPlayingMenu_;
+
+    // Subscribe to the events the App cares about
+    EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_TO_MENU, this);
+    EventDispatcher::getInstance().subscribe(EventType::NAVIGATE_BACK, this);
+    EventDispatcher::getInstance().subscribe(EventType::RETURN_TO_MENU, this);
+    EventDispatcher::getInstance().subscribe(EventType::REPLACE_MENU, this);
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
@@ -602,6 +712,24 @@ void App::setup()
 void App::loop()
 {
     hardware_.update();
+
+    // --- MODIFICATION START: Deferred Navigation Handling ---
+    // This block checks for pending navigation requests *after* hardware updates are complete.
+    if (pendingMenuChange_ != MenuType::NONE) {
+        changeMenu(pendingMenuChange_, isForwardNavPending_);
+        pendingMenuChange_ = MenuType::NONE;
+    } else if (backNavPending_) {
+        changeMenu(MenuType::BACK, false);
+        backNavPending_ = false;
+    } else if (pendingReturnMenu_ != MenuType::NONE) {
+        returnToMenu(pendingReturnMenu_);
+        pendingReturnMenu_ = MenuType::NONE;
+    } else if (pendingReplaceMenu_ != MenuType::NONE) {
+        replaceMenu(pendingReplaceMenu_);
+        pendingReplaceMenu_ = MenuType::NONE;
+    }
+    // --- MODIFICATION END ---
+
     wifiManager_.update();
     otaManager_.loop();
     gameAudio_.update();
@@ -615,6 +743,7 @@ void App::loop()
     probeFlooder_.loop();
     bleSpammer_.loop();
     duckyRunner_.loop();
+    associationSleeper_.loop();
 
     bool wifiIsRequired = false; 
     if (currentMenu_)
@@ -622,7 +751,8 @@ void App::loop()
         MenuType currentType = currentMenu_->getMenuType();
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
-            currentType == MenuType::WIFI_CONNECTION_STATUS)
+            currentType == MenuType::WIFI_CONNECTION_STATUS ||
+            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE)
         {
             wifiIsRequired = true;
         }
@@ -640,7 +770,8 @@ void App::loop()
         karmaAttacker_.isSniffing() ||
         probeFlooder_.isActive() ||
         probeSniffer_.isActive() ||
-        handshakeCapture_.isActive())
+        handshakeCapture_.isActive() ||
+        associationSleeper_.isActive())
     {
         wifiIsRequired = true;
     }
@@ -653,13 +784,7 @@ void App::loop()
         wifiManager_.setHardwareState(false);
     }
 
-    InputEvent event = hardware_.getNextInputEvent();
-    if (event != InputEvent::NONE) {
-        LOG(LogLevel::DEBUG, "Input", false, "Event: %s", DebugUtils::inputEventToString(event));
-        if (currentMenu_ != nullptr) {
-            currentMenu_->handleInput(this, event);
-        }
-    }
+    // Input is now handled by the event system. The old polling logic is removed.
 
     if (currentMenu_)
     {
@@ -705,6 +830,33 @@ void App::loop()
 
     mainDisplay.sendBuffer();
     drawSecondaryDisplay();
+}
+
+void App::onEvent(const Event& event) {
+    switch (event.type) {
+        case EventType::NAVIGATE_TO_MENU: {
+            const auto& navEvent = static_cast<const NavigateToMenuEvent&>(event);
+            changeMenu(navEvent.menuType, navEvent.isForwardNav);
+            break;
+        }
+        case EventType::NAVIGATE_BACK: {
+            changeMenu(MenuType::BACK, false);
+            break;
+        }
+        case EventType::RETURN_TO_MENU: {
+            const auto& navEvent = static_cast<const ReturnToMenuEvent&>(event);
+            returnToMenu(navEvent.menuType);
+            break;
+        }
+        case EventType::REPLACE_MENU: {
+            const auto& navEvent = static_cast<const ReplaceMenuEvent&>(event);
+            replaceMenu(navEvent.menuType);
+            break;
+        }
+        default:
+            // App doesn't handle other events
+            break;
+    }
 }
 
 void App::changeMenu(MenuType type, bool isForwardNav) {

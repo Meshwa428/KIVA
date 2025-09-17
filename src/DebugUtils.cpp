@@ -48,7 +48,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::USB_DRIVE_MODE: return "USB_DRIVE_MODE";
         case MenuType::TEXT_INPUT: return "TEXT_INPUT";
         case MenuType::WIFI_CONNECTION_STATUS: return "WIFI_CONNECTION_STATUS";
-        case MenuType::MUSIC_PLAYER_LIST: return "MUSIC_PLAYER_LIST";
+        case MenuType::MUSIC_LIBRARY: return "MUSIC_PLAYER_LIST";
+        case MenuType::SONG_LIST: return "SONG_LIST";
         case MenuType::NOW_PLAYING: return "NOW_PLAYING";
         case MenuType::INFO_MENU: return "INFO_MENU";
         default: return "UNKNOWN_MENU";

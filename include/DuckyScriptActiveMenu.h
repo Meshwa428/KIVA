@@ -11,7 +11,7 @@ public:
     void onUpdate(App* app) override;
     void onExit(App* app) override;
     void draw(App* app, U8G2& display) override;
-    void handleInput(App* app, InputEvent event) override;
+    void handleInput(InputEvent event, App* app) override;
 
     const char* getTitle() const override { return "Ducky Script"; }
     MenuType getMenuType() const override { return MenuType::DUCKY_SCRIPT_ACTIVE; }

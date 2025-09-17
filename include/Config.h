@@ -34,6 +34,7 @@ enum class MenuType
     BEACON_MODE_GRID,
     DEAUTH_MODE_GRID,
     PROBE_FLOOD_MODE_GRID,
+    ASSOCIATION_SLEEP_MODE_CAROUSEL,
 
     // --- Core Attack/Tool Screens ---
     WIFI_LIST, // Re-used for multiple purposes
@@ -53,6 +54,7 @@ enum class MenuType
     BLE_SPAM_ACTIVE,
     DUCKY_SCRIPT_ACTIVE,
     JAMMING_ACTIVE,
+    ASSOCIATION_SLEEP_ACTIVE,
 
     // --- Settings Sub-menus ---
     SETTINGS_GRID,
@@ -71,7 +73,8 @@ enum class MenuType
     USB_DRIVE_MODE,
     TEXT_INPUT,
     WIFI_CONNECTION_STATUS,
-    MUSIC_PLAYER_LIST,
+    MUSIC_LIBRARY,
+    SONG_LIST,
     NOW_PLAYING,
     INFO_MENU
 };
@@ -151,7 +154,14 @@ namespace Battery
     static constexpr unsigned long CHECK_INTERVAL_MS = 1000;
 }
 
-// --- NEW: Centralized SD Card Path Definitions ---
+// --- Centralized Channel Definitions ---
+namespace Channels {
+    // The optimal channel hopping order for 2.4GHz WiFi
+    static constexpr int WIFI_2_4GHZ[] = {1, 6, 11, 2, 7, 3, 8, 4, 9, 5, 10, 12, 13};
+    static constexpr size_t WIFI_2_4GHZ_COUNT = sizeof(WIFI_2_4GHZ) / sizeof(int);
+}
+
+// --- Centralized SD Card Path Definitions ---
 namespace SD_ROOT
 {
     // Top-level directories

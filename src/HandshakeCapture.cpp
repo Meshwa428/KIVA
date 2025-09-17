@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "Deauther.h"
+#include "Config.h"
 
 // Static instance pointer
 HandshakeCapture* HandshakeCapture::instance_ = nullptr;
@@ -116,18 +117,17 @@ void HandshakeCapture::stop() {
     app_->getHardwareManager().setPerformanceMode(false);
 }
 
-static const int CHANNELS_TO_SNIFF[] = {1, 6, 11, 2, 7, 3, 8, 4, 9, 5, 10, 12, 13};
-
 void HandshakeCapture::loop() {
     if (!isActive_) return;
 
     if (currentConfig_.type == HandshakeCaptureType::SCANNER) {
         if (millis() - lastChannelHopTime_ > channelHopDelayMs_) {
             lastChannelHopTime_ = millis();
-            channelHopIndex_ = (channelHopIndex_ + 1) % (sizeof(CHANNELS_TO_SNIFF) / sizeof(int));
-            esp_wifi_set_channel(CHANNELS_TO_SNIFF[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
+            // THE FIX: Use the central channel list and count
+            channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
+            esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
         }
-    } else { 
+    } else {
         switch (targetedState_) {
             case TargetedAttackState::WAITING_FOR_DEAUTH:
                 if (millis() - lastDeauthTime_ > INITIAL_DEAUTH_DELAY_MS) {

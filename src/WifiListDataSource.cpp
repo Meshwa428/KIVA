@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "WifiListDataSource.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -109,7 +111,7 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
             menu->reloadData(app);
             break;
         case ListItemType::BACK:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         case ListItemType::NETWORK: {
             // --- RENAMED ---
@@ -134,19 +136,19 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
 
                 if (netInfo.isSecure) {
                     if (wifi.tryConnectKnown(netInfo.ssid)) {
-                        app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                     } else {
                         TextInputMenu& textMenu = app->getTextInputMenu();
                         textMenu.configure("Enter Password",
                             [](App* cb_app, const char* password) {
                                 cb_app->getWifiManager().connectWithPassword(password);
-                                cb_app->replaceMenu(MenuType::WIFI_CONNECTION_STATUS);
+                                EventDispatcher::getInstance().publish(ReplaceMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                             }, true);
-                        app->changeMenu(MenuType::TEXT_INPUT);
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
                     }
                 } else {
                     wifi.connectOpen(netInfo.ssid);
-                    app->changeMenu(MenuType::WIFI_CONNECTION_STATUS);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                 }
             }
             break;

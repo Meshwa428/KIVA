@@ -1,3 +1,7 @@
+#include "Event.h"
+#include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ProbeFloodActiveMenu.h"
 #include "App.h"
 
@@ -9,6 +13,7 @@ void ProbeFloodActiveMenu::setAttackParameters(ProbeFloodMode mode, const std::s
 }
 
 void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(true);
     auto& flooder = app->getProbeFlooder();
     auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
@@ -16,21 +21,22 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
     if (!flooder.start(std::move(rfLock), modeToStart_, filePathToUse_)) {
         app->getHardwareManager().setPerformanceMode(false);
         app->showPopUp("Error", "Failed to start attack.", [](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
     }
 }
 
 void ProbeFloodActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(false);
     app->getProbeFlooder().stop();
 }
 
 void ProbeFloodActiveMenu::onUpdate(App* app) {}
 
-void ProbeFloodActiveMenu::handleInput(App* app, InputEvent event) {
+void ProbeFloodActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 

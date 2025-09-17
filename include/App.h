@@ -47,26 +47,35 @@
 #include "ConfigManager.h"
 #include "UsbDriveMenu.h"
 #include "MusicPlayer.h"
-#include "MusicPlayListDataSource.h"
+#include "MusicLibraryDataSource.h"
+#include "SongListDataSource.h"
 #include "NowPlayingMenu.h"
 #include "MusicLibraryManager.h"
 #include "Logger.h"
 #include <HIDForge.h>
 #include "InfoMenu.h" 
-#include "ActionListDataSource.h" // Include our new generic data source
+#include "ActionListDataSource.h"
 #include "SnakeGameMenu.h"
 #include "GameAudio.h"
+#include "EventDispatcher.h"
+#include "StationSniffer.h"
+#include "AssociationSleeper.h"
+#include "AssociationSleepActiveMenu.h"
 
-class App
+
+class App : public ISubscriber
 {
 public:
-    App();
+    static App& getInstance();
+
+    // Deleted copy constructor and assignment operator
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
+
     void setup();
     void loop();
 
-    void changeMenu(MenuType type, bool isForwardNav = true);
-    void replaceMenu(MenuType type);
-    void returnToMenu(MenuType type);
+    void onEvent(const Event& event) override;
 
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
                    const std::string &confirmText = "OK", const std::string &cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
@@ -87,22 +96,39 @@ public:
     ConfigManager &getConfigManager() { return configManager_; }
     MusicPlayer &getMusicPlayer() { return musicPlayer_; }
     MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
+    MusicLibraryDataSource& getMusicLibraryDataSource() { return musicLibraryDataSource_; }
+    SongListDataSource& getSongListDataSource() { return songListDataSource_; }
     GameAudio &getGameAudio() { return gameAudio_; }
+    StationSniffer &getStationSniffer() { return stationSniffer_; }
+    AssociationSleeper &getAssociationSleeper() { return associationSleeper_; }
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
 
     MenuType getPreviousMenuType() const;
-    void clearInputQueue() { hardware_.clearInputQueue(); }
 
     void drawStatusBar();
 
 private:
+    App(); // Private constructor
+
+    void changeMenu(MenuType type, bool isForwardNav = true);
+    void replaceMenu(MenuType type);
+    void returnToMenu(MenuType type);
+
     void drawSecondaryDisplay();
 
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
     void logToSmallDisplay(const char *message, const char *status = nullptr);
+
+    // --- MODIFICATION START: Add pending navigation state variables ---
+    MenuType pendingMenuChange_{MenuType::NONE};
+    MenuType pendingReturnMenu_{MenuType::NONE};
+    MenuType pendingReplaceMenu_{MenuType::NONE};
+    bool isForwardNavPending_{true};
+    bool backNavPending_{false};
+    // --- MODIFICATION END ---
 
     float currentProgressBarFillPx_;
 
@@ -128,6 +154,8 @@ private:
     MusicPlayer musicPlayer_;
     MusicLibraryManager musicLibraryManager_;
     GameAudio gameAudio_;
+    StationSniffer stationSniffer_;
+    AssociationSleeper associationSleeper_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;
@@ -150,6 +178,7 @@ private:
     GridMenu beaconModeMenu_;
     GridMenu deauthModeMenu_;
     GridMenu probeFloodModeMenu_;
+    CarouselMenu associationSleepModeMenu_;
     GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
 
@@ -173,6 +202,7 @@ private:
     BleSpamActiveMenu bleSpamActiveMenu_;
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
     NowPlayingMenu nowPlayingMenu_;
+    AssociationSleepActiveMenu associationSleepActiveMenu_;
 
     // DataSources
     WifiListDataSource wifiListDataSource_;
@@ -180,7 +210,8 @@ private:
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
     DuckyScriptListDataSource duckyScriptListDataSource_;
-    MusicPlayListDataSource musicPlayListDataSource_;
+    MusicLibraryDataSource musicLibraryDataSource_; // Renamed
+    SongListDataSource songListDataSource_;
     
     // New Generic DataSources
     ActionListDataSource wifiAttacksDataSource_;
@@ -200,7 +231,8 @@ private:
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
     ListMenu duckyScriptListMenu_;
-    ListMenu musicPlayerListMenu_;
+    ListMenu musicLibraryMenu_; // Renamed
+    ListMenu songListMenu_;     // Renamed
     
     // New ListMenus using the generic source
     ListMenu wifiAttacksMenu_;

@@ -143,10 +143,11 @@ void ConfigManager::loadFromSdCard() {
 
     settings_.mainDisplayBrightness = doc["main_brightness"] | 255;
     settings_.auxDisplayBrightness = doc["aux_brightness"] | 255;
-    settings_.volume = doc["volume"] | 100; // Load volume, default to 100%
+    settings_.volume = doc["volume"] | 100;
     settings_.keyboardLayoutIndex = doc["kb_layout_idx"] | 0;
     strlcpy(settings_.otaPassword, doc["ota_password"] | "KIVA_PASS", sizeof(settings_.otaPassword));
     settings_.channelHopDelayMs = doc["channel_hop_delay_ms"] | 500;
+    settings_.attackCooldownMs = doc["attack_cooldown_ms"] | 30000; // Default to 30 seconds
     
     if ((size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         settings_.keyboardLayoutIndex = 0;
@@ -160,10 +161,11 @@ void ConfigManager::saveToSdCard() {
     JsonDocument doc;
     doc["main_brightness"] = settings_.mainDisplayBrightness;
     doc["aux_brightness"] = settings_.auxDisplayBrightness;
-    doc["volume"] = settings_.volume; // Save volume
+    doc["volume"] = settings_.volume;
     doc["kb_layout_idx"] = settings_.keyboardLayoutIndex;
     doc["ota_password"] = settings_.otaPassword;
     doc["channel_hop_delay_ms"] = settings_.channelHopDelayMs;
+    doc["attack_cooldown_ms"] = settings_.attackCooldownMs;
 
     String jsonStr;
     serializeJson(doc, jsonStr);
@@ -173,10 +175,11 @@ void ConfigManager::saveToSdCard() {
 void ConfigManager::useDefaultSettings() {
     settings_.mainDisplayBrightness = 255;
     settings_.auxDisplayBrightness = 255;
-    settings_.volume = 100; // Default volume to 100%
+    settings_.volume = 100;
     settings_.keyboardLayoutIndex = 0; 
     strcpy(settings_.otaPassword, "KIVA_PASS");
     settings_.channelHopDelayMs = 500;
+    settings_.attackCooldownMs = 30000; // 30 seconds
 }
 
 bool ConfigManager::reloadFromSdCard() {

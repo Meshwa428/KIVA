@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "HandshakeCaptureMenu.h"
 #include "App.h"
 
@@ -7,7 +9,7 @@ HandshakeCaptureMenu::HandshakeCaptureMenu() : GridMenu("Handshake Sniffer", Men
     MenuItem{"EAPOL (Scan)", IconType::NET_WIFI, MenuType::NONE,
         [](App* app) {
             app->getHandshakeCapture().prepare(HandshakeCaptureMode::EAPOL, HandshakeCaptureType::SCANNER);
-            app->changeMenu(MenuType::HANDSHAKE_CAPTURE_ACTIVE);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));
         }},
     MenuItem{"EAPOL (Target)", IconType::TARGET, MenuType::NONE,
         [](App* app) {
@@ -16,16 +18,16 @@ HandshakeCaptureMenu::HandshakeCaptureMenu() : GridMenu("Handshake Sniffer", Men
             auto& ds = app->getWifiListDataSource();
             ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork) {
                 app_cb->getHandshakeCapture().start(selectedNetwork);
-                app_cb->changeMenu(MenuType::HANDSHAKE_CAPTURE_ACTIVE);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));
             });
 
             ds.setScanOnEnter(true);
-            app->changeMenu(MenuType::WIFI_LIST);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
         }},
     MenuItem{"PMKID (Scan)", IconType::NET_WIFI, MenuType::NONE,
         [](App* app) {
             app->getHandshakeCapture().prepare(HandshakeCaptureMode::PMKID, HandshakeCaptureType::SCANNER);
-            app->changeMenu(MenuType::HANDSHAKE_CAPTURE_ACTIVE);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));
         }},
     MenuItem{"PMKID (Target)", IconType::TARGET, MenuType::NONE,
         [](App* app) {
@@ -34,11 +36,11 @@ HandshakeCaptureMenu::HandshakeCaptureMenu() : GridMenu("Handshake Sniffer", Men
             auto& ds = app->getWifiListDataSource();
             ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork) {
                 app_cb->getHandshakeCapture().start(selectedNetwork);
-                app_cb->changeMenu(MenuType::HANDSHAKE_CAPTURE_ACTIVE);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));
             });
 
             ds.setScanOnEnter(true);
-            app->changeMenu(MenuType::WIFI_LIST);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
         }},
     MenuItem{"Back", IconType::NAV_BACK, MenuType::BACK}
 }, 2) {}

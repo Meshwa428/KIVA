@@ -1,4 +1,6 @@
 #include "HardwareManager.h"
+#include "EventDispatcher.h" // For publishing events
+#include "Event.h"           // For event data structures
 #include <Arduino.h>
 #include <numeric>
 #include <WiFi.h>
@@ -102,12 +104,20 @@ void HardwareManager::update()
     // Button repeats must be checked continuously to handle the "hold" duration.
     processButtonRepeats(); 
 
-    // --- PURE INTERRUPT-DRIVEN LOGIC ---
-    if (buttonInterruptFired_) {
+    // --- MODIFICATION START: Change 'if' to 'while' ---
+    // This is the complete fix. By using a 'while' loop, we ensure that if another
+    // interrupt fires while we are processing the first one (e.g., during a slow
+    // menu change), we will immediately loop again to process the newest button state.
+    // This prevents any interrupts from being lost.
+    while (buttonInterruptFired_) {
+    // --- MODIFICATION END ---
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");
         
-        // 1. Read the state of BOTH modules once. This captures the state
-        //    that caused the interrupt and resets the INT line on both chips.
+        // 1. Atomically clear the flag at the START of processing.
+        // This is crucial for detecting new interrupts that occur during processing.
+        buttonInterruptFired_ = false;
+
+        // 2. Read the state of BOTH modules once.
         selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
         uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
 
@@ -117,14 +127,13 @@ void HardwareManager::update()
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF0 (Encoder) Raw: 0x%02X", pcf0State);
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF1 (Nav Btns) Raw: 0x%02X", pcf1State);
         
-        // 2. Process the captured states. These functions no longer do I2C reads.
+        // 3. Process the captured states.
         processEncoder(pcf0State);
         processButton_PCF0(pcf0State);
         processButtons_PCF1(pcf1State);
         
-        // 3. Reset the flag, ready for the next interrupt.
-        buttonInterruptFired_ = false;
-        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled and reset.");
+        // The flag is no longer cleared at the end of the block.
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled. Re-checking flag for new events.");
     }
 }
 
@@ -493,30 +502,6 @@ U8G2 &HardwareManager::getSmallDisplay()
     return u8g2_small_;
 }
 
-InputEvent HardwareManager::getNextInputEvent()
-{
-    if (inputQueue_.empty())
-    {
-        return InputEvent::NONE;
-    }
-    InputEvent event = inputQueue_.front();
-    inputQueue_.erase(inputQueue_.begin());
-    return event;
-}
-
-void HardwareManager::clearInputQueue() {
-    inputQueue_.clear();
-    
-    unsigned long currentTime = millis();
-    for (int i = 0; i < 8; ++i) {
-        prevDbncHState0_[i] = true;
-        lastDbncT0_[i] = currentTime;
-        prevDbncHState1_[i] = true;
-        lastDbncT1_[i] = currentTime;
-        isBtnHeld1_[i] = false;
-    }
-}
-
 void HardwareManager::selectMux(uint8_t channel)
 {
     static uint8_t lastSelectedChannel = 255;
@@ -589,12 +574,12 @@ void HardwareManager::processEncoder(uint8_t pcf0State)
 
     if (encConsecutiveValid_ >= requiredConsecutive)
     {
-        inputQueue_.push_back(InputEvent::ENCODER_CW);
+        EventDispatcher::getInstance().publish(InputEventData(InputEvent::ENCODER_CW));
         encConsecutiveValid_ = 0;
     }
     else if (encConsecutiveValid_ <= -requiredConsecutive)
     {
-        inputQueue_.push_back(InputEvent::ENCODER_CCW);
+        EventDispatcher::getInstance().publish(InputEventData(InputEvent::ENCODER_CCW));
         encConsecutiveValid_ = 0;
     }
 }
@@ -617,7 +602,7 @@ void HardwareManager::processButton_PCF0(uint8_t pcf0State)
             prevDbncHState0_[pin] = rawState;
             // If the new state is PRESSED (LOW, which is false)...
             if (rawState == false) {
-                inputQueue_.push_back(InputEvent::BTN_ENCODER_PRESS);
+                EventDispatcher::getInstance().publish(InputEventData(InputEvent::BTN_ENCODER_PRESS));
             }
         }
     }
@@ -644,7 +629,7 @@ void HardwareManager::processButtons_PCF1(uint8_t pcf1State)
                 prevDbncHState1_[pin] = rawState;
 
                 if (rawState == false) { // PRESSED
-                    inputQueue_.push_back(mapPcf1PinToEvent(pin));
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
                     isBtnHeld1_[pin] = true;
                     btnHoldStartT1_[pin] = currentTime;
                     lastRepeatT1_[pin] = currentTime;
@@ -669,8 +654,7 @@ void HardwareManager::processButtonRepeats()
             if (currentTime - btnHoldStartT1_[pin] > REPEAT_INIT_DELAY_MS &&
                 currentTime - lastRepeatT1_[pin] > REPEAT_INTERVAL_MS)
             {
-
-                inputQueue_.push_back(mapPcf1PinToEvent(pin));
+                EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
                 lastRepeatT1_[pin] = currentTime;
             }
         }

@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "KarmaActiveMenu.h"
 #include "App.h"
 #include "KarmaAttacker.h"
@@ -11,6 +13,7 @@ KarmaActiveMenu::KarmaActiveMenu() :
 {}
 
 void KarmaActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         topDisplayIndex_ = 0;
         selectedIndex_ = 0;
@@ -21,6 +24,7 @@ void KarmaActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void KarmaActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     auto& karma = app->getKarmaAttacker();
     // Stop whichever mode is active
     if (karma.isSniffing()) {
@@ -45,18 +49,18 @@ void KarmaActiveMenu::onUpdate(App* app) {
     }
 }
 
-void KarmaActiveMenu::handleInput(App* app, InputEvent event) {
+void KarmaActiveMenu::handleInput(InputEvent event, App* app) {
     auto& karma = app->getKarmaAttacker();
 
     if (event == InputEvent::BTN_BACK_PRESS) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
         return;
     }
     
     if (karma.isAttacking()) {
         // In attack mode, any other button also stops the attack
         if (event != InputEvent::NONE) {
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }
         return;
     }

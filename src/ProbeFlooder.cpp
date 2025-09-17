@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include "Config.h"
 
 // Base 802.11 Probe Request frame
 static uint8_t prob_req_packet_template[24] = {
@@ -63,7 +64,8 @@ bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeF
 
     packetCounter_ = 0;
     channelHopIndex_ = 0;
-    currentChannel_ = CHANNELS_TO_SPAM[0];
+    // THE FIX: Use the central channel list
+    currentChannel_ = Channels::WIFI_2_4GHZ[0];
     esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
     lastChannelHopTime_ = millis();
     isActive_ = true;
@@ -99,8 +101,9 @@ void ProbeFlooder::loop() {
     // Handle channel hopping
     const uint32_t CHANNEL_HOP_INTERVAL_MS = 250;
     if (millis() - lastChannelHopTime_ > CHANNEL_HOP_INTERVAL_MS) {
-        channelHopIndex_ = (channelHopIndex_ + 1) % (sizeof(CHANNELS_TO_SPAM) / sizeof(int));
-        currentChannel_ = CHANNELS_TO_SPAM[channelHopIndex_];
+        // THE FIX: Use the central channel list and count
+        channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
+        currentChannel_ = Channels::WIFI_2_4GHZ[channelHopIndex_];
         esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
         lastChannelHopTime_ = millis();
     }

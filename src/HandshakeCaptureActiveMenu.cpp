@@ -1,3 +1,7 @@
+#include "Event.h"
+#include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "HandshakeCaptureActiveMenu.h"
 #include "App.h"
 #include "HandshakeCapture.h"
@@ -6,6 +10,7 @@
 HandshakeCaptureActiveMenu::HandshakeCaptureActiveMenu() : startTime_(0) {}
 
 void HandshakeCaptureActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     HandshakeCapture& capture = app->getHandshakeCapture();
     if (capture.getConfig().type == HandshakeCaptureType::SCANNER) {
         capture.startScanner();
@@ -15,6 +20,7 @@ void HandshakeCaptureActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void HandshakeCaptureActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getHandshakeCapture().stop();
 }
 
@@ -23,10 +29,10 @@ void HandshakeCaptureActiveMenu::onUpdate(App* app) {
 }
 
 // --- THIS IS THE MISSING FUNCTION IMPLEMENTATION ---
-void HandshakeCaptureActiveMenu::handleInput(App* app, InputEvent event) {
+void HandshakeCaptureActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS) {
         // Use returnToMenu to reliably get back to the grid menu
-        app->returnToMenu(MenuType::HANDSHAKE_CAPTURE_MENU);
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::HANDSHAKE_CAPTURE_MENU));
     }
 }
 

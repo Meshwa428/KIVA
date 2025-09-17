@@ -1,3 +1,7 @@
+#include "Event.h"
+#include "EventDispatcher.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "MusicPlayer.h"
@@ -15,10 +19,11 @@ NowPlayingMenu::NowPlayingMenu() :
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     // Allocate resources when entering the player screen
     if (!app->getMusicPlayer().allocateResources()) {
         app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
         return;
     }
@@ -66,6 +71,7 @@ void NowPlayingMenu::onUpdate(App* app) {
 }
 
 void NowPlayingMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // When leaving the "Now Playing" screen, stop the current song.
     app->getMusicPlayer().stop();
     // Release resources when leaving the player screen entirely.
@@ -74,7 +80,7 @@ void NowPlayingMenu::onExit(App* app) {
     app->getMusicPlayer().setSongFinishedCallback(nullptr);
 }
 
-void NowPlayingMenu::handleInput(App* app, InputEvent event) {
+void NowPlayingMenu::handleInput(InputEvent event, App* app) {
     auto& player = app->getMusicPlayer();
     switch (event) {
         case InputEvent::BTN_OK_PRESS:
@@ -86,13 +92,11 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
         case InputEvent::ENCODER_CCW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.prevTrack()"); 
             player.prevTrack();
-            app->clearInputQueue();
             break;
         case InputEvent::BTN_RIGHT_PRESS:
         case InputEvent::ENCODER_CW:
             LOG(LogLevel::INFO, "UI", "Next/Prev: Calling player.nextTrack()");
             player.nextTrack();
-            app->clearInputQueue();
             break;
         case InputEvent::BTN_UP_PRESS:
         case InputEvent::BTN_DOWN_PRESS:
@@ -120,7 +124,7 @@ void NowPlayingMenu::handleInput(App* app, InputEvent event) {
             player.toggleShuffle();
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

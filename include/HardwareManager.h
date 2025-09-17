@@ -62,8 +62,6 @@ public:
     U8G2& getSmallDisplay();
 
     // Input accessor
-    InputEvent getNextInputEvent();
-    void clearInputQueue();
 
     // Output Control Methods
     void setLaser(bool on);
@@ -128,7 +126,6 @@ private:
     int encPos_;
     int lastEncState_;
     int encConsecutiveValid_;
-    std::vector<InputEvent> inputQueue_;
     
     // --- Button Hold/Repeat State ---
     bool isBtnHeld1_[8];

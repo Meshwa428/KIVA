@@ -3,6 +3,8 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 // --- ADD CONSTRUCTOR ---
 DuckyScriptListDataSource::DuckyScriptListDataSource() : modeToExecute_(DuckyScriptRunner::Mode::USB) {}
@@ -46,7 +48,7 @@ void DuckyScriptListDataSource::onItemSelected(App* app, ListMenu* menu, int ind
     if (index >= filePaths_.size()) return;
     const std::string& path = filePaths_[index];
     if (app->getDuckyRunner().startScript(path, modeToExecute_)) {
-        app->changeMenu(MenuType::DUCKY_SCRIPT_ACTIVE);
+        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_ACTIVE));
     } else {
         const char* errorMsg = (modeToExecute_ == DuckyScriptRunner::Mode::USB) 
                                 ? "Failed to start USB HID." 

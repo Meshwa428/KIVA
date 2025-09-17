@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "BeaconSpamActiveMenu.h"
 #include "App.h"
 #include "BeaconSpammer.h"
@@ -10,6 +12,7 @@ void BeaconSpamActiveMenu::setAttackParameters(BeaconSsidMode mode, const std::s
 }
 
 void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(true);
 
     auto& spammer = app->getBeaconSpammer();
@@ -20,22 +23,23 @@ void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
         app->getHardwareManager().setPerformanceMode(false);
         // This popup will now only show if there's a hardware-level problem.
         app->showPopUp("Error", "Failed to acquire RF lock.", [](App* app_cb){
-            app_cb->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
     }
 }
 
 void BeaconSpamActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getHardwareManager().setPerformanceMode(false);
     app->getBeaconSpammer().stop();
 }
 
 void BeaconSpamActiveMenu::onUpdate(App* app) {}
 
-void BeaconSpamActiveMenu::handleInput(App* app, InputEvent event) {
+void BeaconSpamActiveMenu::handleInput(InputEvent event, App* app) {
     switch (event) {
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

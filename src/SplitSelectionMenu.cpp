@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "SplitSelectionMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -23,6 +25,7 @@ SplitSelectionMenu::SplitSelectionMenu(std::string title, MenuType menuType, con
 }
 
 void SplitSelectionMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
@@ -66,9 +69,11 @@ void SplitSelectionMenu::onUpdate(App* app) {
     }
 }
 
-void SplitSelectionMenu::onExit(App* app) {}
+void SplitSelectionMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
+}
 
-void SplitSelectionMenu::handleInput(App* app, InputEvent event) {
+void SplitSelectionMenu::handleInput(InputEvent event, App* app) {
     switch (event) {
         case InputEvent::ENCODER_CW:
         case InputEvent::BTN_RIGHT_PRESS:
@@ -83,16 +88,16 @@ void SplitSelectionMenu::handleInput(App* app, InputEvent event) {
             {
                 const auto& selected = menuItems_[selectedIndex_];
                 if (selected.targetMenu == MenuType::BACK) {
-                    app->changeMenu(MenuType::BACK);
+                    EventDispatcher::getInstance().publish(NavigateBackEvent());
                 } else if (selected.action) {
                     selected.action(app);
                 } else {
-                    app->changeMenu(selected.targetMenu);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

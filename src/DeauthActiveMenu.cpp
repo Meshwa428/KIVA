@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "DeauthActiveMenu.h"
 #include "App.h"
 #include "Deauther.h"
@@ -7,6 +9,7 @@
 DeauthActiveMenu::DeauthActiveMenu() {}
 
 void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
@@ -18,6 +21,7 @@ void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void DeauthActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getDeauther().stop();
 }
 
@@ -25,9 +29,9 @@ void DeauthActiveMenu::onUpdate(App* app) {
     // Deauther::loop is called from App::loop
 }
 
-void DeauthActiveMenu::handleInput(App* app, InputEvent event) {
+void DeauthActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        app->returnToMenu(MenuType::WIFI_ATTACKS_LIST);
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
     }
 }
 

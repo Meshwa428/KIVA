@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "ChannelSelectionMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -16,6 +18,7 @@ ChannelSelectionMenu::ChannelSelectionMenu() :
 }
 
 void ChannelSelectionMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         selectedIndex_ = 0;
         targetScrollOffset_Y_ = 0.0f;
@@ -34,10 +37,11 @@ void ChannelSelectionMenu::onUpdate(App* app) {
 }
 
 void ChannelSelectionMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // No specific cleanup needed
 }
 
-void ChannelSelectionMenu::handleInput(App* app, InputEvent event) {
+void ChannelSelectionMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::BTN_UP_PRESS:
             scroll(-columns_);
@@ -66,7 +70,7 @@ void ChannelSelectionMenu::handleInput(App* app, InputEvent event) {
             }
             break;
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;
@@ -162,7 +166,7 @@ void ChannelSelectionMenu::startJamming(App* app) {
         jammerMenu->setJammingConfig(config);
         
         // 3. Navigate to it. Its onEnter() will do the work.
-        app->changeMenu(MenuType::JAMMING_ACTIVE);
+        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
     } else {
         // This should not happen if the menu is registered correctly.
         app->showPopUp("Fatal Error", "Jamming menu not found.", nullptr, "OK", "", true);

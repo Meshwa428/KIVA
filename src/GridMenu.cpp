@@ -1,6 +1,8 @@
 #include "GridMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 #include <Arduino.h>
 #include <algorithm> // For std::min
 
@@ -20,6 +22,8 @@ GridMenu::GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> i
 
 void GridMenu::onEnter(App *app, bool isForwardNav)
 {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+
     if (isForwardNav) {
         selectedIndex_ = 0;
         targetGridScrollOffset_Y_ = 0;
@@ -77,10 +81,11 @@ void GridMenu::onUpdate(App *app)
 
 void GridMenu::onExit(App *app)
 {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false;
 }
 
-void GridMenu::handleInput(App* app, InputEvent event) {
+void GridMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
         case InputEvent::BTN_DOWN_PRESS:
             scroll(columns_); // Move down one row
@@ -105,13 +110,13 @@ void GridMenu::handleInput(App* app, InputEvent event) {
                 if (selected.action) {
                     selected.action(app);
                 } else {
-                    app->changeMenu(selected.targetMenu);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;
 
         case InputEvent::BTN_BACK_PRESS:
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
             break;

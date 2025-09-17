@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "SnakeGameMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
@@ -71,11 +73,13 @@ bool SnakeGameMenu::drawCustomStatusBar(App* app, U8G2& display) { return true; 
 MenuType SnakeGameMenu::getMenuType() const { return MenuType::SNAKE_GAME; }
 
 void SnakeGameMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     gameState_ = GameState::TITLE_SCREEN;
     lastUpdateTime_ = millis();
     animCounter_ = 0;
 }
 void SnakeGameMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // Make sure the amplifier is off when we leave the game
     app->getGameAudio().noTone();
 }
@@ -159,7 +163,7 @@ void SnakeGameMenu::onUpdate(App* app) {
     }
 }
 
-void SnakeGameMenu::handleInput(App* app, InputEvent event) {
+void SnakeGameMenu::handleInput(InputEvent event, App* app) {
     switch(gameState_) {
         case GameState::TITLE_SCREEN: stateLogicTitle(app, event); break;
         case GameState::PLAYING:      stateLogicPlaying(app, event); break;
@@ -169,7 +173,7 @@ void SnakeGameMenu::handleInput(App* app, InputEvent event) {
 
 void SnakeGameMenu::stateLogicTitle(App* app, InputEvent event) {
     if (event == InputEvent::BTN_BACK_PRESS) {
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     } else {
         playPressTune(app);
         initNewGame();
@@ -181,7 +185,7 @@ void SnakeGameMenu::stateLogicPlaying(App* app, InputEvent event) {
     else if (event == InputEvent::BTN_DOWN_PRESS && snake_.direction != DIR_UP) snake_.direction = DIR_DOWN;
     else if (event == InputEvent::BTN_LEFT_PRESS && snake_.direction != DIR_RIGHT) snake_.direction = DIR_LEFT;
     else if (event == InputEvent::BTN_RIGHT_PRESS && snake_.direction != DIR_LEFT) snake_.direction = DIR_RIGHT;
-    else if (event == InputEvent::BTN_BACK_PRESS) app->changeMenu(MenuType::BACK);
+    else if (event == InputEvent::BTN_BACK_PRESS) EventDispatcher::getInstance().publish(NavigateBackEvent());
 }
 
 void SnakeGameMenu::stateLogicGameOver(App* app, InputEvent event) {

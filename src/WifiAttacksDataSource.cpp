@@ -2,6 +2,8 @@
 #include "App.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
+#include "Event.h"
+#include "EventDispatcher.h"
 
 WifiAttacksDataSource::WifiAttacksDataSource() {
     items_ = {
@@ -10,6 +12,7 @@ WifiAttacksDataSource::WifiAttacksDataSource() {
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     };
 }
@@ -21,8 +24,10 @@ void WifiAttacksDataSource::onItemSelected(App* app, ListMenu* menu, int index) 
     const auto& item = items_[index];
     if (item.action) {
         item.action(app);
+    } else if (item.targetMenu == MenuType::BACK) {
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     } else {
-        app->changeMenu(item.targetMenu);
+        EventDispatcher::getInstance().publish(NavigateToMenuEvent(item.targetMenu));
     }
 }
 

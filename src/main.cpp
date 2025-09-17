@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include "App.h"
 
-App kivaApp;
+// Get the singleton instance of the App
+App& kivaApp = App::getInstance();
 
 void setup() {
   kivaApp.setup();

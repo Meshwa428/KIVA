@@ -1,3 +1,5 @@
+#include "Event.h"
+#include "EventDispatcher.h"
 #include "JammingActiveMenu.h"
 #include "App.h" // For App context to stop jammer, etc.
 
@@ -12,6 +14,7 @@ void JammingActiveMenu::setJammingConfig(const JammerConfig& config) {
 }
 
 void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
+    EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (modeToStart_ != JammingMode::IDLE) {
         app->getHardwareManager().setPerformanceMode(true);
 
@@ -25,7 +28,7 @@ void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
         } else {
             // If starting failed, immediately go back and show an error.
             app->getHardwareManager().setPerformanceMode(false);
-            app->changeMenu(MenuType::BACK);
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
             app->showPopUp("Error", "Failed to start jammer.", nullptr, "OK", "", true);
         }
     }
@@ -36,6 +39,7 @@ void JammingActiveMenu::onUpdate(App* app) {
 }
 
 void JammingActiveMenu::onExit(App* app) {
+    EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // This now correctly triggers the RAII cleanup.
     if (app->getJammer().isActive()) {
         app->getJammer().stop();
@@ -47,11 +51,11 @@ void JammingActiveMenu::onExit(App* app) {
     startConfig_ = JammerConfig(); // Reset to default config
 }
 
-void JammingActiveMenu::handleInput(App* app, InputEvent event) {
+void JammingActiveMenu::handleInput(InputEvent event, App* app) {
     // Only care about the back button to stop the process.
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS || event == InputEvent::BTN_ENCODER_PRESS) {
         // onExit will handle the actual stopping.
-        app->changeMenu(MenuType::BACK);
+        EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
 
