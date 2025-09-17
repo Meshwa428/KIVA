@@ -10,13 +10,13 @@ class App;
 
 // A struct to hold all persistent settings
 struct DeviceSettings {
-    // REMOVED: uint8_t unifiedBrightness;
     uint8_t mainDisplayBrightness; // 0-255
     uint8_t auxDisplayBrightness;  // 0-255
     uint8_t volume;                // 0-200, representing 0-200%
     int keyboardLayoutIndex;
     char otaPassword[33]; // Max 32 chars + null terminator
     int channelHopDelayMs; // in milliseconds
+    int attackCooldownMs;  // Cooldown for broadcast attacks, in milliseconds
 };
 
 class ConfigManager {
@@ -44,7 +44,7 @@ private:
 
     App* app_;
     DeviceSettings settings_;
-    DeviceSettings lastAppliedSettings_; // <-- ADD THIS LINE
+    DeviceSettings lastAppliedSettings_;
     bool isEepromValid_;
 
     std::vector<std::pair<std::string, std::string>> keyboardLayouts_;

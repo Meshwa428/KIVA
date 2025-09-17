@@ -218,6 +218,32 @@ App::App() :
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    associationSleepModeMenu_("Association Sleep Mode", MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL, {
+        {"Targeted", IconType::TARGET, MenuType::NONE, 
+            [](App* app) {
+                auto& ds = app->getWifiListDataSource();
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
+                    if (app_cb->getAssociationSleeper().start(selectedNetwork)) {
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+                    } else {
+                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+                    }
+                });
+                ds.setScanOnEnter(true);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+            }
+        },
+        {"Broadcast", IconType::SKULL, MenuType::NONE, 
+            [](App* app) {
+                if (app->getAssociationSleeper().start()) {
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+                } else {
+                    app->showPopUp("Error", "Failed to start broadcast attack.", nullptr, "OK", "", true);
+                }
+            }
+        },
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
         {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
         {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
@@ -279,7 +305,7 @@ App::App() :
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
-        {"Assoc Sleep", IconType::SKULL, MenuType::NONE},
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiSniffDataSource_({
@@ -386,14 +412,75 @@ App::App() :
         {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST},
         MenuItem{
             "Hop Delay", IconType::UI_REFRESH, MenuType::NONE, nullptr, true,
+            // --- THIS IS THE MODIFIED LAMBDA ---
             [](App* app) -> std::string {
-                char buf[16]; snprintf(buf, sizeof(buf), "< %dms >", app->getConfigManager().getSettings().channelHopDelayMs); return std::string(buf);
+                // Get the value in milliseconds
+                int ms = app->getConfigManager().getSettings().channelHopDelayMs;
+                // Convert to a float for seconds
+                float seconds = (float)ms / 1000.0f;
+                char buf[16];
+                // Use "%.1f" to format with one decimal place
+                snprintf(buf, sizeof(buf), "< %.1fs >", seconds); 
+                return std::string(buf);
             },
+            // The adjustValue lambda remains the same, as it operates on the raw millisecond value
             [](App* app, int dir) {
                 auto& settings = app->getConfigManager().getSettings();
-                int newDelay = settings.channelHopDelayMs + (dir * 100);
-                if (newDelay < 100) newDelay = 100; if (newDelay > 5000) newDelay = 5000;
+                // We'll adjust the step to be 50ms for finer control
+                int newDelay = settings.channelHopDelayMs + (dir * 50);
+                if (newDelay < 50) newDelay = 50;     // Minimum 0.05s
+                if (newDelay > 5000) newDelay = 5000; // Maximum 5.0s
                 settings.channelHopDelayMs = newDelay;
+                app->getConfigManager().saveSettings();
+            }
+        },
+        // --- NEW SLIDER FOR ATTACK COOLDOWN ---
+        MenuItem{
+            "Atk Cooldown", IconType::SKULL, MenuType::NONE, nullptr, true,
+            // The display lambda is already correct and does not need changes.
+            [](App* app) -> std::string {
+                int ms = app->getConfigManager().getSettings().attackCooldownMs;
+                char buf[16];
+                if (ms < 1000) {
+                    float seconds = (float)ms / 1000.0f;
+                    snprintf(buf, sizeof(buf), "< %.1fs >", seconds);
+                } 
+                else {
+                    int seconds = ms / 1000;
+                    snprintf(buf, sizeof(buf), "< %ds >", seconds);
+                }
+                return std::string(buf);
+            },
+            // This adjustValue lambda now implements the correct symmetrical stepping logic.
+            [](App* app, int dir) {
+                auto& settings = app->getConfigManager().getSettings();
+                int currentCooldown = settings.attackCooldownMs;
+                int newCooldown = currentCooldown;
+
+                const int minVal = 100;    // 0.1s
+                const int maxVal = 30000;  // 30s
+                const int smallStep = 100; // 0.1s
+                const int largeStep = 1000; // 1.0s
+
+                if (dir > 0) { // Increasing value
+                    if (currentCooldown < 1000) {
+                        newCooldown += smallStep;
+                    } else {
+                        newCooldown += largeStep;
+                    }
+                } else { // Decreasing value
+                    if (currentCooldown > 1000) {
+                        newCooldown -= largeStep;
+                    } else {
+                        newCooldown -= smallStep;
+                    }
+                }
+                
+                // Clamp the new value within the min/max bounds
+                if (newCooldown < minVal) newCooldown = minVal;
+                if (newCooldown > maxVal) newCooldown = maxVal;
+                
+                settings.attackCooldownMs = newCooldown;
                 app->getConfigManager().saveSettings();
             }
         },
@@ -564,6 +651,7 @@ void App::setup()
     menuRegistry_[MenuType::BEACON_MODE_GRID] = &beaconModeMenu_;
     menuRegistry_[MenuType::DEAUTH_MODE_GRID] = &deauthModeMenu_;
     menuRegistry_[MenuType::PROBE_FLOOD_MODE_GRID] = &probeFloodModeMenu_;
+    menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL] = &associationSleepModeMenu_;
 
     // Settings Sub-menus
     menuRegistry_[MenuType::SETTINGS_GRID] = &settingsGridMenu_;

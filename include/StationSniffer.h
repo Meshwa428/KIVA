@@ -13,6 +13,10 @@ class App;
 
 struct StationInfo {
     uint8_t mac[6];
+    // --- NEW: Add the AP's BSSID and channel for context ---
+    uint8_t ap_bssid[6];
+    int channel;
+    
     bool operator==(const StationInfo& other) const {
         return memcmp(mac, other.mac, 6) == 0;
     }

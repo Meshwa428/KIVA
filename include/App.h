@@ -178,6 +178,7 @@ private:
     GridMenu beaconModeMenu_;
     GridMenu deauthModeMenu_;
     GridMenu probeFloodModeMenu_;
+    CarouselMenu associationSleepModeMenu_;
     GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
 
