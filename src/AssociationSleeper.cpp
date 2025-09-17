@@ -183,6 +183,16 @@ void AssociationSleeper::handlePacket(wifi_promiscuous_pkt_t *packet) {
         memcpy(newStation.ap_bssid, bssid, 6);
         newStation.channel = packet->rx_ctrl.channel;
         newClientsFound_.push_back(newStation);
+
+        // --- NEW LOGGING ---
+        // Log the discovery of a new client in broadcast mode.
+        // We log the client MAC and the BSSID of the AP it's connected to.
+        char clientMacStr[18];
+        char bssidStr[18];
+        sprintf(clientMacStr, "%02X:%02X:%02X:%02X:%02X:%02X", client_mac[0], client_mac[1], client_mac[2], client_mac[3], client_mac[4], client_mac[5]);
+        sprintf(bssidStr, "%02X:%02X:%02X:%02X:%02X:%02X", bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+        LOG(LogLevel::INFO, "ASSOC_SLEEP", "Broadcast: Found station %s -> BSSID %s", clientMacStr, bssidStr);
+        // --- END OF NEW LOGGING ---
     }
 }
 

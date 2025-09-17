@@ -751,7 +751,8 @@ void App::loop()
         MenuType currentType = currentMenu_->getMenuType();
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
-            currentType == MenuType::WIFI_CONNECTION_STATUS)
+            currentType == MenuType::WIFI_CONNECTION_STATUS ||
+            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE)
         {
             wifiIsRequired = true;
         }
@@ -769,7 +770,8 @@ void App::loop()
         karmaAttacker_.isSniffing() ||
         probeFlooder_.isActive() ||
         probeSniffer_.isActive() ||
-        handshakeCapture_.isActive())
+        handshakeCapture_.isActive() ||
+        associationSleeper_.isActive())
     {
         wifiIsRequired = true;
     }

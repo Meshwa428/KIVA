@@ -12,20 +12,7 @@ WifiAttacksDataSource::WifiAttacksDataSource() {
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
-        {"Assoc Sleep", IconType::SKULL, MenuType::NONE, 
-            [](App* app) {
-                auto& ds = app->getWifiListDataSource();
-                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getAssociationSleeper().start(selectedNetwork)) {
-                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
-                    } else {
-                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
-                    }
-                });
-                ds.setScanOnEnter(true);
-                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
-            }
-        },
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     };
 }

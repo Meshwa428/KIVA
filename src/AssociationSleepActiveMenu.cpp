@@ -16,6 +16,10 @@ void AssociationSleepActiveMenu::onExit(App* app) {
 }
 
 void AssociationSleepActiveMenu::onUpdate(App* app) {
+    // If the attack stops for any reason (e.g. error), go back automatically.
+    if (!app->getAssociationSleeper().isActive()) {
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
+    }
 }
 
 void AssociationSleepActiveMenu::handleInput(InputEvent event, App* app) {
