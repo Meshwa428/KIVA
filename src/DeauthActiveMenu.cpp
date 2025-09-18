@@ -13,10 +13,11 @@ void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
-        if (config.target == DeauthTarget::ALL_APS) {
-            deauther.startAllAPs();
+        // --- FIX: Use correct enum ---
+        if (config.type == DeauthAttackType::BROADCAST_NORMAL || config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
+            // --- FIX: Use correct method name ---
+            deauther.startBroadcast();
         }
-        // For SPECIFIC_AP, start() is called by WifiListDataSource.
     }
 }
 
@@ -43,11 +44,15 @@ bool DeauthActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     display.setDrawColor(1);
 
     // Left side: Attack Method
-    const char* modeText = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP" : "Broadcast";
+    const char* modeText = (
+        config.type == DeauthAttackType::EVIL_TWIN || 
+        config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) ? "Evil Twin" : "Broadcast";
     display.drawStr(2, 8, modeText);
 
     // Right side: Attack Scope
-    const char* scopeText = (config.target == DeauthTarget::ALL_APS) ? "Target: All" : "Target: 1";
+    const char* scopeText = (
+        config.type == DeauthAttackType::BROADCAST_NORMAL ||
+        config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) ? "Target: All" : "Target: 1";
     int textWidth = display.getStrWidth(scopeText);
     display.drawStr(128 - textWidth - 2, 8, scopeText);
     
@@ -69,7 +74,8 @@ void DeauthActiveMenu::draw(App* app, U8G2& display) {
     }
     
     const auto& config = deauther.getPendingConfig();
-    if (config.target == DeauthTarget::ALL_APS && deauther.getCurrentTargetSsid().empty()) {
+    if ((config.type == DeauthAttackType::BROADCAST_NORMAL ||
+         config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) && deauther.getCurrentTargetSsid().empty()) {
         // --- THIS IS THE FIX ---
         // Replace the simple drawStr with the word-wrapping utility
         const char* msg = "Scanning for targets...";
@@ -94,7 +100,12 @@ void DeauthActiveMenu::draw(App* app, U8G2& display) {
     // 1. Attack Mode Title (using a smaller font)
     display.setFont(u8g2_font_6x10_tf);
     display.setDrawColor(1);
-    const char* title = (config.mode == DeauthMode::ROGUE_AP) ? "Rogue AP Attack" : "Broadcast Deauth";
+    const char* title = "Broadcast Deauth";
+    if (config.type == DeauthAttackType::EVIL_TWIN || config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
+        title = "Evil Twin";
+    } else if (config.type == DeauthAttackType::PINPOINT_CLIENT) {
+        title = "Pinpoint Deauth";
+    }
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(title)) / 2, 28, title);
 
     // 2. Current Target SSID (large, bold, and centered)

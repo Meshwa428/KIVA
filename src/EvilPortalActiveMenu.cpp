@@ -2,19 +2,19 @@
 #include "EventDispatcher.h"
 #include "Event.h"
 #include "EventDispatcher.h"
-#include "EvilTwinActiveMenu.h"
+#include "EvilPortalActiveMenu.h"
 #include "App.h"
-#include "EvilTwin.h" 
+#include "EvilPortal.h" 
 #include "UI_Utils.h" 
 #include <algorithm> // For std::max
 
-EvilTwinActiveMenu::EvilTwinActiveMenu() :
+EvilPortalActiveMenu::EvilPortalActiveMenu() :
     topDisplayIndex_(0),
     selectedIndex_(0),
     lastKnownVictimCount_(0)
 {}
 
-void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
+void EvilPortalActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
         // Reset list state when the menu is entered
@@ -24,13 +24,13 @@ void EvilTwinActiveMenu::onEnter(App* app, bool isForwardNav) {
     lastKnownVictimCount_ = 0;
 }
 
-void EvilTwinActiveMenu::onExit(App* app) {
+void EvilPortalActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    app->getEvilTwin().stop();
+    app->getEvilPortal().stop();
 }
 
-void EvilTwinActiveMenu::onUpdate(App* app) {
-    auto& evilTwin = app->getEvilTwin();
+void EvilPortalActiveMenu::onUpdate(App* app) {
+    auto& evilTwin = app->getEvilPortal();
     if (evilTwin.getVictimCount() != lastKnownVictimCount_) {
         lastKnownVictimCount_ = evilTwin.getVictimCount();
         
@@ -43,13 +43,13 @@ void EvilTwinActiveMenu::onUpdate(App* app) {
     }
 }
 
-void EvilTwinActiveMenu::handleInput(InputEvent event, App* app) {
+void EvilPortalActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
         EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
         return;
     }
 
-    int listSize = app->getEvilTwin().getVictimCount();
+    int listSize = app->getEvilPortal().getVictimCount();
     if (listSize == 0) return;
 
     const int maxVisibleItems = 4;
@@ -68,8 +68,8 @@ void EvilTwinActiveMenu::handleInput(InputEvent event, App* app) {
     }
 }
 
-bool EvilTwinActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
-    auto& evilTwin = app->getEvilTwin();
+bool EvilPortalActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
+    auto& evilTwin = app->getEvilPortal();
     display.setFont(u8g2_font_6x10_tf);
     display.setDrawColor(1);
 
@@ -84,8 +84,8 @@ bool EvilTwinActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     return true;
 }
 
-void EvilTwinActiveMenu::draw(App* app, U8G2& display) {
-    auto& evilTwin = app->getEvilTwin();
+void EvilPortalActiveMenu::draw(App* app, U8G2& display) {
+    auto& evilTwin = app->getEvilPortal();
     if (!evilTwin.isActive()) {
         const char* msg = "Initializing...";
         display.setFont(u8g2_font_7x13B_tr);

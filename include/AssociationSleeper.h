@@ -12,17 +12,20 @@ class App;
 
 class AssociationSleeper {
 public:
-    enum class AttackMode {
-        TARGETED,
-        BROADCAST
+    // --- MODIFICATION: New enum ---
+    enum class AttackType {
+        NORMAL,         // Target a specific AP and all its clients
+        BROADCAST,      // Listen on all channels and attack any client seen
+        PINPOINT_CLIENT // Attack a single, specific client
     };
 
     AssociationSleeper();
     void setup(App* app);
     void loop();
 
-    bool start(const WifiNetworkInfo& ap);
-    bool start(); // For broadcast
+    bool start(const WifiNetworkInfo& ap); // For NORMAL
+    bool start();                          // For BROADCAST
+    bool start(const StationInfo& client); // <-- NEW: For PINPOINT
     void stop();
 
     bool isActive() const;
@@ -30,13 +33,11 @@ public:
     std::string getTargetSsid() const;
     int getClientCount() const;
     bool isSniffing() const;
-    AttackMode getAttackMode() const; // NEW getter for UI
+    AttackType getAttackType() const; // Renamed from getAttackMode
 
 private:
-    // --- MODIFIED: Needs AP info now ---
     void sendSleepPacket(const StationInfo& client);
     
-    // --- NEW: Packet handler for broadcast mode ---
     static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);
     void handlePacket(wifi_promiscuous_pkt_t *packet);
 
@@ -45,20 +46,23 @@ private:
     std::unique_ptr<HardwareManager::RfLock> rfLock_;
     bool isActive_;
     uint32_t packetCounter_;
-    AttackMode attackMode_;
+    AttackType attackType_; // Renamed from attackMode_
 
-    // State for TARGETED mode
+    // State for NORMAL mode
     WifiNetworkInfo targetAp_;
     unsigned long lastTargetedPacketTime_;
     int currentClientIndex_;
     enum class State { SNIFFING, ATTACKING };
     State state_;
 
-    // --- NEW: State for BROADCAST mode ---
+    // State for BROADCAST mode
     std::vector<StationInfo> newClientsFound_;
     std::map<std::string, unsigned long> recentlyAttacked_;
     int channelHopIndex_;
     unsigned long lastChannelHopTime_;
+    
+    // --- NEW: State for PINPOINT mode ---
+    StationInfo pinpointTarget_;
 
     static AssociationSleeper* instance_;
 };

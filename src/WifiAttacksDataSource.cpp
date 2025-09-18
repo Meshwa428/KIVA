@@ -12,7 +12,7 @@ WifiAttacksDataSource::WifiAttacksDataSource() {
         {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
-        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODES_GRID},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     };
 }

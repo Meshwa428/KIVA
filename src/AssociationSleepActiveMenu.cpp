@@ -16,7 +16,6 @@ void AssociationSleepActiveMenu::onExit(App* app) {
 }
 
 void AssociationSleepActiveMenu::onUpdate(App* app) {
-    // If the attack stops for any reason (e.g. error), go back automatically.
     if (!app->getAssociationSleeper().isActive()) {
         EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
     }
@@ -43,28 +42,43 @@ void AssociationSleepActiveMenu::draw(App* app, U8G2& display) {
 
     display.setFont(u8g2_font_6x10_tf);
 
-    // --- NEW: UI Logic for different modes ---
-    if (sleeper.getAttackMode() == AssociationSleeper::AttackMode::TARGETED) {
-        std::string targetSsid = "Target: " + sleeper.getTargetSsid();
-        char* truncated = truncateText(targetSsid.c_str(), 124, display);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
-
-        char statusStr[32];
-        if (sleeper.isSniffing()) {
-            snprintf(statusStr, sizeof(statusStr), "Sniffing for clients...");
-        } else {
-            snprintf(statusStr, sizeof(statusStr), "Attacking %d clients", sleeper.getClientCount());
-        }
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusStr)) / 2, 48, statusStr);
-    } else { // BROADCAST MODE
-        const char* modeStr = "Mode: Broadcast";
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeStr)) / 2, 36, modeStr);
-
-        char statusStr[32];
-        snprintf(statusStr, sizeof(statusStr), "Clients Attacked: %d", sleeper.getClientCount());
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusStr)) / 2, 48, statusStr);
+    // --- FIX: Use correct getter and enums, and add new case ---
+    switch(sleeper.getAttackType()) {
+        case AssociationSleeper::AttackType::NORMAL:
+            {
+                std::string targetSsid = "Target: " + sleeper.getTargetSsid();
+                char* truncated = truncateText(targetSsid.c_str(), 124, display);
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
+                char statusStr[32];
+                if (sleeper.isSniffing()) {
+                    snprintf(statusStr, sizeof(statusStr), "Sniffing for clients...");
+                } else {
+                    snprintf(statusStr, sizeof(statusStr), "Attacking %d clients", sleeper.getClientCount());
+                }
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusStr)) / 2, 48, statusStr);
+            }
+            break;
+        case AssociationSleeper::AttackType::BROADCAST:
+            {
+                const char* modeStr = "Mode: Broadcast";
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeStr)) / 2, 36, modeStr);
+                char statusStr[32];
+                snprintf(statusStr, sizeof(statusStr), "Clients Attacked: %d", sleeper.getClientCount());
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusStr)) / 2, 48, statusStr);
+            }
+            break;
+        case AssociationSleeper::AttackType::PINPOINT_CLIENT:
+            {
+                const char* modeStr = "Mode: Pinpoint";
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeStr)) / 2, 36, modeStr);
+                char statusStr[32];
+                snprintf(statusStr, sizeof(statusStr), "Attacking 1 client");
+                display.drawStr((display.getDisplayWidth() - display.getStrWidth(statusStr)) / 2, 48, statusStr);
+            }
+            break;
     }
 
+    display.setFont(u8g2_font_5x8_t_cyrillic);
     const char* instruction = "Press BACK to Stop";
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 60, instruction);
 }
