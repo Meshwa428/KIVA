@@ -17,9 +17,9 @@ struct VictimCredentials {
     std::string password;
 };
 
-class EvilTwin {
+class EvilPortal {
 public:
-    EvilTwin();
+    EvilPortal();
     void setup(App* app);
     void loop();
 
@@ -69,7 +69,7 @@ private:
     static const uint8_t deauth_frame_template[];
     
     // --- NEW: Static instance pointer for the callback ---
-    static EvilTwin* instance_;
+    static EvilPortal* instance_;
 };
 
 #endif // EVIL_TWIN_H

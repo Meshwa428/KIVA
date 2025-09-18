@@ -149,15 +149,15 @@ void BeaconSpammer::sendBeaconPacket(const FakeAP& ap) {
     size_t post_tags_len;
 
     if (ap.is_wpa2) {
-        template_data = wpa2_beacon_template;
-        template_len = sizeof(wpa2_beacon_template);
-        post_ssid_tags_data = wpa2_beacon_post_ssid_tags;
-        post_tags_len = sizeof(wpa2_beacon_post_ssid_tags);
+        template_data = RawFrames::Mgmt::Beacon::WPA2_TEMPLATE;
+        template_len = sizeof(RawFrames::Mgmt::Beacon::WPA2_TEMPLATE);
+        post_ssid_tags_data = RawFrames::Mgmt::Beacon::WPA2_POST_SSID_TAGS;
+        post_tags_len = sizeof(RawFrames::Mgmt::Beacon::WPA2_POST_SSID_TAGS);
     } else {
-        template_data = open_beacon_template;
-        template_len = sizeof(open_beacon_template);
-        post_ssid_tags_data = open_beacon_post_ssid_tags;
-        post_tags_len = sizeof(open_beacon_post_ssid_tags);
+        template_data = RawFrames::Mgmt::Beacon::OPEN_TEMPLATE;
+        template_len = sizeof(RawFrames::Mgmt::Beacon::OPEN_TEMPLATE);
+        post_ssid_tags_data = RawFrames::Mgmt::Beacon::OPEN_POST_SSID_TAGS;
+        post_tags_len = sizeof(RawFrames::Mgmt::Beacon::OPEN_POST_SSID_TAGS);
     }
     
     // The actual packet starts with the template, but SSID length is at template_len, not template_len-1.

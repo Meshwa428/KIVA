@@ -126,7 +126,7 @@ std::string ProbeFlooder::getNextSsid() {
 
 void ProbeFlooder::sendProbePacket(const std::string& ssid) {
     uint8_t packet_buffer[128];
-    memcpy(packet_buffer, prob_req_packet_template, sizeof(prob_req_packet_template));
+    memcpy(packet_buffer, RawFrames::Mgmt::ProbeRequest::TEMPLATE, sizeof(RawFrames::Mgmt::ProbeRequest::TEMPLATE));
 
     // Set random source MAC address
     for (int i = 0; i < 6; i++) {
@@ -138,18 +138,17 @@ void ProbeFlooder::sendProbePacket(const std::string& ssid) {
     uint8_t ssid_len = std::min((int)ssid.length(), 32);
     
     // Construct tagged parameters section
-    uint8_t* p = packet_buffer + sizeof(prob_req_packet_template);
+    uint8_t* p = packet_buffer + sizeof(RawFrames::Mgmt::ProbeRequest::TEMPLATE);
     *p++ = 0; // Tag: SSID
     *p++ = ssid_len;
     memcpy(p, ssid.c_str(), ssid_len);
     p += ssid_len;
     
-    memcpy(p, post_ssid_tags, sizeof(post_ssid_tags));
-    p += sizeof(post_ssid_tags);
+    memcpy(p, RawFrames::Mgmt::ProbeRequest::POST_SSID_TAGS, sizeof(RawFrames::Mgmt::ProbeRequest::POST_SSID_TAGS));
+    p += sizeof(RawFrames::Mgmt::ProbeRequest::POST_SSID_TAGS);
 
     int total_len = p - packet_buffer;
     
-    // Use WIFI_IF_STA for raw packet injection when in promiscuous station mode.
     esp_wifi_80211_tx(WIFI_IF_STA, packet_buffer, total_len, false);
 }
 

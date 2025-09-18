@@ -27,7 +27,7 @@ App::App() :
     jammer_(),
     beaconSpammer_(),
     deauther_(),
-    evilTwin_(),
+    evilPortal_(),
     probeSniffer_(),
     karmaAttacker_(),
     handshakeCapture_(),
@@ -169,29 +169,57 @@ App::App() :
         {"From SD", IconType::SD_CARD, MenuType::BEACON_FILE_LIST},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    deauthModeMenu_("Deauth Type", MenuType::DEAUTH_MODE_GRID, {
-        {"Rogue AP", IconType::BEACON, MenuType::NONE, 
-            [](App *app) {
-                app->getDeauther().prepareAttack(DeauthMode::ROGUE_AP, DeauthTarget::SPECIFIC_AP);
-                auto& ds = app->getWifiListDataSource();
-                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
-                    else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+    deauthModeMenu_("Deauth Attack", MenuType::DEAUTH_MODE_GRID, {
+        {"Normal", IconType::TARGET, MenuType::NONE, [](App* app){
+            app->getDeauther().prepareAttack(DeauthAttackType::NORMAL);
+            auto& ds = app->getWifiListDataSource();
+            ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                if (app_cb->getDeauther().start(net)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
+            });
+            ds.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
+        {"Evil Twin", IconType::SKULL, MenuType::NONE, [](App* app){
+            app->getDeauther().prepareAttack(DeauthAttackType::EVIL_TWIN);
+            auto& ds = app->getWifiListDataSource();
+            ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                if (app_cb->getDeauther().start(net)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
+            });
+            ds.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
+        {"Broadcast", IconType::TOOL_JAMMING, MenuType::NONE, [](App* app){
+            app->getDeauther().prepareAttack(DeauthAttackType::BROADCAST_NORMAL);
+            if (app->getDeauther().startBroadcast()) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
+        }},
+        {"Broadcast Twin", IconType::BEACON, MenuType::NONE, [](App* app){
+            app->getDeauther().prepareAttack(DeauthAttackType::BROADCAST_EVIL_TWIN);
+            if (app->getDeauther().startBroadcast()) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
+        }},
+        {"Pinpoint", IconType::TOOL_INJECTION, MenuType::NONE, [](App* app){
+            // STEP 1: Go to WifiList to choose the TARGET AP
+            auto& wifiDS = app->getWifiListDataSource();
+            wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                // STEP 2: An AP was chosen. Now go to the StationList for that AP.
+                auto& stationDS = app_cb->getStationListDataSource();
+                stationDS.setMode(true, net); // Live scan mode for this AP
+                stationDS.setAttackCallback([](App* attack_app, const StationInfo& client){
+                    // --- FIX START ---
+                    // STEP 3: A client was chosen. Stop the sniffer to release the RF lock.
+                    attack_app->getStationSniffer().stop();
+
+                    // Now, prepare and launch the pinpoint attack. The Deauther can now acquire the lock.
+                    attack_app->getDeauther().prepareAttack(DeauthAttackType::PINPOINT_CLIENT);
+                    if(attack_app->getDeauther().start(client)) {
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
+                    }
+                    // --- FIX END ---
                 });
-                ds.setScanOnEnter(true);
-                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
-            }},
-        {"Broadcast", IconType::SKULL, MenuType::NONE, 
-            [](App *app) {
-                app->getDeauther().prepareAttack(DeauthMode::BROADCAST, DeauthTarget::SPECIFIC_AP);
-                auto& ds = app->getWifiListDataSource();
-                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getDeauther().start(selectedNetwork)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
-                     else app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
-                });
-                ds.setScanOnEnter(true);
-                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
-            }},
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
+            });
+            wifiDS.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     probeFloodModeMenu_("Probe Flood Mode", MenuType::PROBE_FLOOD_MODE_GRID, {
@@ -218,32 +246,41 @@ App::App() :
             }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    associationSleepModeMenu_("Association Sleep Mode", MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL, {
-        {"Targeted", IconType::TARGET, MenuType::NONE, 
-            [](App* app) {
-                auto& ds = app->getWifiListDataSource();
-                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& selectedNetwork){
-                    if (app_cb->getAssociationSleeper().start(selectedNetwork)) {
-                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
-                    } else {
-                        app_cb->showPopUp("Error", "Failed to start attack.", nullptr, "OK", "", true);
+    associationSleepModeMenu_("Assoc Sleep Attack", MenuType::ASSOCIATION_SLEEP_MODES_GRID, {
+        {"Normal", IconType::TARGET, MenuType::NONE, [](App* app){
+            auto& ds = app->getWifiListDataSource();
+            ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                if (app_cb->getAssociationSleeper().start(net)) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+            });
+            ds.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
+        {"Broadcast", IconType::TOOL_JAMMING, MenuType::NONE, [](App* app){
+            if (app->getAssociationSleeper().start()) EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
+        }},
+        {"Pinpoint", IconType::TOOL_INJECTION, MenuType::NONE, [](App* app){
+            // Same multi-step navigation logic as Deauth Pinpoint
+            auto& wifiDS = app->getWifiListDataSource();
+            wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                auto& stationDS = app_cb->getStationListDataSource();
+                stationDS.setMode(true, net);
+                stationDS.setAttackCallback([](App* attack_app, const StationInfo& client){
+                    // --- FIX START ---
+                    // Stop the sniffer first to release the hardware lock
+                    attack_app->getStationSniffer().stop();
+                    // Now start the sleeper, which can acquire its own lock
+                    if(attack_app->getAssociationSleeper().start(client)) {
+                         EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
                     }
+                    // --- FIX END ---
                 });
-                ds.setScanOnEnter(true);
-                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
-            }
-        },
-        {"Broadcast", IconType::SKULL, MenuType::NONE, 
-            [](App* app) {
-                if (app->getAssociationSleeper().start()) {
-                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
-                } else {
-                    app->showPopUp("Error", "Failed to start broadcast attack.", nullptr, "OK", "", true);
-                }
-            }
-        },
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
+            });
+            wifiDS.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
-    }),
+    }, 2),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
         {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
         {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
@@ -280,7 +317,7 @@ App::App() :
     jammingActiveMenu_(),
     beaconSpamActiveMenu_(),
     deauthActiveMenu_(),
-    evilTwinActiveMenu_(),
+    evilPortalActiveMenu_(),
     probeSnifferActiveMenu_(),
     karmaActiveMenu_(),
     handshakeCaptureMenu_(),
@@ -291,7 +328,7 @@ App::App() :
     nowPlayingMenu_(),
     associationSleepActiveMenu_(),
 
-    // --- DataSources ---
+    // --- Data Sources ---
     wifiListDataSource_(),
     firmwareListDataSource_(),
     beaconFileListDataSource_(),
@@ -299,18 +336,34 @@ App::App() :
     duckyScriptListDataSource_(),
     musicLibraryDataSource_(),
     songListDataSource_(),
+    stationListDataSource_(),
     wifiAttacksDataSource_({
         {"Beacon Spam", IconType::BEACON, MenuType::BEACON_MODE_GRID},
         {"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_MODE_GRID},
-        {"Evil Twin", IconType::SKULL, MenuType::PORTAL_LIST},
+        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODES_GRID},
+        {"Evil Portal", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
-        {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiSniffDataSource_({
         {"Handshake Sniffer", IconType::NET_WIFI_LOCK, MenuType::HANDSHAKE_CAPTURE_MENU},
         {"Probe Sniffer", IconType::TOOL_PROBE, MenuType::PROBE_ACTIVE},
+        {"Station Sniffer", IconType::TARGET, MenuType::NONE, [](App* app){
+            // This is for the "Sniff & Save" feature
+            // For now, it just goes to the WifiList to select an AP to sniff
+            auto& wifiDS = app->getWifiListDataSource();
+            wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                // TODO: Implement the file saving logic here.
+                // For now, it will just open the live station list.
+                auto& stationDS = app_cb->getStationListDataSource();
+                stationDS.setMode(true, net); // Live scan mode
+                stationDS.setAttackCallback(nullptr); // No attack, just viewing
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
+            });
+            wifiDS.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     bleAttacksDataSource_({
@@ -529,6 +582,7 @@ App::App() :
     }),
     // --- ListMenu Instances ---
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
+    stationListMenu_("Select Client", MenuType::STATION_LIST, &stationListDataSource_),
     firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
     beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
     portalListMenu_("Select Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
@@ -584,7 +638,7 @@ void App::setup()
         {"Jammer",          [&](){ jammer_.setup(this); }},
         {"Beacon Spammer",  [&](){ beaconSpammer_.setup(this); }},
         {"Deauther",        [&](){ deauther_.setup(this); }},
-        {"Evil Twin",       [&](){ evilTwin_.setup(this); }},
+        {"Evil Twin",       [&](){ evilPortal_.setup(this); }},
         {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
         {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
         {"Probe Flooder",   [&](){ probeFlooder_.setup(this); }},
@@ -651,7 +705,8 @@ void App::setup()
     menuRegistry_[MenuType::BEACON_MODE_GRID] = &beaconModeMenu_;
     menuRegistry_[MenuType::DEAUTH_MODE_GRID] = &deauthModeMenu_;
     menuRegistry_[MenuType::PROBE_FLOOD_MODE_GRID] = &probeFloodModeMenu_;
-    menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODE_CAROUSEL] = &associationSleepModeMenu_;
+    menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODES_GRID] = &associationSleepModeMenu_;
+    menuRegistry_[MenuType::STATION_LIST] = &stationListMenu_;
 
     // Settings Sub-menus
     menuRegistry_[MenuType::SETTINGS_GRID] = &settingsGridMenu_;
@@ -673,7 +728,7 @@ void App::setup()
     // Active Screens
     menuRegistry_[MenuType::BEACON_SPAM_ACTIVE] = &beaconSpamActiveMenu_;
     menuRegistry_[MenuType::DEAUTH_ACTIVE] = &deauthActiveMenu_;
-    menuRegistry_[MenuType::EVIL_TWIN_ACTIVE] = &evilTwinActiveMenu_;
+    menuRegistry_[MenuType::EVIL_PORTAL_ACTIVE] = &evilPortalActiveMenu_;
     menuRegistry_[MenuType::PROBE_FLOOD_ACTIVE] = &probeFloodActiveMenu_;
     menuRegistry_[MenuType::KARMA_ACTIVE] = &karmaActiveMenu_;
     menuRegistry_[MenuType::PROBE_ACTIVE] = &probeSnifferActiveMenu_;
@@ -736,7 +791,7 @@ void App::loop()
     jammer_.loop();
     beaconSpammer_.loop();
     deauther_.loop();
-    evilTwin_.loop();
+    evilPortal_.loop();
     probeSniffer_.loop();
     karmaAttacker_.loop();
     handshakeCapture_.loop();
@@ -752,7 +807,8 @@ void App::loop()
         if (currentType == MenuType::WIFI_LIST ||
             currentType == MenuType::TEXT_INPUT ||
             currentType == MenuType::WIFI_CONNECTION_STATUS ||
-            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE)
+            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE ||
+            currentType == MenuType::STATION_LIST)
         {
             wifiIsRequired = true;
         }
@@ -765,12 +821,13 @@ void App::loop()
     if (wifiManager_.getState() == WifiState::CONNECTED || 
         beaconSpammer_.isActive() ||
         deauther_.isActive() || 
-        evilTwin_.isActive() || 
+        evilPortal_.isActive() || 
         karmaAttacker_.isAttacking() || 
         karmaAttacker_.isSniffing() ||
         probeFlooder_.isActive() ||
         probeSniffer_.isActive() ||
         handshakeCapture_.isActive() ||
+        stationSniffer_.isActive() ||
         associationSleeper_.isActive())
     {
         wifiIsRequired = true;
@@ -792,7 +849,7 @@ void App::loop()
     }
 
     bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
-                    evilTwin_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
+                    evilPortal_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
                     duckyRunner_.isActive();
     static unsigned long lastRenderTime = 0;
     if (perfMode && (millis() - lastRenderTime < 1000))

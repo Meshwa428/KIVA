@@ -23,12 +23,13 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::WIFI_LIST: return "WIFI_LIST";
         case MenuType::BEACON_FILE_LIST: return "BEACON_FILE_LIST";
         case MenuType::PORTAL_LIST: return "PORTAL_LIST";
+        case MenuType::STATION_LIST: return "STATION_LIST";
         case MenuType::DUCKY_SCRIPT_LIST: return "DUCKY_SCRIPT_LIST";
         case MenuType::CHANNEL_SELECTION: return "CHANNEL_SELECTION";
         case MenuType::HANDSHAKE_CAPTURE_MENU: return "HANDSHAKE_CAPTURE_MENU";
         case MenuType::BEACON_SPAM_ACTIVE: return "BEACON_SPAM_ACTIVE";
         case MenuType::DEAUTH_ACTIVE: return "DEAUTH_ACTIVE";
-        case MenuType::EVIL_TWIN_ACTIVE: return "EVIL_TWIN_ACTIVE";
+        case MenuType::EVIL_PORTAL_ACTIVE: return "EVIL_PORTAL_ACTIVE";
         case MenuType::PROBE_FLOOD_ACTIVE: return "PROBE_FLOOD_ACTIVE";
         case MenuType::KARMA_ACTIVE: return "KARMA_ACTIVE";
         case MenuType::PROBE_ACTIVE: return "PROBE_ACTIVE";

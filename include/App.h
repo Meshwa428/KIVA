@@ -26,8 +26,8 @@
 #include "BeaconSpamActiveMenu.h"
 #include "Deauther.h"
 #include "DeauthActiveMenu.h"
-#include "EvilTwin.h"
-#include "EvilTwinActiveMenu.h"
+#include "EvilPortal.h"
+#include "EvilPortalActiveMenu.h"
 #include "PortalListDataSource.h"
 #include "ProbeSniffer.h"
 #include "ProbeSnifferActiveMenu.h"
@@ -61,6 +61,7 @@
 #include "StationSniffer.h"
 #include "AssociationSleeper.h"
 #include "AssociationSleepActiveMenu.h"
+#include "StationListDataSource.h"
 
 
 class App : public ISubscriber
@@ -85,7 +86,7 @@ public:
     Jammer &getJammer() { return jammer_; }
     BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
     Deauther &getDeauther() { return deauther_; }
-    EvilTwin &getEvilTwin() { return evilTwin_; }
+    EvilPortal &getEvilPortal() { return evilPortal_; }
     ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
     KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
     HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
@@ -105,6 +106,7 @@ public:
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
+    StationListDataSource &getStationListDataSource() { return stationListDataSource_; }
 
     MenuType getPreviousMenuType() const;
 
@@ -142,7 +144,7 @@ private:
     Jammer jammer_;
     BeaconSpammer beaconSpammer_;
     Deauther deauther_;
-    EvilTwin evilTwin_;
+    EvilPortal evilPortal_;
     ProbeSniffer probeSniffer_;
     KarmaAttacker karmaAttacker_;
     HandshakeCapture handshakeCapture_;
@@ -178,7 +180,7 @@ private:
     GridMenu beaconModeMenu_;
     GridMenu deauthModeMenu_;
     GridMenu probeFloodModeMenu_;
-    CarouselMenu associationSleepModeMenu_;
+    GridMenu associationSleepModeMenu_;
     GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
 
@@ -193,7 +195,7 @@ private:
     JammingActiveMenu jammingActiveMenu_;
     BeaconSpamActiveMenu beaconSpamActiveMenu_;
     DeauthActiveMenu deauthActiveMenu_;
-    EvilTwinActiveMenu evilTwinActiveMenu_;
+    EvilPortalActiveMenu evilPortalActiveMenu_;
     ProbeSnifferActiveMenu probeSnifferActiveMenu_;
     KarmaActiveMenu karmaActiveMenu_;
     HandshakeCaptureMenu handshakeCaptureMenu_;
@@ -206,11 +208,12 @@ private:
 
     // DataSources
     WifiListDataSource wifiListDataSource_;
+    StationListDataSource stationListDataSource_;
     FirmwareListDataSource firmwareListDataSource_;
     BeaconFileListDataSource beaconFileListDataSource_;
     PortalListDataSource portalListDataSource_;
     DuckyScriptListDataSource duckyScriptListDataSource_;
-    MusicLibraryDataSource musicLibraryDataSource_; // Renamed
+    MusicLibraryDataSource musicLibraryDataSource_;
     SongListDataSource songListDataSource_;
     
     // New Generic DataSources
@@ -227,12 +230,13 @@ private:
 
     // ListMenu Instances
     ListMenu wifiListMenu_;
+    ListMenu stationListMenu_;
     ListMenu firmwareListMenu_;
     ListMenu beaconFileListMenu_;
     ListMenu portalListMenu_;
     ListMenu duckyScriptListMenu_;
-    ListMenu musicLibraryMenu_; // Renamed
-    ListMenu songListMenu_;     // Renamed
+    ListMenu musicLibraryMenu_;
+    ListMenu songListMenu_;
     
     // New ListMenus using the generic source
     ListMenu wifiAttacksMenu_;

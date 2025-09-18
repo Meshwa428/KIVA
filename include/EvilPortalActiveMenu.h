@@ -5,9 +5,9 @@
 #include <vector> // <-- Add include
 #include <string> // <-- Add include
 
-class EvilTwinActiveMenu : public IMenu {
+class EvilPortalActiveMenu : public IMenu {
 public:
-    EvilTwinActiveMenu();
+    EvilPortalActiveMenu();
 
     void onEnter(App* app, bool isForwardNav) override;
     void onUpdate(App* app) override;
@@ -18,7 +18,7 @@ public:
     bool drawCustomStatusBar(App* app, U8G2& display) override;
 
     const char* getTitle() const override { return "Evil Twin"; } // Shorter title
-    MenuType getMenuType() const override { return MenuType::EVIL_TWIN_ACTIVE; }
+    MenuType getMenuType() const override { return MenuType::EVIL_PORTAL_ACTIVE; }
 
 private:
     // --- NEW: State for the victim list ---

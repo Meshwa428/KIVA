@@ -1,5 +1,6 @@
 #include "Jammer.h"
 #include "App.h"
+#include "Config.h"
 
 // Pre-defined channel lists (no longer need reversed versions)
 const int Jammer::ble_adv_nrf_channels_[] = {2, 26, 80};
@@ -156,11 +157,13 @@ void Jammer::loop() {
 void Jammer::jamWithNoise(int channel1, int channel2) {
     if (rfLock_->radio1 && channel1 >= 0 && channel1 <= 125) {
         rfLock_->radio1->setChannel(channel1);
-        rfLock_->radio1->writeFast(&jam_text, sizeof(jam_text));
+        // --- MODIFICATION: Use centralized payload ---
+        rfLock_->radio1->writeFast(RawFrames::Jamming::NOISE_PAYLOAD, sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
     }
     if (rfLock_->radio2 && channel2 >= 0 && channel2 <= 125) {
         rfLock_->radio2->setChannel(channel2);
-        rfLock_->radio2->writeFast(&jam_text, sizeof(jam_text));
+        // --- MODIFICATION: Use centralized payload ---
+        rfLock_->radio2->writeFast(RawFrames::Jamming::NOISE_PAYLOAD, sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
     }
 }
 

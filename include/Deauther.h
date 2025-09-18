@@ -3,29 +3,27 @@
 
 #include "HardwareManager.h"
 #include "WifiManager.h"
+#include "StationSniffer.h" // <-- NEW: For StationInfo struct
 #include <string>
 #include <vector>
 #include <memory>
 
 class App;
 
-// Defines the attack methodology
-enum class DeauthMode {
-    ROGUE_AP,
-    BROADCAST
-};
-
-// Defines the target selection strategy
-enum class DeauthTarget {
-    SPECIFIC_AP,
-    ALL_APS
+// --- MODIFICATION: A single, more descriptive enum for attack types ---
+enum class DeauthAttackType {
+    NORMAL,             // Deauth a specific AP (broadcast frames to its clients)
+    EVIL_TWIN,          // Deauth a specific AP (using its BSSID to create a rogue AP)
+    BROADCAST_NORMAL,   // Cycle through all APs with normal deauth
+    BROADCAST_EVIL_TWIN,// Cycle through all APs with rogue AP deauth
+    PINPOINT_CLIENT     // Deauth a single, specific client
 };
 
 // Configuration for an attack
 struct DeauthConfig {
-    DeauthMode mode;
-    DeauthTarget target;
-    WifiNetworkInfo specific_target_info;
+    DeauthAttackType type;
+    WifiNetworkInfo specific_ap_info;
+    StationInfo specific_client_info; // <-- NEW
 };
 
 class Deauther {
@@ -35,9 +33,10 @@ public:
     void loop();
 
     // --- Attack Control ---
-    void prepareAttack(DeauthMode mode, DeauthTarget target);
-    bool start(const WifiNetworkInfo& targetNetwork); // For specific AP attacks
-    bool startAllAPs();                               // For cycling attacks
+    void prepareAttack(DeauthAttackType type);
+    bool start(const WifiNetworkInfo& targetNetwork); // For AP-based attacks
+    bool start(const StationInfo& targetClient);      // <-- NEW: For pinpoint attacks
+    bool startBroadcast();                            // For cycling attacks
     void stop();
 
     // --- State Getters ---
@@ -46,14 +45,6 @@ public:
     const DeauthConfig& getPendingConfig() const;
     const std::string& getCurrentTargetSsid() const;
 
-    /**
-     * @brief Sends a burst of deauthentication packets to a target on a specific channel.
-     * This is a static utility function that can be called from anywhere in the app.
-     * It handles channel switching internally.
-     * @param targetBssid The 6-byte BSSID of the target access point.
-     * @param channel The channel the target AP is on.
-     * @param clientMac The 6-byte MAC address of a specific client to deauth. If nullptr, a broadcast deauth is sent.
-     */
     static void sendPacket(const uint8_t* targetBssid, int channel, const uint8_t* clientMac = nullptr);
 
 private:
@@ -74,10 +65,10 @@ private:
     int currentTargetIndex_;
     unsigned long lastHopTime_;
 
-    static const uint32_t ALL_APS_HOP_INTERVAL_MS = 15000; // Attack each AP for 15 seconds
-    static const uint32_t BROADCAST_PACKET_INTERVAL_MS = 200;
+    static const uint32_t ALL_APS_HOP_INTERVAL_MS = 15000;
+    static const uint32_t PACKET_INTERVAL_MS = 200; // For NORMAL and PINPOINT modes
 
-    // Timing for broadcast packets
+    // Timing for packets
     unsigned long lastPacketSendTime_;
 };
 
