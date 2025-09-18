@@ -23,8 +23,6 @@ void SongListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
 
 void SongListDataSource::onExit(App* app, ListMenu* menu) {
     tracks_.clear();
-    playlistPath_ = "";
-    playlistName_ = "";
 }
 
 // --- THIS IS THE CORRECT, FAST IMPLEMENTATION ---
