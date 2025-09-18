@@ -8,7 +8,6 @@
 #include "AudioFileSourceSD.h"
 #include "AudioGeneratorMP3.h"
 
-// ... (Constructor and other setup methods are unchanged) ...
 MusicPlayer::MusicPlayer() : 
     app_(nullptr), resourcesAllocated_(false),
     out_(nullptr), mixer_(nullptr), currentSlot_(-1),
