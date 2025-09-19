@@ -34,4 +34,22 @@ struct CarouselAnimation {
     bool update();
 };
 
+struct GridAnimation {
+    std::vector<float> itemScale;
+    std::vector<unsigned long> itemAnimStartTime;
+    float targetScrollOffset_Y;
+    float currentScrollOffset_Y;
+    bool isAnimatingIn;
+
+    static constexpr float animSpd = 20.f;
+    static constexpr float frmTime = 0.016f;
+    static constexpr float staggerDelay = 40.0f;
+
+    void resize(size_t size);
+    void init();
+    void startIntro(int numItems, int columns);
+    void setScrollTarget(float target);
+    bool update();
+};
+
 #endif // ANIMATION_H

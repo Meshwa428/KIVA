@@ -51,7 +51,7 @@ void ConnectionStatusMenu::draw(App* app, U8G2& display) {
     WifiManager& wifi = app->getWifiManager();
     WifiState state = wifi.getState();
     
-    IconType icon = IconType::NET_WIFI;
+    IconType icon = IconType::WIFI;
     const char* top_text = "Connecting";
     String bottom_text = wifi.getSsidToConnect();
 

@@ -2,6 +2,7 @@
 #define GRID_MENU_H
 
 #include "IMenu.h"
+#include "Animation.h" // Now includes GridAnimation
 #include <vector>
 #include <string>
 
@@ -21,7 +22,6 @@ public:
 
 private:
     void scroll(int direction);
-    void startGridAnimation();
 
     std::string title_;
     std::vector<MenuItem> menuItems_;
@@ -29,12 +29,8 @@ private:
     int selectedIndex_;
     int columns_;
 
-    // Animation state
-    float targetGridScrollOffset_Y_;
-    float currentGridScrollOffset_Y_anim_;
-    std::vector<float> gridItemScale_;
-    std::vector<unsigned long> gridItemAnimStartTime_;
-    bool gridAnimatingIn_;
+    // Animation state is now encapsulated
+    GridAnimation animation_;
 
     // Marquee state
     char marqueeText_[40];

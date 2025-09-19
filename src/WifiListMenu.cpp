@@ -273,7 +273,7 @@ void WifiListMenu::draw(App* app, U8G2& display)
             int lock_x = 128 - 4 - IconSize::SMALL_WIDTH;
             int lock_y = item_center_y_abs - (IconSize::SMALL_HEIGHT / 2);
             if (isSelected) display.setDrawColor(0);
-            drawCustomIcon(display, lock_x, lock_y, IconType::NET_WIFI_LOCK, IconRenderSize::SMALL);
+            drawCustomIcon(display, lock_x, lock_y, IconType::WIFI_LOCK, IconRenderSize::SMALL);
             if (isSelected) display.setDrawColor(1);
         }
     }

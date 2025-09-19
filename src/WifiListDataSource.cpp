@@ -194,7 +194,7 @@ void WifiListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int i
     if (drawLock) {
         int lock_x = (x + w) - 4 - IconSize::SMALL_WIDTH;
         int lock_y = item_center_y_abs - (IconSize::SMALL_HEIGHT / 2);
-        drawCustomIcon(display, lock_x, lock_y, IconType::NET_WIFI_LOCK, IconRenderSize::SMALL);
+        drawCustomIcon(display, lock_x, lock_y, IconType::WIFI_LOCK, IconRenderSize::SMALL);
     }
 }
 

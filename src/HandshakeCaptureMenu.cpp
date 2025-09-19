@@ -6,7 +6,7 @@
 // --- THIS IS THE FIX ---
 // Added 'MenuType::HANDSHAKE_CAPTURE_MENU' as the second argument
 HandshakeCaptureMenu::HandshakeCaptureMenu() : GridMenu("Handshake Sniffer", MenuType::HANDSHAKE_CAPTURE_MENU, {
-    MenuItem{"EAPOL (Scan)", IconType::NET_WIFI, MenuType::NONE,
+    MenuItem{"EAPOL (Scan)", IconType::WIFI, MenuType::NONE,
         [](App* app) {
             app->getHandshakeCapture().prepare(HandshakeCaptureMode::EAPOL, HandshakeCaptureType::SCANNER);
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));
@@ -24,7 +24,7 @@ HandshakeCaptureMenu::HandshakeCaptureMenu() : GridMenu("Handshake Sniffer", Men
             ds.setScanOnEnter(true);
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
         }},
-    MenuItem{"PMKID (Scan)", IconType::NET_WIFI, MenuType::NONE,
+    MenuItem{"PMKID (Scan)", IconType::WIFI, MenuType::NONE,
         [](App* app) {
             app->getHandshakeCapture().prepare(HandshakeCaptureMode::PMKID, HandshakeCaptureType::SCANNER);
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::HANDSHAKE_CAPTURE_ACTIVE));

@@ -134,3 +134,71 @@ bool CarouselAnimation::update() {
     }
     return anim;
 }
+
+// --- GridAnimation ---
+void GridAnimation::resize(size_t size) {
+    itemScale.assign(size, 0.0f);
+    itemAnimStartTime.assign(size, 0);
+}
+
+void GridAnimation::init() {
+    std::fill(itemScale.begin(), itemScale.end(), 0.0f);
+    std::fill(itemAnimStartTime.begin(), itemAnimStartTime.end(), 0);
+    targetScrollOffset_Y = 0.0f;
+    currentScrollOffset_Y = 0.0f;
+    isAnimatingIn = false;
+}
+
+void GridAnimation::startIntro(int numItems, int columns) {
+    isAnimatingIn = true;
+    unsigned long currentTime = millis();
+    for (int i = 0; i < numItems; ++i)
+    {
+        itemScale[i] = 0.0f;
+        int row = i / columns;
+        int col = i % columns;
+        itemAnimStartTime[i] = currentTime + (unsigned long)((row * 1.5f + col) * staggerDelay);
+    }
+}
+
+void GridAnimation::setScrollTarget(float target) {
+    targetScrollOffset_Y = target;
+}
+
+bool GridAnimation::update() {
+    bool isAnimating = false;
+    
+    // Smooth scrolling animation
+    float scrollDiff = targetScrollOffset_Y - currentScrollOffset_Y;
+    if (abs(scrollDiff) > 0.1f) {
+        currentScrollOffset_Y += scrollDiff * animSpd * frmTime;
+        isAnimating = true;
+    } else {
+        currentScrollOffset_Y = targetScrollOffset_Y;
+    }
+
+    // Intro stagger animation
+    if (isAnimatingIn) {
+        bool stillAnimatingIntro = false;
+        unsigned long currentTime = millis();
+        for (size_t i = 0; i < itemScale.size(); ++i) {
+            if (currentTime >= itemAnimStartTime[i]) {
+                float diffScale = 1.0f - itemScale[i];
+                if (abs(diffScale) > 0.01f) {
+                    itemScale[i] += diffScale * animSpd * frmTime;
+                    stillAnimatingIntro = true;
+                } else {
+                    itemScale[i] = 1.0f;
+                }
+            } else {
+                stillAnimatingIntro = true; // An item is still waiting for its start time
+            }
+        }
+        if (!stillAnimatingIntro) {
+            isAnimatingIn = false;
+        }
+        isAnimating = isAnimating || stillAnimatingIntro;
+    }
+    
+    return isAnimating;
+}

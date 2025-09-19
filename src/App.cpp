@@ -53,7 +53,7 @@ App::App() :
     // --- Main Navigation Menus ---
     mainMenu_(),
     toolsMenu_("Tools", MenuType::TOOLS_CAROUSEL, {
-        {"WIFI", IconType::NET_WIFI, MenuType::WIFI_TOOLS_GRID},
+        {"WIFI", IconType::WIFI, MenuType::WIFI_TOOLS_GRID},
         {"BLE", IconType::NET_BLUETOOTH, MenuType::BLE_TOOLS_GRID},
         {"NRF24 Jammer", IconType::TOOL_JAMMING, MenuType::NRF_JAMMER_GRID},
         {"Host/Other", IconType::TOOL_INJECTION, MenuType::HOST_OTHER_GRID},
@@ -103,7 +103,7 @@ App::App() :
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
-        {"WiFi Narrow", IconType::NET_WIFI, MenuType::NONE,
+        {"WiFi Narrow", IconType::WIFI, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -292,7 +292,7 @@ App::App() :
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
         {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
         {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
-        {"Connectivity", IconType::NET_WIFI, MenuType::CONNECTIVITY_SETTINGS_LIST},
+        {"Connectivity", IconType::WIFI, MenuType::CONNECTIVITY_SETTINGS_LIST},
         {"System", IconType::SETTING_SYSTEM, MenuType::SYSTEM_SETTINGS_LIST},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
@@ -355,7 +355,7 @@ App::App() :
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     wifiSniffDataSource_({
-        {"Handshake Sniffer", IconType::NET_WIFI_LOCK, MenuType::HANDSHAKE_CAPTURE_MENU},
+        {"Handshake Sniffer", IconType::WIFI_LOCK, MenuType::HANDSHAKE_CAPTURE_MENU},
         {"Probe Sniffer", IconType::TOOL_PROBE, MenuType::PROBE_ACTIVE},
         {"Station Sniffer", IconType::TARGET, MenuType::NONE, [](App* app){
             // This is for the "Sniff & Save" feature
@@ -470,7 +470,7 @@ App::App() :
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     connectivitySettingsDataSource_({
-        {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST, 
+        {"WiFi Settings", IconType::WIFI, MenuType::WIFI_LIST, 
             [](App* app) {
                 // 1. Explicitly clear any lingering attack setup callback.
                 app->getWifiListDataSource().setSelectionCallback(nullptr);

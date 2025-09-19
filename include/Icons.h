@@ -27,7 +27,7 @@ enum class IconType
     GAME_PONG,
     GAME_MAZE,
     NAV_BACK,
-    NET_WIFI,
+    WIFI,
     NET_BLUETOOTH,
     TOOL_JAMMING,
     TOOL_INJECTION,
@@ -42,7 +42,7 @@ enum class IconType
     UI_FLASHLIGHT,
     UTILITIES_CATEGORY,
     BOOT_LOGO,
-    NET_WIFI_LOCK,
+    WIFI_LOCK,
     SD_CARD,
     BEACON,
     SKULL,
@@ -81,7 +81,7 @@ extern const unsigned char icon_game_tetris_large_bits[];
 extern const unsigned char icon_game_pong_large_bits[];
 extern const unsigned char icon_game_maze_large_bits[];
 extern const unsigned char icon_nav_back_large_bits[];
-extern const unsigned char icon_net_wifi_large_bits[];
+extern const unsigned char icon_wifi_large_bits[];
 extern const unsigned char icon_net_bluetooth_large_bits[];
 extern const unsigned char icon_tool_jamming_large_bits[];
 extern const unsigned char icon_tool_injection_large_bits[];
@@ -121,5 +121,6 @@ extern const unsigned char icon_ui_charging_bolt_small_bits[];
 extern const unsigned char icon_ui_refresh_small_bits[];
 extern const unsigned char icon_nav_back_small_bits[];
 extern const unsigned char icon_lock_small_bits[];
+extern const unsigned char icon_wifi_small_bits[];
 
 #endif // ICONS_H

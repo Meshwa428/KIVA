@@ -34,11 +34,17 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
             h = IconSize::SMALL_HEIGHT;
             icon_resolved = true;
             break;
-        case IconType::NET_WIFI_LOCK:
+        case IconType::WIFI_LOCK:
             xbm_data = icon_lock_small_bits;
             w = IconSize::SMALL_WIDTH;
             h = IconSize::SMALL_HEIGHT;
             icon_resolved = true;
+        case IconType::WIFI:
+            xbm_data = icon_wifi_small_bits;
+            w = IconSize::SMALL_WIDTH;
+            h = IconSize::SMALL_HEIGHT;
+            icon_resolved = true;
+            break;
         default:
             break; // Fall through to large icon
         }
@@ -85,8 +91,8 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
         case IconType::NAV_BACK:
             xbm_data = icon_nav_back_large_bits;
             break;
-        case IconType::NET_WIFI:
-            xbm_data = icon_net_wifi_large_bits;
+        case IconType::WIFI:
+            xbm_data = icon_wifi_large_bits;
             break;
         case IconType::NET_BLUETOOTH:
             xbm_data = icon_net_bluetooth_large_bits;

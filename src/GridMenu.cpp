@@ -10,14 +10,13 @@
 GridMenu::GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> items, int columns) : 
     title_(title),
     menuItems_(items),
-    menuType_(menuType), // Set type from parameter
+    menuType_(menuType),
     columns_(columns),
     selectedIndex_(0),
-    gridAnimatingIn_(false),
+    animation_(), // Default constructed
     marqueeActive_(false),
     marqueeScrollLeft_(true)
 {
-    // REMOVED all the fragile "if (title == ...)" logic
 }
 
 void GridMenu::onEnter(App *app, bool isForwardNav)
@@ -26,57 +25,21 @@ void GridMenu::onEnter(App *app, bool isForwardNav)
 
     if (isForwardNav) {
         selectedIndex_ = 0;
-        targetGridScrollOffset_Y_ = 0;
-        currentGridScrollOffset_Y_anim_ = 0;
         marqueeScrollLeft_ = true;
     }
-    // Resize animation vectors to match the number of items
-    gridItemScale_.resize(menuItems_.size());
-    gridItemAnimStartTime_.resize(menuItems_.size());
-
-    startGridAnimation();
+    
+    // Setup and start animation via the animation object
+    animation_.resize(menuItems_.size());
+    animation_.init();
+    animation_.startIntro(menuItems_.size(), columns_);
+    
     marqueeActive_ = false;
 }
 
 void GridMenu::onUpdate(App *app)
 {
-    float scrollDiff = targetGridScrollOffset_Y_ - currentGridScrollOffset_Y_anim_;
-    if (abs(scrollDiff) > 0.1f)
-    {
-        currentGridScrollOffset_Y_anim_ += scrollDiff * GRID_ANIM_SPEED * 0.016f;
-    }
-    else
-    {
-        currentGridScrollOffset_Y_anim_ = targetGridScrollOffset_Y_;
-    }
-
-    if (gridAnimatingIn_)
-    {
-        bool stillAnimating = false;
-        unsigned long currentTime = millis();
-        for (size_t i = 0; i < menuItems_.size(); ++i)
-        {
-            if (currentTime >= gridItemAnimStartTime_[i])
-            {
-                float diffScale = 1.0f - gridItemScale_[i];
-                if (abs(diffScale) > 0.01f)
-                {
-                    gridItemScale_[i] += diffScale * GRID_ANIM_SPEED * 0.016f;
-                    stillAnimating = true;
-                }
-                else
-                {
-                    gridItemScale_[i] = 1.0f;
-                }
-            }
-            else
-            {
-                stillAnimating = true;
-            }
-        }
-        if (!stillAnimating)
-            gridAnimatingIn_ = false;
-    }
+    // All animation logic is now handled by the animation object
+    animation_.update();
 }
 
 void GridMenu::onExit(App *app)
@@ -167,29 +130,16 @@ void GridMenu::scroll(int direction)
     const int visibleRows = gridVisibleAreaH / itemRowHeight;
 
     int currentSelectionRow = selectedIndex_ / columns_;
-    int topVisibleRow = (int)(targetGridScrollOffset_Y_ / itemRowHeight);
+    int topVisibleRow = (int)(animation_.targetScrollOffset_Y / itemRowHeight);
 
     if (currentSelectionRow < topVisibleRow) {
-        targetGridScrollOffset_Y_ = currentSelectionRow * itemRowHeight;
+        animation_.setScrollTarget(currentSelectionRow * itemRowHeight);
     } else if (currentSelectionRow >= topVisibleRow + visibleRows) {
-        targetGridScrollOffset_Y_ = (currentSelectionRow - visibleRows + 1) * itemRowHeight;
+        animation_.setScrollTarget((currentSelectionRow - visibleRows + 1) * itemRowHeight);
     }
     
     marqueeActive_ = false;
     marqueeScrollLeft_ = true;
-}
-
-void GridMenu::startGridAnimation()
-{
-    gridAnimatingIn_ = true;
-    unsigned long currentTime = millis();
-    for (size_t i = 0; i < menuItems_.size(); ++i)
-    {
-        gridItemScale_[i] = 0.0f;
-        int row = i / columns_;
-        int col = i % columns_;
-        gridItemAnimStartTime_[i] = currentTime + (unsigned long)((row * 1.5f + col) * GRID_ANIM_STAGGER_DELAY);
-    }
 }
 
 void GridMenu::draw(App* app, U8G2& display) {
@@ -206,14 +156,14 @@ void GridMenu::draw(App* app, U8G2& display) {
         int row = i / columns_;
         int col = i % columns_;
 
-        float scale = gridAnimatingIn_ ? gridItemScale_[i] : 1.0f;
+        float scale = animation_.isAnimatingIn ? animation_.itemScale[i] : 1.0f;
         int itemW = (int)(itemBaseW * scale);
         int itemH = (int)(itemBaseH * scale);
         if (itemW < 1 || itemH < 1) continue;
 
         int box_x = 4 + col * (itemBaseW + 4) + (itemBaseW - itemW) / 2;
         int box_y_noscroll = gridStartY + row * (itemBaseH + 4) + (itemBaseH - itemH) / 2;
-        int box_y = box_y_noscroll - (int)currentGridScrollOffset_Y_anim_;
+        int box_y = box_y_noscroll - (int)animation_.currentScrollOffset_Y;
         
         if (box_y + itemH <= clip_y_start || box_y >= 64) continue;
         
