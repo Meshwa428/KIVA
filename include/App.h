@@ -134,6 +134,16 @@ private:
 
     float currentProgressBarFillPx_;
 
+    // --- NEW: Marquee state for the status bar title ---
+    char statusBarMarqueeText_[40];
+    int statusBarMarqueeTextLenPx_;
+    float statusBarMarqueeOffset_;
+    unsigned long lastStatusBarMarqueeTime_;
+    bool statusBarMarqueeActive_;
+    bool statusBarMarqueePaused_;
+    unsigned long statusBarMarqueePauseStartTime_;
+    bool statusBarMarqueeScrollLeft_;
+
     static const int MAX_LOG_LINES_SMALL_DISPLAY = 4;
     static const int MAX_LOG_LINE_LENGTH_SMALL_DISPLAY = 32;
     char smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];

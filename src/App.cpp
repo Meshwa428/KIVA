@@ -20,6 +20,14 @@ App& App::getInstance() {
 App::App() : 
     // --- Core Managers & Hardware ---
     currentMenu_(nullptr),
+    // --- NEW: Initialize status bar marquee state ---
+    statusBarMarqueeTextLenPx_(0),
+    statusBarMarqueeOffset_(0.0f),
+    lastStatusBarMarqueeTime_(0),
+    statusBarMarqueeActive_(false),
+    statusBarMarqueePaused_(false),
+    statusBarMarqueePauseStartTime_(0),
+    statusBarMarqueeScrollLeft_(true),
     currentProgressBarFillPx_(0.0f),
     hardware_(),
     wifiManager_(),
@@ -462,7 +470,14 @@ App::App() :
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
     connectivitySettingsDataSource_({
-        {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST},
+        {"WiFi Settings", IconType::NET_WIFI, MenuType::WIFI_LIST, 
+            [](App* app) {
+                // 1. Explicitly clear any lingering attack setup callback.
+                app->getWifiListDataSource().setSelectionCallback(nullptr);
+                // 2. Now, perform the navigation to the WiFi list menu.
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+            }
+        },
         MenuItem{
             "Hop Delay", IconType::UI_REFRESH, MenuType::NONE, nullptr, true,
             // --- THIS IS THE MODIFIED LAMBDA ---
@@ -917,6 +932,10 @@ void App::onEvent(const Event& event) {
 }
 
 void App::changeMenu(MenuType type, bool isForwardNav) {
+    // --- NEW: Reset status bar marquee whenever the menu changes ---
+    statusBarMarqueeActive_ = false;
+    statusBarMarqueeScrollLeft_ = true;
+
     // --- LOGGING POINT #2: MENU NAVIGATION ---
     const char* fromMenuName = (currentMenu_) ? DebugUtils::menuTypeToString(currentMenu_->getMenuType()) : "NULL";
     const char* toMenuName = DebugUtils::menuTypeToString(type);
@@ -1004,6 +1023,10 @@ void App::replaceMenu(MenuType type) {
     LOG(LogLevel::INFO, "NAV", "Replace: From '%s' -> To '%s'", 
         (currentMenu_ ? DebugUtils::menuTypeToString(currentMenu_->getMenuType()) : "NULL"), 
         DebugUtils::menuTypeToString(type));
+
+    // --- NEW: Reset status bar marquee ---
+    statusBarMarqueeActive_ = false;
+    statusBarMarqueeScrollLeft_ = true;
 
     if (currentMenu_) {
         currentMenu_->onExit(this);
@@ -1123,26 +1146,9 @@ void App::drawStatusBar()
         title = currentMenu_->getTitle();
     }
 
-    // Truncate title if too long
-    char titleBuffer[16];
-    strncpy(titleBuffer, title, sizeof(titleBuffer) - 1);
-    titleBuffer[sizeof(titleBuffer) - 1] = '\0';
-    if (display.getStrWidth(titleBuffer) > 65)
-    {
-        char *truncated = truncateText(titleBuffer, 60, display);
-        strncpy(titleBuffer, truncated, sizeof(titleBuffer) - 1);
-        titleBuffer[sizeof(titleBuffer) - 1] = '\0';
-    }
-    display.drawStr(2, 8, titleBuffer);
-
-    // --- LOGGING POINT #4: Value Just Before Rendering ---
-    float voltageToRender = hardware_.getBatteryVoltage();
-    uint8_t percentToRender = hardware_.getBatteryPercentage();
-    // Serial.printf("[APP-LOG-RENDER] Drawing Status Bar. Voltage: %.2fV, Percent: %d%%\n", voltageToRender, percentToRender);
-
     // --- Battery Drawing Logic ---
     int battery_area_x = 128 - 2;
-    uint8_t batPercent = percentToRender; // Use the value we just logged
+    uint8_t batPercent = hardware_.getBatteryPercentage();
     int bat_icon_width = 10;
     battery_area_x -= bat_icon_width;
     drawBatIcon(display, battery_area_x, 2, batPercent);
@@ -1163,6 +1169,25 @@ void App::drawStatusBar()
     int percent_text_spacing = 2;
     battery_area_x -= (percentWidth + percent_text_spacing);
     display.drawStr(battery_area_x, 8, percentStr);
+
+    // --- NEW MARQUEE LOGIC FOR TITLE ---
+    int title_x = 2;
+    int title_y = 8;
+    // Calculate available width based on where the battery info starts, with 4px padding
+    int title_available_width = battery_area_x - title_x - 4;
+
+    updateMarquee(statusBarMarqueeActive_, statusBarMarqueePaused_, statusBarMarqueeScrollLeft_, 
+                  statusBarMarqueePauseStartTime_, lastStatusBarMarqueeTime_, statusBarMarqueeOffset_, 
+                  statusBarMarqueeText_, statusBarMarqueeTextLenPx_, title, title_available_width, display);
+
+    // Clip the drawing area to prevent text from overflowing into the battery info
+    display.setClipWindow(title_x, 0, title_x + title_available_width, STATUS_BAR_H);
+    if (statusBarMarqueeActive_) {
+        display.drawStr(title_x + (int)statusBarMarqueeOffset_, title_y, statusBarMarqueeText_);
+    } else {
+        display.drawStr(title_x, title_y, title);
+    }
+    display.setMaxClipWindow();
 
     // Bottom line
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
