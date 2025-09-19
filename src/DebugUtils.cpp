@@ -20,6 +20,7 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::BEACON_MODE_GRID: return "BEACON_MODE_GRID";
         case MenuType::DEAUTH_MODE_GRID: return "DEAUTH_MODE_GRID";
         case MenuType::PROBE_FLOOD_MODE_GRID: return "PROBE_FLOOD_MODE_GRID";
+        case MenuType::ASSOCIATION_SLEEP_MODES_GRID: return "ASSOCIATION_SLEEP_MODES_GRID";
         case MenuType::WIFI_LIST: return "WIFI_LIST";
         case MenuType::BEACON_FILE_LIST: return "BEACON_FILE_LIST";
         case MenuType::PORTAL_LIST: return "PORTAL_LIST";

@@ -44,7 +44,6 @@ void WifiListDataSource::onExit(App* app, ListMenu* menu) {
     scanOnEnter_ = true;
     isScanning_ = false;
     backNavOverride_ = false;
-    selectionCallback_ = nullptr; // <-- RENAMED
 }
 
 void WifiListDataSource::onUpdate(App* app, ListMenu* menu) {
