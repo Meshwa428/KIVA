@@ -22,23 +22,23 @@ void VerticalListAnimation::init() {
     isIntroPhase = false; introStartTime = 0;
 }
 
-void VerticalListAnimation::setTargets(int selIdx, int total) {
+void VerticalListAnimation::setTargets(int selIdx, int total, float itemSpacing) {
     if (targetOffsetY.size() != total) resize(total);
     for (int i = 0; i < total; i++) {
         if (i < total) {
             int rP = i - selIdx;
-            targetOffsetY[i] = rP * itmSpc;
+            targetOffsetY[i] = rP * itemSpacing;
             if (i == selIdx) targetScale[i] = 1.3f;
             else if (abs(rP) == 1) targetScale[i] = 1.f;
             else targetScale[i] = 0.8f;
         } else {
-            targetOffsetY[i] = (i - selIdx) * itmSpc;
+            targetOffsetY[i] = (i - selIdx) * itemSpacing;
             targetScale[i] = 0.f;
         }
     }
 }
 
-void VerticalListAnimation::startIntro(int selIdx, int total) {
+void VerticalListAnimation::startIntro(int selIdx, int total, float itemSpacing) {
     isIntroPhase = true;
     introStartTime = millis();
     const float initial_scale = 0.0f;
@@ -47,7 +47,7 @@ void VerticalListAnimation::startIntro(int selIdx, int total) {
     for (int i = 0; i < total; i++) {
         if (i < total) {
             int rP = i - selIdx;
-            float finalTargetOffsetY = rP * itmSpc;
+            float finalTargetOffsetY = rP * itemSpacing;
             float finalTargetScale = (i == selIdx) ? 1.3f : (abs(rP) == 1) ? 1.f : 0.8f;
             introStartSourceOffsetY[i] = finalTargetOffsetY * (1.0f - initial_y_offset_factor_from_final);
             introStartSourceScale[i] = initial_scale;
@@ -56,11 +56,11 @@ void VerticalListAnimation::startIntro(int selIdx, int total) {
             targetOffsetY[i] = finalTargetOffsetY;
             targetScale[i] = finalTargetScale;
         } else {
-            introStartSourceOffsetY[i] = (i - selIdx) * itmSpc;
+            introStartSourceOffsetY[i] = (i - selIdx) * itemSpacing;
             introStartSourceScale[i] = 0.0f;
             itemOffsetY[i] = introStartSourceOffsetY[i];
             itemScale[i] = introStartSourceScale[i];
-            targetOffsetY[i] = (i - selIdx) * itmSpc;
+            targetOffsetY[i] = (i - selIdx) * itemSpacing;
             targetScale[i] = 0.0f;
         }
     }

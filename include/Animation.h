@@ -17,8 +17,8 @@ struct VerticalListAnimation {
     
     void resize(size_t size);
     void init();
-    void startIntro(int selIdx, int total);
-    void setTargets(int selIdx, int total);
+    void startIntro(int selIdx, int total, float itemSpacing = itmSpc);
+    void setTargets(int selIdx, int total, float itemSpacing = itmSpc);
     bool update();
 };
 

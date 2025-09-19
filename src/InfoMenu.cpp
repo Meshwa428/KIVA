@@ -8,6 +8,8 @@
 #include "esp_psram.h"
 #include <vector>
 #include <string>
+#include <Arduino.h> // For temperatureRead()
+#include <algorithm> // For std::max
 
 // Helper function for smart byte formatting (compact suffixes)
 static std::string formatBytes(uint64_t bytes) {
@@ -31,18 +33,27 @@ static std::string formatBytes(uint64_t bytes) {
     return std::string(buffer);
 }
 
-InfoMenu::InfoMenu() : uptimeItemIndex_(-1) {}
+InfoMenu::InfoMenu() : 
+    uptimeItemIndex_(-1), 
+    temperatureItemIndex_(-1),
+    selectedIndex_(0)
+{}
 
 void InfoMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    // This function now runs only ONCE when the menu is opened.
+    
     infoItems_.clear();
     uptimeItemIndex_ = -1;
+    temperatureItemIndex_ = -1;
     char buffer[40];
 
     // CPU Freq
     snprintf(buffer, sizeof(buffer), "%d MHz", getCpuFrequencyMhz());
     infoItems_.push_back({"CPU Freq", buffer});
+
+    // Temperature
+    infoItems_.push_back({"Temperature", "..."});
+    temperatureItemIndex_ = infoItems_.size() - 1;
 
     // RAM (Used / Total)
     uint32_t totalHeap = ESP.getHeapSize();
@@ -71,69 +82,122 @@ void InfoMenu::onEnter(App* app, bool isForwardNav) {
     unsigned long hours = minutes / 60;
     snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
     infoItems_.push_back({"Uptime", buffer});
-    
-    // Store the index of the uptime item so we can update it efficiently.
     uptimeItemIndex_ = infoItems_.size() - 1;
+
+    // Initialize scrolling animation
+    if (isForwardNav) {
+        selectedIndex_ = 0;
+    }
+    animation_.resize(infoItems_.size());
+    animation_.init();
+    // Use the new method to provide a custom item spacing
+    animation_.startIntro(selectedIndex_, infoItems_.size(), 10.f);
 }
 
 void InfoMenu::onUpdate(App* app) {
-    // This function is called every frame, but only updates the uptime.
-    if (uptimeItemIndex_ != -1 && uptimeItemIndex_ < infoItems_.size()) {
+    animation_.update();
+    
+    // Update Uptime
+    if (uptimeItemIndex_ != -1 && (size_t)uptimeItemIndex_ < infoItems_.size()) {
         char buffer[40];
         unsigned long seconds = millis() / 1000;
         unsigned long minutes = seconds / 60;
         unsigned long hours = minutes / 60;
         snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
-        
-        // Update only the value string for the uptime item.
         infoItems_[uptimeItemIndex_].second = buffer;
+    }
+
+    // Update Temperature
+    if (temperatureItemIndex_ != -1 && (size_t)temperatureItemIndex_ < infoItems_.size()) {
+        char buffer[16];
+        float temp = temperatureRead();
+        snprintf(buffer, sizeof(buffer), "%.1f C", temp);
+        infoItems_[temperatureItemIndex_].second = buffer;
     }
 }
 
 void InfoMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    // Clear data to free memory
     infoItems_.clear();
-    uptimeItemIndex_ = -1;
 }
 
 void InfoMenu::handleInput(InputEvent event, App* app) {
-    // Any button press will exit the info screen.
-    if (event != InputEvent::NONE) {
-        EventDispatcher::getInstance().publish(NavigateBackEvent());
+    switch(event) {
+        case InputEvent::ENCODER_CW:
+        case InputEvent::BTN_DOWN_PRESS:
+            scroll(1);
+            break;
+        case InputEvent::ENCODER_CCW:
+        case InputEvent::BTN_UP_PRESS:
+            scroll(-1);
+            break;
+        case InputEvent::BTN_BACK_PRESS:
+        case InputEvent::BTN_OK_PRESS:
+        case InputEvent::BTN_ENCODER_PRESS:
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
+            break;
+        default:
+            break;
     }
 }
 
-void InfoMenu::draw(App* app, U8G2& display) {
-    // --- Layout Calculation (runs every frame, but is very fast) ---
-    display.setFont(u8g2_font_5x7_tf);
-    const int lineHeight = 9;
-    const int footerHeight = 8;
-    const int totalItemHeight = infoItems_.size() * lineHeight;
-    const int totalContentHeight = totalItemHeight + footerHeight;
-    
-    const int drawableAreaTopY = STATUS_BAR_H + 1;
-    const int drawableAreaHeight = 63 - drawableAreaTopY;
-    
-    int contentBlockTopY = drawableAreaTopY + (drawableAreaHeight - totalContentHeight) / 2;
-    if (contentBlockTopY < drawableAreaTopY) {
-        contentBlockTopY = drawableAreaTopY;
+void InfoMenu::scroll(int direction) {
+    if (infoItems_.empty()) return;
+    selectedIndex_ += direction;
+    if (selectedIndex_ < 0) {
+        selectedIndex_ = infoItems_.size() - 1;
+    } else if (selectedIndex_ >= (int)infoItems_.size()) {
+        selectedIndex_ = 0;
     }
+    // Use the new method to provide a custom item spacing
+    animation_.setTargets(selectedIndex_, infoItems_.size(), 10.f);
+}
 
-    // --- Drawing (now just renders the stored data) ---
-    const int leftColX = 6;
-    const int rightColX = 122;
-    int currentTopY = contentBlockTopY;
+void InfoMenu::draw(App* app, U8G2& display) {
+    const int list_start_y = STATUS_BAR_H + 1;
+    const int item_h = 10;
+    const int num_visible_items = 5;
 
-    for (const auto& item : infoItems_) {
-        int baselineY = currentTopY + display.getAscent();
+    display.setClipWindow(0, list_start_y, 127, 63);
+    display.setFont(u8g2_font_5x7_tf);
+
+    for (size_t i = 0; i < infoItems_.size(); ++i) {
+        int item_center_y_rel = (int)animation_.itemOffsetY[i];
+        int item_center_y_abs = (list_start_y + (63 - list_start_y) / 2) + item_center_y_rel;
+        
+        if (item_center_y_abs < list_start_y - (item_h / 2) || item_center_y_abs > 63 + (item_h / 2)) {
+            continue;
+        }
+
+        bool isSelected = (i == selectedIndex_);
+        
+        if (isSelected) {
+            display.setDrawColor(1);
+            display.drawGlyph(0, item_center_y_abs + 3, '>');
+        }
+        
+        const auto& item = infoItems_[i];
+        const int leftColX = 6;
+        const int rightColX = 122;
+        int baselineY = item_center_y_abs + 3;
+
+        display.setDrawColor(1);
         display.drawStr(leftColX, baselineY, item.first.c_str());
         display.drawStr(rightColX - display.getStrWidth(item.second.c_str()), baselineY, item.second.c_str());
-        currentTopY += lineHeight;
     }
 
-    // --- Footer ---
-    int footerY = 63;
-    const char* instruction = "Press any key to exit";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, footerY, instruction);
+    display.setDrawColor(1);
+    display.setMaxClipWindow();
+
+    if (infoItems_.size() > num_visible_items) {
+        int scrollbarH = 63 - list_start_y;
+        int thumbH = std::max(5, (scrollbarH * num_visible_items) / (int)infoItems_.size());
+        int scrollRange = infoItems_.size() - num_visible_items;
+        int thumbY = list_start_y;
+        if (scrollRange > 0) {
+            thumbY += (scrollbarH - thumbH) * selectedIndex_ / scrollRange;
+        }
+        display.drawFrame(126, list_start_y, 2, scrollbarH); 
+        display.drawBox(126, thumbY, 2, thumbH);
+    }
 }

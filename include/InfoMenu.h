@@ -2,6 +2,7 @@
 #define INFO_MENU_H
 
 #include "IMenu.h"
+#include "Animation.h" // Add this for scrolling animations
 #include <vector>
 #include <string>
 
@@ -19,8 +20,15 @@ public:
     MenuType getMenuType() const override { return MenuType::INFO_MENU; }
 
 private:
+    void scroll(int direction); // Add scroll helper method
+
     std::vector<std::pair<std::string, std::string>> infoItems_;
-    int uptimeItemIndex_; // To efficiently update the uptime string
+    int uptimeItemIndex_;
+    int temperatureItemIndex_; // Add index for temperature item
+
+    // Add state for scrolling
+    int selectedIndex_;
+    VerticalListAnimation animation_;
 };
 
 #endif // INFO_MENU_H
