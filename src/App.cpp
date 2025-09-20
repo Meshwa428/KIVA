@@ -20,6 +20,10 @@ App& App::getInstance() {
     return instance;
 }
 
+void App::requestRedraw() {
+    redrawRequested_ = true;
+}
+
 App::App() : 
     // --- Core Managers & Hardware ---
     currentMenu_(nullptr),
@@ -796,10 +800,9 @@ void App::setup()
 // ... (the rest of App.cpp, including the loop() function, remains unchanged) ...
 void App::loop()
 {
+    // 1. Update hardware and background services
     hardware_.update();
 
-    // --- MODIFICATION START: Deferred Navigation Handling ---
-    // This block checks for pending navigation requests *after* hardware updates are complete.
     if (pendingMenuChange_ != MenuType::NONE) {
         changeMenu(pendingMenuChange_, isForwardNavPending_);
         pendingMenuChange_ = MenuType::NONE;
@@ -813,7 +816,6 @@ void App::loop()
         replaceMenu(pendingReplaceMenu_);
         pendingReplaceMenu_ = MenuType::NONE;
     }
-    // --- MODIFICATION END ---
 
     wifiManager_.update();
     otaManager_.loop();
@@ -832,6 +834,67 @@ void App::loop()
     duckyRunner_.loop();
     associationSleeper_.loop();
 
+    // 2. Let the current menu run its update logic (e.g., for animations)
+    if (currentMenu_)
+    {
+        currentMenu_->onUpdate(this);
+    }
+
+    // 3. Determine if a redraw is needed
+    if (millis() - lastDrawTime_ > 1000) { // Periodic refresh for status bar time, etc.
+        requestRedraw();
+    }
+
+    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
+                    evilPortal_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
+                    duckyRunner_.isActive() || associationSleeper_.isActive();
+    if (perfMode) {
+        requestRedraw();
+    }
+
+    // 4. The core optimization: only draw if requested
+    if (redrawRequested_) {
+        redrawRequested_ = false;
+        lastDrawTime_ = millis();
+
+        // --- Drawing Logic ---
+        U8G2 &mainDisplay = hardware_.getMainDisplay();
+        mainDisplay.clearBuffer();
+
+        IMenu *menuForUI = currentMenu_;
+        IMenu *underlyingMenu = nullptr;
+
+        if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
+            underlyingMenu = getMenu(getPreviousMenuType());
+            menuForUI = underlyingMenu; 
+        }
+        
+        if (menuForUI) {
+            if (!menuForUI->drawCustomStatusBar(this, mainDisplay)) {
+                drawStatusBar();
+            }
+        } else if (currentMenu_) {
+            drawStatusBar();
+        }
+        
+        if (underlyingMenu) {
+            underlyingMenu->draw(this, mainDisplay);
+        }
+        
+        if (currentMenu_) {
+            currentMenu_->draw(this, mainDisplay);
+        }
+
+        mainDisplay.sendBuffer();
+        drawSecondaryDisplay();
+        // --- End Drawing Logic ---
+
+    } else {
+        // --- Idle State ---
+        delay(10); // Yield CPU time
+    }
+
+    // 5. Handle WiFi hardware state based on current needs
     bool wifiIsRequired = false; 
     if (currentMenu_)
     {
@@ -872,53 +935,6 @@ void App::loop()
         LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
         wifiManager_.setHardwareState(false);
     }
-
-    // Input is now handled by the event system. The old polling logic is removed.
-
-    if (currentMenu_)
-    {
-        currentMenu_->onUpdate(this);
-    }
-
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
-                    evilPortal_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
-                    duckyRunner_.isActive();
-    static unsigned long lastRenderTime = 0;
-    if (perfMode && (millis() - lastRenderTime < 1000))
-    {
-        return;
-    }
-    lastRenderTime = millis();
-
-    U8G2 &mainDisplay = hardware_.getMainDisplay();
-    mainDisplay.clearBuffer();
-
-    IMenu *menuForUI = currentMenu_;
-    IMenu *underlyingMenu = nullptr;
-
-    if (currentMenu_ && currentMenu_->getMenuType() == MenuType::POPUP) {
-        underlyingMenu = getMenu(getPreviousMenuType());
-        menuForUI = underlyingMenu; 
-    }
-    
-    if (menuForUI) {
-        if (!menuForUI->drawCustomStatusBar(this, mainDisplay)) {
-            drawStatusBar();
-        }
-    } else if (currentMenu_) {
-        drawStatusBar();
-    }
-    
-    if (underlyingMenu) {
-        underlyingMenu->draw(this, mainDisplay);
-    }
-    
-    if (currentMenu_) {
-        currentMenu_->draw(this, mainDisplay);
-    }
-
-    mainDisplay.sendBuffer();
-    drawSecondaryDisplay();
 }
 
 void App::onEvent(const Event& event) {
@@ -1033,6 +1049,7 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
                 navigationStack_.push_back(type);
             }
         }
+        requestRedraw();
     }
 }
 
@@ -1062,6 +1079,7 @@ void App::replaceMenu(MenuType type) {
         navigationStack_.push_back(type);
         // Enter the new menu as if it were a forward navigation
         currentMenu_->onEnter(this, true); 
+        requestRedraw();
     }
 }
 
@@ -1127,6 +1145,7 @@ void App::toggleSecondaryWidget(SecondaryWidgetType type) {
         mask |= bit; // Activate
     }
     configManager_.saveSettings();
+    requestRedraw();
 }
 
 bool App::isSecondaryWidgetActive(SecondaryWidgetType type) const {

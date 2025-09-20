@@ -25,7 +25,9 @@ void MainMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void MainMenu::onUpdate(App* app) {
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
 }
 
 void MainMenu::onExit(App* app) {

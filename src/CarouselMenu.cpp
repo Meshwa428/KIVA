@@ -29,7 +29,9 @@ void CarouselMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void CarouselMenu::onUpdate(App* app) {
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
 }
 
 void CarouselMenu::onExit(App* app) {

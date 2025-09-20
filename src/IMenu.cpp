@@ -7,8 +7,10 @@ void IMenu::onEvent(const Event& event) {
     if (event.type == EventType::APP_INPUT) {
         // We know App is valid because a menu can't exist without it.
         // We need a way to get the App context. For now, we assume a global or service locator.
+        App* app = &App::getInstance();
         // Let's assume App provides a static getInstance() for simplicity here.
         const auto& inputEvent = static_cast<const InputEventData&>(event);
-        handleInput(inputEvent.input, &App::getInstance()); // We'll need to implement App::getInstance()
+        handleInput(inputEvent.input, app); // We'll need to implement App::getInstance()
+        app->requestRedraw();
     }
 }

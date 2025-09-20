@@ -38,6 +38,7 @@ void PopUpMenu::onUpdate(App* app) {
     float diff = targetScale - overlayScale_;
     if (abs(diff) > 0.01f) {
         overlayScale_ += diff * (GRID_ANIM_SPEED * 1.5f) * 0.016f;
+        app->requestRedraw();
     } else {
         overlayScale_ = targetScale;
     }

@@ -43,7 +43,9 @@ void ListMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void ListMenu::onUpdate(App* app) {
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
     if (dataSource_) {
         dataSource_->onUpdate(app, this);
     }

@@ -118,6 +118,7 @@ public:
     MenuType getPreviousMenuType() const;
 
     void drawStatusBar();
+    void requestRedraw();
 
 private:
     App(); // Private constructor
@@ -130,6 +131,10 @@ private:
 
     void updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration);
     void logToSmallDisplay(const char *message, const char *status = nullptr);
+
+    // --- NEW: Redraw optimization state ---
+    bool redrawRequested_ = true;
+    unsigned long lastDrawTime_ = 0;
 
     // --- MODIFICATION START: Add pending navigation state variables ---
     MenuType pendingMenuChange_{MenuType::NONE};

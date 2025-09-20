@@ -510,6 +510,10 @@ void HardwareManager::selectMux(uint8_t channel)
     {
         return;
     }
+
+    // LOG(LogLevel::DEBUG, "I2C_MUX", false, "Request to select channel %d (%s)", channel, DebugUtils::muxChannelToString(channel));
+    // LOG(LogLevel::INFO, "I2C_MUX", false, "SWITCHING to channel %d (%s)", channel, DebugUtils::muxChannelToString(channel));
+
     Wire.beginTransmission(Pins::MUX_ADDR);
     Wire.write(1 << channel);
     Wire.endTransmission();

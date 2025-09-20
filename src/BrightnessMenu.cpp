@@ -22,7 +22,9 @@ void BrightnessMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void BrightnessMenu::onUpdate(App* app) {
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
 }
 
 void BrightnessMenu::onExit(App* app) {

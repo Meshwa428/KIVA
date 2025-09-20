@@ -38,8 +38,9 @@ void GridMenu::onEnter(App *app, bool isForwardNav)
 
 void GridMenu::onUpdate(App *app)
 {
-    // All animation logic is now handled by the animation object
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
 }
 
 void GridMenu::onExit(App *app)
