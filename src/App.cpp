@@ -13,6 +13,8 @@
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
 
+// ... (constructor code remains exactly the same) ...
+
 App& App::getInstance() {
     static App instance;
     return instance;
@@ -627,6 +629,7 @@ App::App() :
     }
 }
 
+
 void App::setup()
 {
     Serial.begin(115200);
@@ -668,7 +671,12 @@ void App::setup()
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
         {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
         {"Assoc Sleeper",   [&](){ associationSleeper_.setup(this); }},
-        {"RTC",             [&](){ rtcManager_.setup(this); }},
+        {"RTC",             [&](){ 
+            rtcManager_.setup(this); 
+            // --- ADDED THIS LINE FOR THE FIX ---
+            rtcManager_.syncInternalClock(); 
+            // ------------------------------------
+        }},
         {"System Data",     [&](){ systemDataProvider_.setup(this); }},
         {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
@@ -701,6 +709,7 @@ void App::setup()
 
     LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing menus.");
     
+    // ... (rest of the setup function remains the same) ...
     // --- NEW, CLEANED UP MENU REGISTRY ---
     
     // Main Navigation
@@ -784,6 +793,7 @@ void App::setup()
     LOG(LogLevel::INFO, "App", "App setup finished.");
 }
 
+// ... (the rest of App.cpp, including the loop() function, remains unchanged) ...
 void App::loop()
 {
     hardware_.update();
