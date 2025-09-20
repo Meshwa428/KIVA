@@ -1,3 +1,4 @@
+#include <SPI.h>
 #include "App.h"
 #include "Icons.h"
 #include "UI_Utils.h"
@@ -49,6 +50,8 @@ App::App() :
     gameAudio_(),
     stationSniffer_(),
     associationSleeper_(),
+    rtcManager_(),
+    systemDataProvider_(),
 
     // --- Main Navigation Menus ---
     mainMenu_(),
@@ -665,6 +668,8 @@ void App::setup()
         {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
         {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
         {"Assoc Sleeper",   [&](){ associationSleeper_.setup(this); }},
+        {"RTC",             [&](){ rtcManager_.setup(this); }},
+        {"System Data",     [&](){ systemDataProvider_.setup(this); }},
         {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
@@ -803,6 +808,8 @@ void App::loop()
     wifiManager_.update();
     otaManager_.loop();
     gameAudio_.update();
+    rtcManager_.update();
+    systemDataProvider_.update();
     jammer_.loop();
     beaconSpammer_.loop();
     deauther_.loop();
@@ -1087,51 +1094,134 @@ MenuType App::getPreviousMenuType() const
     return navigationStack_[navigationStack_.size() - 2];
 }
 
+void App::toggleSecondaryWidget(SecondaryWidgetType type) {
+    uint32_t bit = 1 << static_cast<int>(type);
+    uint32_t& mask = configManager_.getSettings().secondaryWidgetMask;
+    bool is_active = (mask & bit) != 0;
+
+    if (is_active) {
+        mask &= ~bit; // Deactivate
+    } else {
+        // Count active widgets before activating a new one
+        int active_count = 0;
+        for (int i = 0; i < 5; ++i) { // Assuming 5 possible widget types
+            if ((mask & (1 << i)) != 0) {
+                active_count++;
+            }
+        }
+
+        if (active_count >= 3) { // Limit is 3 user-selectable + 1 static (Voltage)
+            showPopUp("Limit Reached", "Max 4 widgets allowed.", nullptr, "OK", "", true);
+            return;
+        }
+        mask |= bit; // Activate
+    }
+    configManager_.saveSettings();
+}
+
+bool App::isSecondaryWidgetActive(SecondaryWidgetType type) const {
+    uint32_t bit = 1 << static_cast<int>(type);
+    return (configManager_.getSettings().secondaryWidgetMask & bit) != 0;
+}
+
+std::vector<SecondaryWidgetType> App::getActiveSecondaryWidgets() const {
+    std::vector<SecondaryWidgetType> active_widgets;
+    for (int i = 0; i < 5; ++i) { // Assuming 5 possible widget types
+        if ((configManager_.getSettings().secondaryWidgetMask & (1 << i)) != 0) {
+            active_widgets.push_back(static_cast<SecondaryWidgetType>(i));
+        }
+    }
+    return active_widgets;
+}
+
 void App::drawSecondaryDisplay()
 {
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::TEXT_INPUT)
     {
-        // The PasswordInputMenu's draw function will handle drawing the keyboard
-        // on the small display. We get the display and pass it.
         U8G2 &smallDisplay = hardware_.getSmallDisplay();
-        // The cast is safe because we've checked the menu type.
         static_cast<TextInputMenu *>(currentMenu_)->draw(this, smallDisplay);
+        return;
     }
-    else
-    {
-        U8G2 &display = hardware_.getSmallDisplay();
-        display.clearBuffer();
-        display.setDrawColor(1);
 
-        // Battery Info
-        char batInfoStr[16];
-        snprintf(batInfoStr, sizeof(batInfoStr), "%.2fV %s%d%%",
-                 hardware_.getBatteryVoltage(),
-                 hardware_.isCharging() ? "+" : "",
-                 hardware_.getBatteryPercentage());
-        display.setFont(u8g2_font_5x7_tf);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(batInfoStr)) / 2, 8, batInfoStr);
+    U8G2 &display = hardware_.getSmallDisplay();
+    display.clearBuffer();
+    display.setDrawColor(1);
 
-        // Current Menu Info
-        const char *modeText = "KivaOS";
-        if (currentMenu_)
-        {
-            modeText = currentMenu_->getTitle();
-        }
-        display.setFont(u8g2_font_6x12_tr);
-        char truncated[22];
-        strncpy(truncated, modeText, sizeof(truncated) - 1);
-        truncated[sizeof(truncated) - 1] = '\0';
-        if (display.getStrWidth(truncated) > display.getDisplayWidth() - 4)
-        {
-            // A simple truncation if needed, marquee is too complex for here.
-            truncated[sizeof(truncated) - 2] = '.';
-            truncated[sizeof(truncated) - 3] = '.';
-        }
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 28, truncated);
+    // --- Top Bar ---
+    display.setFont(u8g2_font_5x7_tf);
+    // Time
+    display.drawStr(2, 7, rtcManager_.getFormattedTime().c_str());
 
-        display.sendBuffer();
+    // Battery
+    char batPercentStr[5];
+    snprintf(batPercentStr, sizeof(batPercentStr), "%d%%", hardware_.getBatteryPercentage());
+    int percentWidth = display.getStrWidth(batPercentStr);
+    drawBatIcon(display, 128 - 12, 2, hardware_.getBatteryPercentage());
+    display.drawStr(128 - 12 - percentWidth - 2, 7, batPercentStr);
+
+    // Status Icons
+    int statusIconX = (128 - 18) / 2;
+    if (wifiManager_.getState() == WifiState::CONNECTED) {
+        drawCustomIcon(display, statusIconX, 1, IconType::WIFI, IconRenderSize::SMALL);
+        statusIconX += 9;
     }
+    if (hardware_.isCharging()) {
+        drawCustomIcon(display, statusIconX, 1, IconType::UI_CHARGING_BOLT, IconRenderSize::SMALL);
+    }
+
+    display.drawHLine(0, 9, 128);
+
+    // --- Widgets ---
+    std::vector<SecondaryWidgetType> active_widgets = getActiveSecondaryWidgets();
+    std::vector<std::pair<std::string, std::string>> widget_data;
+
+    // Always add Voltage
+    char voltStr[8];
+    snprintf(voltStr, sizeof(voltStr), "%.2fV", hardware_.getBatteryVoltage());
+    widget_data.push_back({"VOLT", voltStr});
+
+    for (const auto& type : active_widgets) {
+        char valStr[8];
+        switch (type) {
+            case SecondaryWidgetType::WIDGET_RAM:
+                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getRamUsage().percentage);
+                widget_data.push_back({"RAM", valStr});
+                break;
+            case SecondaryWidgetType::WIDGET_PSRAM:
+                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getPsramUsage().percentage);
+                widget_data.push_back({"PSRAM", valStr});
+                break;
+            case SecondaryWidgetType::WIDGET_SD:
+                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getSdCardUsage().percentage);
+                widget_data.push_back({"SD", valStr});
+                break;
+            case SecondaryWidgetType::WIDGET_CPU:
+                snprintf(valStr, sizeof(valStr), "%lu", systemDataProvider_.getCpuFrequency());
+                widget_data.push_back({"CPU", valStr});
+                break;
+            case SecondaryWidgetType::WIDGET_TEMP:
+                snprintf(valStr, sizeof(valStr), "%.0fC", systemDataProvider_.getTemperature());
+                widget_data.push_back({"TEMP", valStr});
+                break;
+        }
+    }
+
+    int num_widgets = widget_data.size();
+    if (num_widgets > 0) {
+        int widget_w = (128 / num_widgets);
+        for (int i = 0; i < num_widgets; ++i) {
+            int widget_x = i * widget_w;
+            display.setFont(u8g2_font_5x7_tf);
+            display.drawStr(widget_x + (widget_w - display.getStrWidth(widget_data[i].first.c_str())) / 2, 18, widget_data[i].first.c_str());
+            display.setFont(u8g2_font_6x10_tf);
+            display.drawStr(widget_x + (widget_w - display.getStrWidth(widget_data[i].second.c_str())) / 2, 29, widget_data[i].second.c_str());
+            if (i > 0) {
+                display.drawVLine(widget_x, 11, 20);
+            }
+        }
+    }
+
+    display.sendBuffer();
 }
 
 void App::drawStatusBar()

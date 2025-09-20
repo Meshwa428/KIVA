@@ -229,6 +229,7 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
         case ARDUINO_EVENT_WIFI_STA_GOT_IP: { 
             state_ = WifiState::CONNECTED;
             statusMessage_ = "Connected";
+            app_->getRtcManager().onNtpSync();
             
             KnownWifiNetwork* known = findKnownNetwork(WiFi.SSID().c_str());
             if(known && known->failureCount > 0) {

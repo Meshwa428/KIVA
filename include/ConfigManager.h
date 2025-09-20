@@ -17,6 +17,7 @@ struct DeviceSettings {
     char otaPassword[33]; // Max 32 chars + null terminator
     int channelHopDelayMs; // in milliseconds
     int attackCooldownMs;  // Cooldown for broadcast attacks, in milliseconds
+    uint32_t secondaryWidgetMask; // Bitmask for secondary display widgets
 };
 
 class ConfigManager {
@@ -31,6 +32,7 @@ public:
 
     // Accessors
     DeviceSettings& getSettings();
+    const DeviceSettings& getSettings() const;
     const std::vector<std::pair<std::string, std::string>>& getKeyboardLayouts() const;
     const uint8_t* getSelectedKeyboardLayout() const;
 

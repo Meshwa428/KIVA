@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "Logger.h"
+#include "DebugUtils.h" // For logging MUX channels
 
 // --- Define the static instance pointer ---
 HardwareManager* HardwareManager::instance_ = nullptr;
@@ -504,11 +505,13 @@ U8G2 &HardwareManager::getSmallDisplay()
 
 void HardwareManager::selectMux(uint8_t channel)
 {
+    LOG(LogLevel::DEBUG, "I2C_MUX", false, "Request to select channel %d (%s)", channel, DebugUtils::muxChannelToString(channel));
     static uint8_t lastSelectedChannel = 255;
     if (channel == lastSelectedChannel)
     {
         return;
     }
+    LOG(LogLevel::INFO, "I2C_MUX", "SWITCHING to channel %d (%s)", channel, DebugUtils::muxChannelToString(channel));
     Wire.beginTransmission(Pins::MUX_ADDR);
     Wire.write(1 << channel);
     Wire.endTransmission();

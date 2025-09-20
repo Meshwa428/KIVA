@@ -9,6 +9,9 @@ namespace DebugUtils {
 
     // Converts an InputEvent enum to a string for logging
     const char* inputEventToString(InputEvent event);
+
+    // Converts a MUX channel number to a string for logging
+    const char* muxChannelToString(uint8_t channel);
 }
 
 #endif // DEBUG_UTILS_H

@@ -3,117 +3,30 @@
 #include "InfoMenu.h"
 #include "App.h"
 #include "UI_Utils.h"
-#include "SdCardManager.h"
-#include "esp_chip_info.h"
-#include "esp_psram.h"
 #include <vector>
 #include <string>
-#include <Arduino.h> // For temperatureRead()
-#include <algorithm> // For std::max
-
-// Helper function for smart byte formatting (compact suffixes)
-static std::string formatBytes(uint64_t bytes) {
-    char buffer[20];
-    const uint64_t KILO = 1024;
-    const uint64_t MEGA = KILO * 1024;
-    const uint64_t GIGA = MEGA * 1024;
-
-    if (bytes >= (GIGA / 2)) {
-        double gb = (double)bytes / GIGA;
-        snprintf(buffer, sizeof(buffer), "%.2fG", gb);
-    }
-    else if (bytes >= MEGA) {
-        double mb = (double)bytes / MEGA;
-        snprintf(buffer, sizeof(buffer), "%.1fM", mb);
-    }
-    else {
-        uint64_t kb = bytes / KILO;
-        snprintf(buffer, sizeof(buffer), "%lluK", kb);
-    }
-    return std::string(buffer);
-}
+#include <Arduino.h>
+#include <algorithm>
 
 InfoMenu::InfoMenu() : 
-    uptimeItemIndex_(-1), 
-    temperatureItemIndex_(-1),
     selectedIndex_(0)
 {}
 
 void InfoMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    
-    infoItems_.clear();
-    uptimeItemIndex_ = -1;
-    temperatureItemIndex_ = -1;
-    char buffer[40];
+    buildInfoItems(app);
 
-    // CPU Freq
-    snprintf(buffer, sizeof(buffer), "%d MHz", getCpuFrequencyMhz());
-    infoItems_.push_back({"CPU Freq", buffer});
-
-    // Temperature
-    infoItems_.push_back({"Temperature", "..."});
-    temperatureItemIndex_ = infoItems_.size() - 1;
-
-    // RAM (Used / Total)
-    uint32_t totalHeap = ESP.getHeapSize();
-    uint32_t freeHeap = ESP.getFreeHeap();
-    infoItems_.push_back({"RAM", formatBytes(totalHeap - freeHeap) + "/" + formatBytes(totalHeap)});
-
-    // PSRAM (Used / Total)
-    if (psramFound()) {
-        uint32_t totalPsram = ESP.getPsramSize();
-        uint32_t freePsram = ESP.getFreePsram();
-        infoItems_.push_back({"PSRAM", formatBytes(totalPsram - freePsram) + "/" + formatBytes(totalPsram)});
-    }
-
-    // SD Card (Used / Total)
-    if (SdCardManager::isAvailable()) {
-        uint64_t totalBytes = SD.cardSize();
-        uint64_t usedBytes = SD.usedBytes();
-        infoItems_.push_back({"SD Card", formatBytes(usedBytes) + "/" + formatBytes(totalBytes)});
-    } else {
-        infoItems_.push_back({"SD Card", "Not Mounted"});
-    }
-    
-    // System Uptime (initial value)
-    unsigned long seconds = millis() / 1000;
-    unsigned long minutes = seconds / 60;
-    unsigned long hours = minutes / 60;
-    snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
-    infoItems_.push_back({"Uptime", buffer});
-    uptimeItemIndex_ = infoItems_.size() - 1;
-
-    // Initialize scrolling animation
     if (isForwardNav) {
         selectedIndex_ = 0;
     }
     animation_.resize(infoItems_.size());
     animation_.init();
-    // Use the new method to provide a custom item spacing
     animation_.startIntro(selectedIndex_, infoItems_.size(), 10.f);
 }
 
 void InfoMenu::onUpdate(App* app) {
     animation_.update();
-    
-    // Update Uptime
-    if (uptimeItemIndex_ != -1 && (size_t)uptimeItemIndex_ < infoItems_.size()) {
-        char buffer[40];
-        unsigned long seconds = millis() / 1000;
-        unsigned long minutes = seconds / 60;
-        unsigned long hours = minutes / 60;
-        snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
-        infoItems_[uptimeItemIndex_].second = buffer;
-    }
-
-    // Update Temperature
-    if (temperatureItemIndex_ != -1 && (size_t)temperatureItemIndex_ < infoItems_.size()) {
-        char buffer[16];
-        float temp = temperatureRead();
-        snprintf(buffer, sizeof(buffer), "%.1f C", temp);
-        infoItems_[temperatureItemIndex_].second = buffer;
-    }
+    buildInfoItems(app); // Re-fetch data every frame for live updates
 }
 
 void InfoMenu::onExit(App* app) {
@@ -131,9 +44,17 @@ void InfoMenu::handleInput(InputEvent event, App* app) {
         case InputEvent::BTN_UP_PRESS:
             scroll(-1);
             break;
-        case InputEvent::BTN_BACK_PRESS:
         case InputEvent::BTN_OK_PRESS:
-        case InputEvent::BTN_ENCODER_PRESS:
+        case InputEvent::BTN_ENCODER_PRESS: {
+            if (selectedIndex_ < infoItems_.size()) {
+                const auto& item = infoItems_[selectedIndex_];
+                if (item.isToggleable) {
+                    app->toggleSecondaryWidget(item.widgetType);
+                }
+            }
+            break;
+        }
+        case InputEvent::BTN_BACK_PRESS:
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         default:
@@ -149,8 +70,49 @@ void InfoMenu::scroll(int direction) {
     } else if (selectedIndex_ >= (int)infoItems_.size()) {
         selectedIndex_ = 0;
     }
-    // Use the new method to provide a custom item spacing
     animation_.setTargets(selectedIndex_, infoItems_.size(), 10.f);
+}
+
+void InfoMenu::buildInfoItems(App* app) {
+    infoItems_.clear();
+    SystemDataProvider& data = app->getSystemDataProvider();
+    char buffer[40];
+
+    // RAM
+    const auto& ram = data.getRamUsage();
+    std::string ramStr = SystemDataProvider::formatBytes(ram.used) + "/" + SystemDataProvider::formatBytes(ram.total);
+    infoItems_.push_back({"RAM", ramStr, true, SecondaryWidgetType::WIDGET_RAM});
+
+    // PSRAM
+    if (psramFound()) {
+        const auto& psram = data.getPsramUsage();
+        std::string psramStr = SystemDataProvider::formatBytes(psram.used) + "/" + SystemDataProvider::formatBytes(psram.total);
+        infoItems_.push_back({"PSRAM", psramStr, true, SecondaryWidgetType::WIDGET_PSRAM});
+    }
+
+    // SD Card
+    const auto& sd = data.getSdCardUsage();
+    if (sd.total > 0) {
+        std::string sdStr = SystemDataProvider::formatBytes(sd.used) + "/" + SystemDataProvider::formatBytes(sd.total);
+        infoItems_.push_back({"SD Card", sdStr, true, SecondaryWidgetType::WIDGET_SD});
+    } else {
+        infoItems_.push_back({"SD Card", "Not Mounted", false, {}});
+    }
+
+    // CPU Freq
+    snprintf(buffer, sizeof(buffer), "%d MHz", data.getCpuFrequency());
+    infoItems_.push_back({"CPU Freq", buffer, true, SecondaryWidgetType::WIDGET_CPU});
+
+    // Temperature
+    snprintf(buffer, sizeof(buffer), "%.1f C", data.getTemperature());
+    infoItems_.push_back({"Temp", buffer, true, SecondaryWidgetType::WIDGET_TEMP});
+
+    // Uptime
+    unsigned long seconds = millis() / 1000;
+    unsigned long minutes = seconds / 60;
+    unsigned long hours = minutes / 60;
+    snprintf(buffer, sizeof(buffer), "%lu:%02lu:%02lu", hours, minutes % 60, seconds % 60);
+    infoItems_.push_back({"Uptime", buffer, false, {}});
 }
 
 void InfoMenu::draw(App* app, U8G2& display) {
@@ -182,8 +144,14 @@ void InfoMenu::draw(App* app, U8G2& display) {
         int baselineY = item_center_y_abs + 3;
 
         display.setDrawColor(1);
-        display.drawStr(leftColX, baselineY, item.first.c_str());
-        display.drawStr(rightColX - display.getStrWidth(item.second.c_str()), baselineY, item.second.c_str());
+        
+        std::string label = item.label;
+        if (item.isToggleable && app->isSecondaryWidgetActive(item.widgetType)) {
+            label += " *";
+        }
+
+        display.drawStr(leftColX, baselineY, label.c_str());
+        display.drawStr(rightColX - display.getStrWidth(item.value.c_str()), baselineY, item.value.c_str());
     }
 
     display.setDrawColor(1);

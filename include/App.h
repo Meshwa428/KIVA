@@ -62,7 +62,8 @@
 #include "AssociationSleeper.h"
 #include "AssociationSleepActiveMenu.h"
 #include "StationListDataSource.h"
-
+#include "RtcManager.h"
+#include "SystemDataProvider.h"
 
 class App : public ISubscriber
 {
@@ -102,6 +103,12 @@ public:
     GameAudio &getGameAudio() { return gameAudio_; }
     StationSniffer &getStationSniffer() { return stationSniffer_; }
     AssociationSleeper &getAssociationSleeper() { return associationSleeper_; }
+    RtcManager& getRtcManager() { return rtcManager_; }
+    SystemDataProvider& getSystemDataProvider() { return systemDataProvider_; }
+
+    void toggleSecondaryWidget(SecondaryWidgetType type);
+    bool isSecondaryWidgetActive(SecondaryWidgetType type) const;
+    std::vector<SecondaryWidgetType> getActiveSecondaryWidgets() const;
     DuckyScriptListDataSource &getDuckyScriptListDataSource() { return duckyScriptListDataSource_; }
     TextInputMenu &getTextInputMenu() { return textInputMenu_; }
     IMenu *getMenu(MenuType type);
@@ -168,6 +175,8 @@ private:
     GameAudio gameAudio_;
     StationSniffer stationSniffer_;
     AssociationSleeper associationSleeper_;
+    RtcManager rtcManager_;
+    SystemDataProvider systemDataProvider_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;

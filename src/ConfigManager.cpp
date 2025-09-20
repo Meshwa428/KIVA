@@ -148,6 +148,7 @@ void ConfigManager::loadFromSdCard() {
     strlcpy(settings_.otaPassword, doc["ota_password"] | "KIVA_PASS", sizeof(settings_.otaPassword));
     settings_.channelHopDelayMs = doc["channel_hop_delay_ms"] | 500;
     settings_.attackCooldownMs = doc["attack_cooldown_ms"] | 30000; // Default to 30 seconds
+    settings_.secondaryWidgetMask = doc["widget_mask"] | 9; // Default to RAM (bit 0) and CPU (bit 3)
     
     if ((size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         settings_.keyboardLayoutIndex = 0;
@@ -166,6 +167,7 @@ void ConfigManager::saveToSdCard() {
     doc["ota_password"] = settings_.otaPassword;
     doc["channel_hop_delay_ms"] = settings_.channelHopDelayMs;
     doc["attack_cooldown_ms"] = settings_.attackCooldownMs;
+    doc["widget_mask"] = settings_.secondaryWidgetMask;
 
     String jsonStr;
     serializeJson(doc, jsonStr);
@@ -180,6 +182,7 @@ void ConfigManager::useDefaultSettings() {
     strcpy(settings_.otaPassword, "KIVA_PASS");
     settings_.channelHopDelayMs = 500;
     settings_.attackCooldownMs = 30000; // 30 seconds
+    settings_.secondaryWidgetMask = 9; // Default to RAM (bit 0) and CPU (bit 3)
 }
 
 bool ConfigManager::reloadFromSdCard() {
@@ -199,6 +202,10 @@ bool ConfigManager::reloadFromSdCard() {
 }
 
 DeviceSettings& ConfigManager::getSettings() {
+    return settings_;
+}
+
+const DeviceSettings& ConfigManager::getSettings() const {
     return settings_;
 }
 

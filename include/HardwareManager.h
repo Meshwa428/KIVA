@@ -71,6 +71,8 @@ public:
     bool isVibrationOn() const;
     bool isAmplifierOn() const;
 
+    void selectMux(uint8_t channel);
+
     void setPerformanceMode(bool highPerf);
     void setMainBrightness(uint8_t contrast);
     void setAuxBrightness(uint8_t contrast);
@@ -91,7 +93,6 @@ private:
     InputEvent mapPcf1PinToEvent(int pin);
     
     // I2C methods
-    void selectMux(uint8_t channel);
     void writePCF(uint8_t pcfAddress, uint8_t data);
     uint8_t readPCF(uint8_t pcfAddress);
     

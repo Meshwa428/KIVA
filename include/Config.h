@@ -80,6 +80,14 @@ enum class MenuType
     INFO_MENU
 };
 
+enum class SecondaryWidgetType {
+    WIDGET_RAM,
+    WIDGET_PSRAM,
+    WIDGET_SD,
+    WIDGET_CPU,
+    WIDGET_TEMP
+};
+
 // Input Event System
 enum class InputEvent
 {

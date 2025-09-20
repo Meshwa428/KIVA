@@ -80,3 +80,22 @@ const char* inputEventToString(InputEvent event) {
 }
 
 } // namespace DebugUtils
+
+const char* DebugUtils::muxChannelToString(uint8_t channel) {
+    switch (channel) {
+        case Pins::MUX_CHANNEL_PCF0_ENCODER:
+            return "PCF0 (Encoder)";
+        case Pins::MUX_CHANNEL_PCF1_NAV:
+            return "PCF1 (Nav)";
+        case Pins::MUX_CHANNEL_MAIN_DISPLAY:
+            return "Main Display";
+        case Pins::MUX_CHANNEL_SECOND_DISPLAY:
+            return "Second Display";
+        case Pins::MUX_CHANNEL_MPU:
+            return "MPU";
+        case Pins::MUX_CHANNEL_RTC:
+            return "RTC";
+        default:
+            return "Unknown";
+    }
+}
