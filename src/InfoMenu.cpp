@@ -25,7 +25,9 @@ void InfoMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void InfoMenu::onUpdate(App* app) {
-    animation_.update();
+    if (animation_.update()) {
+        app->requestRedraw();
+    }
     buildInfoItems(app); // Re-fetch data every frame for live updates
 }
 

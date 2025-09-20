@@ -63,7 +63,8 @@ enum class MenuType
     HARDWARE_SETTINGS_LIST,
     CONNECTIVITY_SETTINGS_LIST,
     SYSTEM_SETTINGS_LIST,
-    BRIGHTNESS_MENU, // The advanced twin-dial menu
+    BRIGHTNESS_MENU,
+    TIMEZONE_LIST,
 
     // --- Firmware Update Menus ---
     FIRMWARE_UPDATE_GRID,

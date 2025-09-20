@@ -35,10 +35,11 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
             icon_resolved = true;
             break;
         case IconType::WIFI_LOCK:
-            xbm_data = icon_lock_small_bits;
+            xbm_data = icon_wifi_lock_small_bits;
             w = IconSize::SMALL_WIDTH;
             h = IconSize::SMALL_HEIGHT;
             icon_resolved = true;
+            break;
         case IconType::WIFI:
             xbm_data = icon_wifi_small_bits;
             w = IconSize::SMALL_WIDTH;

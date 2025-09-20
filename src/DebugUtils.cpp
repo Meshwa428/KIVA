@@ -54,6 +54,7 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::SONG_LIST: return "SONG_LIST";
         case MenuType::NOW_PLAYING: return "NOW_PLAYING";
         case MenuType::INFO_MENU: return "INFO_MENU";
+        case MenuType::TIMEZONE_LIST: return "TIMEZONE_LIST";
         default: return "UNKNOWN_MENU";
     }
 }

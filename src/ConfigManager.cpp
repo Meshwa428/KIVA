@@ -6,7 +6,7 @@
 #include <ArduinoJson.h>
 #include <HIDForge.h>
 
-#define EEPROM_SIZE 64 // Allocate 64 bytes for settings
+#define EEPROM_SIZE 128 // Increase EEPROM size to accommodate the longer string
 
 const uint32_t ConfigManager::EEPROM_MAGIC_NUMBER;
 
@@ -117,6 +117,7 @@ void ConfigManager::loadFromEEPROM() {
 
     EEPROM.get(sizeof(uint32_t), settings_);
     settings_.otaPassword[sizeof(settings_.otaPassword) - 1] = '\0';
+    settings_.timezoneString[sizeof(settings_.timezoneString) - 1] = '\0'; // Ensure null termination
     isEepromValid_ = true;
 }
 
@@ -149,6 +150,7 @@ void ConfigManager::loadFromSdCard() {
     settings_.channelHopDelayMs = doc["channel_hop_delay_ms"] | 500;
     settings_.attackCooldownMs = doc["attack_cooldown_ms"] | 30000; // Default to 30 seconds
     settings_.secondaryWidgetMask = doc["widget_mask"] | 9; // Default to RAM (bit 0) and CPU (bit 3)
+    strlcpy(settings_.timezoneString, doc["timezone_string"] | "UTC0", sizeof(settings_.timezoneString)); // <-- MODIFIED
     
     if ((size_t)settings_.keyboardLayoutIndex >= keyboardLayouts_.size()) {
         settings_.keyboardLayoutIndex = 0;
@@ -168,6 +170,7 @@ void ConfigManager::saveToSdCard() {
     doc["channel_hop_delay_ms"] = settings_.channelHopDelayMs;
     doc["attack_cooldown_ms"] = settings_.attackCooldownMs;
     doc["widget_mask"] = settings_.secondaryWidgetMask;
+    doc["timezone_string"] = settings_.timezoneString; // <-- MODIFIED
 
     String jsonStr;
     serializeJson(doc, jsonStr);
@@ -181,8 +184,9 @@ void ConfigManager::useDefaultSettings() {
     settings_.keyboardLayoutIndex = 0; 
     strcpy(settings_.otaPassword, "KIVA_PASS");
     settings_.channelHopDelayMs = 500;
-    settings_.attackCooldownMs = 30000; // 30 seconds
+    settings_.attackCooldownMs = 1; // 1 seconds
     settings_.secondaryWidgetMask = 9; // Default to RAM (bit 0) and CPU (bit 3)
+    strcpy(settings_.timezoneString, "UTC0"); // <-- MODIFIED
 }
 
 bool ConfigManager::reloadFromSdCard() {

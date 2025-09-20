@@ -12,8 +12,7 @@
 #include <cmath>
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
-
-// ... (constructor code remains exactly the same) ...
+#include "Timezones.h"
 
 App& App::getInstance() {
     static App instance;
@@ -481,40 +480,30 @@ App::App() :
     connectivitySettingsDataSource_({
         {"WiFi Settings", IconType::WIFI, MenuType::WIFI_LIST, 
             [](App* app) {
-                // 1. Explicitly clear any lingering attack setup callback.
                 app->getWifiListDataSource().setSelectionCallback(nullptr);
-                // 2. Now, perform the navigation to the WiFi list menu.
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }
         },
         MenuItem{
             "Hop Delay", IconType::UI_REFRESH, MenuType::NONE, nullptr, true,
-            // --- THIS IS THE MODIFIED LAMBDA ---
             [](App* app) -> std::string {
-                // Get the value in milliseconds
                 int ms = app->getConfigManager().getSettings().channelHopDelayMs;
-                // Convert to a float for seconds
                 float seconds = (float)ms / 1000.0f;
                 char buf[16];
-                // Use "%.1f" to format with one decimal place
                 snprintf(buf, sizeof(buf), "< %.1fs >", seconds); 
                 return std::string(buf);
             },
-            // The adjustValue lambda remains the same, as it operates on the raw millisecond value
             [](App* app, int dir) {
                 auto& settings = app->getConfigManager().getSettings();
-                // We'll adjust the step to be 50ms for finer control
                 int newDelay = settings.channelHopDelayMs + (dir * 50);
-                if (newDelay < 50) newDelay = 50;     // Minimum 0.05s
-                if (newDelay > 5000) newDelay = 5000; // Maximum 5.0s
+                if (newDelay < 50) newDelay = 50;
+                if (newDelay > 5000) newDelay = 5000;
                 settings.channelHopDelayMs = newDelay;
                 app->getConfigManager().saveSettings();
             }
         },
-        // --- NEW SLIDER FOR ATTACK COOLDOWN ---
         MenuItem{
             "Atk Cooldown", IconType::SKULL, MenuType::NONE, nullptr, true,
-            // The display lambda is already correct and does not need changes.
             [](App* app) -> std::string {
                 int ms = app->getConfigManager().getSettings().attackCooldownMs;
                 char buf[16];
@@ -528,32 +517,24 @@ App::App() :
                 }
                 return std::string(buf);
             },
-            // This adjustValue lambda now implements the correct symmetrical stepping logic.
             [](App* app, int dir) {
                 auto& settings = app->getConfigManager().getSettings();
                 int currentCooldown = settings.attackCooldownMs;
                 int newCooldown = currentCooldown;
 
-                const int minVal = 100;    // 0.1s
-                const int maxVal = 30000;  // 30s
-                const int smallStep = 100; // 0.1s
-                const int largeStep = 1000; // 1.0s
+                const int minVal = 100;
+                const int maxVal = 30000;
+                const int smallStep = 100;
+                const int largeStep = 1000;
 
                 if (dir > 0) { // Increasing value
-                    if (currentCooldown < 1000) {
-                        newCooldown += smallStep;
-                    } else {
-                        newCooldown += largeStep;
-                    }
+                    if (currentCooldown < 1000) newCooldown += smallStep;
+                    else newCooldown += largeStep;
                 } else { // Decreasing value
-                    if (currentCooldown > 1000) {
-                        newCooldown -= largeStep;
-                    } else {
-                        newCooldown -= smallStep;
-                    }
+                    if (currentCooldown > 1000) newCooldown -= largeStep;
+                    else newCooldown -= smallStep;
                 }
                 
-                // Clamp the new value within the min/max bounds
                 if (newCooldown < minVal) newCooldown = minVal;
                 if (newCooldown > maxVal) newCooldown = maxVal;
                 
@@ -579,6 +560,57 @@ App::App() :
                 );
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TEXT_INPUT));
             }
+        },
+        // --- THIS IS THE MODIFIED HYBRID MENU ITEM ---
+        MenuItem{
+            "Timezone", IconType::SETTINGS, MenuType::TIMEZONE_LIST, 
+            // Action to navigate to the list on OK press
+            [](App* app) {
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TIMEZONE_LIST));
+            },
+            true, // isInteractive = true
+            // getValue lambda to display the current short name
+            [](App* app) -> std::string {
+                const char* currentTzString = app->getConfigManager().getSettings().timezoneString;
+                for (const auto& tz : TIMEZONE_LIST) {
+                    if (strcmp(currentTzString, tz.posixTzString) == 0) {
+                        return std::string("< ") + tz.shortName + " >";
+                    }
+                }
+                return "< Unknown >"; // Fallback
+            },
+            // --- FIX: Implement adjustValue to enable slider functionality ---
+            [](App* app, int dir) {
+                const auto& tzList = TIMEZONE_LIST;
+                if (tzList.empty()) return;
+
+                auto& settings = app->getConfigManager().getSettings();
+                const char* currentTzString = settings.timezoneString;
+                
+                int currentIndex = -1;
+                for (size_t i = 0; i < tzList.size(); ++i) {
+                    if (strcmp(currentTzString, tzList[i].posixTzString) == 0) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                
+                if (currentIndex == -1) {
+                    for (size_t i = 0; i < tzList.size(); ++i) {
+                        if (strcmp("UTC0", tzList[i].posixTzString) == 0) {
+                            currentIndex = i;
+                            break;
+                        }
+                    }
+                    if (currentIndex == -1) currentIndex = 0; // Absolute fallback
+                }
+
+                int newIndex = (currentIndex + dir + tzList.size()) % tzList.size();
+                
+                strncpy(settings.timezoneString, tzList[newIndex].posixTzString, sizeof(settings.timezoneString) - 1);
+                settings.timezoneString[sizeof(settings.timezoneString) - 1] = '\0';
+                app->getConfigManager().saveSettings();
+            } 
         },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
@@ -622,6 +654,7 @@ App::App() :
     hardwareSettingsMenu_("Hardware", MenuType::HARDWARE_SETTINGS_LIST, &hardwareSettingsDataSource_),
     connectivitySettingsMenu_("Connectivity", MenuType::CONNECTIVITY_SETTINGS_LIST, &connectivitySettingsDataSource_),
     systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_),
+    timezoneMenu_("Select Timezone", MenuType::TIMEZONE_LIST, &timezoneDataSource_),
 
     // --- GAME LISTMENUS ---
     snakeMenu_("Snake", MenuType::SNAKE_MENU, &snakeMenuDataSource_),
@@ -797,7 +830,6 @@ void App::setup()
     LOG(LogLevel::INFO, "App", "App setup finished.");
 }
 
-// ... (the rest of App.cpp, including the loop() function, remains unchanged) ...
 void App::loop()
 {
     // 1. Update hardware and background services
@@ -1029,10 +1061,11 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
         }
         currentMenu_ = newMenu;
 
-        if (isForwardNav || exitingMenuType != MenuType::POPUP)
-        {
-            currentMenu_->onEnter(this, isForwardNav); // <-- MODIFIED: Pass the flag
-        }
+        // if (isForwardNav || exitingMenuType != MenuType::POPUP)
+        // {
+        //     currentMenu_->onEnter(this, isForwardNav); // <-- MODIFIED: Pass the flag
+        // }
+        currentMenu_->onEnter(this, isForwardNav);
 
         if (isForwardNav)
         {

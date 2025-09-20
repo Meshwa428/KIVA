@@ -101,7 +101,6 @@ void RtcManager::update() {
     }
 }
 
-// --- NEW: The one-time synchronization function ---
 void RtcManager::syncInternalClock() {
     if (!rtcFound_) {
         LOG(LogLevel::WARN, "RTC", "Cannot sync internal clock, RTC not found.");
@@ -111,7 +110,6 @@ void RtcManager::syncInternalClock() {
     LOG(LogLevel::INFO, "RTC", "Synchronizing ESP32 internal clock from DS3231.");
     GenericDateTime rtc_time = now();
 
-    // If the read fails, now() will set rtcFound_ to false and return a zeroed struct.
     if (!rtcFound_) {
         LOG(LogLevel::ERROR, "RTC", "Failed to read from RTC during sync operation.");
         return;
@@ -175,12 +173,10 @@ GenericDateTime RtcManager::now() {
     return dt;
 }
 
-// --- MODIFIED: Reads from fast internal clock ---
 std::string RtcManager::getFormattedTime() {
     time_t now_ts;
-    time(&now_ts); // Get current timestamp from internal clock
+    time(&now_ts); 
     
-    // If the timestamp is very small, it means the clock hasn't been set.
     if (now_ts < 1000000000) {
         return "--:--";
     }
@@ -193,7 +189,6 @@ std::string RtcManager::getFormattedTime() {
     return std::string(buf);
 }
 
-// --- MODIFIED: Reads from fast internal clock ---
 std::string RtcManager::getFormattedDate() {
     time_t now_ts;
     time(&now_ts);
@@ -210,18 +205,21 @@ std::string RtcManager::getFormattedDate() {
 }
 
 void RtcManager::onNtpSync() {
-    // This function now correctly syncs the internal clock AND adjusts the external RTC.
     if (!rtcFound_ || app_->getWifiManager().getState() != WifiState::CONNECTED) return;
     if (millis() - lastNtpSyncTime_ < 600000) return;
 
     LOG(LogLevel::INFO, "RTC", "Attempting NTP time synchronization...");
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    
+    // --- FINAL FIX: Use the TZ string from settings ---
+    const char* tz_string = app_->getConfigManager().getSettings().timezoneString;
+    setenv("TZ", tz_string, 1);
+    tzset();
+    
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov"); // When TZ is set, offsets must be 0
     
     struct tm timeinfo;
     if (getLocalTime(&timeinfo, 10000)) {
-        // Internal clock is now synced automatically by getLocalTime().
         
-        // Now, update the external RTC with this new time.
         GenericDateTime ntp_dt = {
             (uint16_t)(timeinfo.tm_year + 1900),
             (uint8_t)(timeinfo.tm_mon + 1),
@@ -231,7 +229,7 @@ void RtcManager::onNtpSync() {
             (uint8_t)timeinfo.tm_sec
         };
         adjust(ntp_dt);
-        LOG(LogLevel::INFO, "RTC", "NTP sync successful. RTC hardware updated.");
+        LOG(LogLevel::INFO, "RTC", "NTP sync successful with TZ string '%s'. RTC hardware updated.", tz_string);
         lastNtpSyncTime_ = millis();
     } else {
         LOG(LogLevel::ERROR, "RTC", "NTP sync failed.");

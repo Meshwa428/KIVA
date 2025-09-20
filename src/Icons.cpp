@@ -881,7 +881,7 @@ extern const unsigned char icon_nav_back_small_bits[] U8X8_PROGMEM = {
   0x30
 };
 
-extern const unsigned char icon_lock_small_bits[] U8X8_PROGMEM = {
+extern const unsigned char icon_wifi_lock_small_bits[] U8X8_PROGMEM = {
   0x1C,
   0x22,
   0x22,

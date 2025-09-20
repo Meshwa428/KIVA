@@ -120,7 +120,7 @@ extern const unsigned char icon_repeat_one_large_bits[];
 extern const unsigned char icon_ui_charging_bolt_small_bits[];
 extern const unsigned char icon_ui_refresh_small_bits[];
 extern const unsigned char icon_nav_back_small_bits[];
-extern const unsigned char icon_lock_small_bits[];
+extern const unsigned char icon_wifi_lock_small_bits[];
 extern const unsigned char icon_wifi_small_bits[];
 
 #endif // ICONS_H

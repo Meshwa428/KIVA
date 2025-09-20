@@ -18,6 +18,7 @@ struct DeviceSettings {
     int channelHopDelayMs; // in milliseconds
     int attackCooldownMs;  // Cooldown for broadcast attacks, in milliseconds
     uint32_t secondaryWidgetMask; // Bitmask for secondary display widgets
+    char timezoneString[40];      // <-- MODIFIED: From int32_t to char array
 };
 
 class ConfigManager {
