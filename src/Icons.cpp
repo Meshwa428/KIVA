@@ -892,11 +892,11 @@ extern const unsigned char icon_wifi_lock_small_bits[] U8X8_PROGMEM = {
 };
 
 extern const unsigned char icon_wifi_small_bits[] U8X8_PROGMEM = {
-  0x00,
-  0x3E,
+  0x1C,
+  0x63,
   0x41,
   0x1C,
   0x22,
-  0x08,
-  0x00
+  0x00,
+  0x08
 };

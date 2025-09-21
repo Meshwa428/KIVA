@@ -1,4 +1,3 @@
-
 #include "Event.h"
 #include "EventDispatcher.h"
 #include "ConnectionStatusMenu.h"
@@ -17,14 +16,7 @@ void ConnectionStatusMenu::onUpdate(App* app) {
     WifiManager& wifi = app->getWifiManager();
     WifiState state = wifi.getState();
 
-    // --- THE CORRECT LOGIC ---
-    // On SUCCESS, return to the list automatically after a short delay.
     if (state == WifiState::CONNECTED && millis() - entryTime_ > 2000) {
-        EventDispatcher::getInstance().publish(NavigateBackEvent());
-    }
-
-    // On FAILURE, also return automatically after a longer delay.
-    if (state == WifiState::CONNECTION_FAILED && millis() - entryTime_ > 4000) {
         EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
@@ -41,8 +33,7 @@ void ConnectionStatusMenu::onExit(App* app) {
 }
 
 void ConnectionStatusMenu::handleInput(InputEvent event, App* app) {
-    // Allow user to press back to dismiss the screen immediately.
-    if (event != InputEvent::NONE) {
+    if (event == InputEvent::BTN_BACK_PRESS) {
         EventDispatcher::getInstance().publish(NavigateBackEvent());
     }
 }
@@ -60,6 +51,7 @@ void ConnectionStatusMenu::draw(App* app, U8G2& display) {
         static char connecting_buf[16];
         strcpy(connecting_buf, "Connecting");
         for (int i=0; i<dots; ++i) strcat(connecting_buf, ".");
+        app->requestRedraw();
         top_text = connecting_buf;
     } else if (state == WifiState::CONNECTED) {
         icon = IconType::INFO;

@@ -1,3 +1,5 @@
+// KIVA/include/RtcManager.h
+
 #ifndef RTC_MANAGER_H
 #define RTC_MANAGER_H
 
@@ -12,20 +14,17 @@ public:
     void setup(App* app);
     void update();
 
-    // --- NEW: Function to perform the one-time sync ---
     void syncInternalClock();
-
     bool isRtcFound() const;
     GenericDateTime now();
     std::string getFormattedTime();
     std::string getFormattedDate();
-
     void onNtpSync();
 
 private:
     void selectRtcMux();
     void adjust(const GenericDateTime& dt);
-    void checkForRtc(); 
+    void checkForRtc();
     static uint8_t bcdToDec(uint8_t val);
     static uint8_t decToBcd(uint8_t val);
 
@@ -33,6 +32,10 @@ private:
     bool rtcFound_;
     unsigned long lastNtpSyncTime_;
     unsigned long lastAttemptTime_;
+
+    // --- NEW: Flag to defer work from the callback ---
+    volatile bool syncPending_;
+
     static constexpr unsigned long RETRY_INTERVAL_MS = 10000;
 };
 

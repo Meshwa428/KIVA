@@ -105,11 +105,6 @@ void HardwareManager::update()
     // Button repeats must be checked continuously to handle the "hold" duration.
     processButtonRepeats(); 
 
-    // --- MODIFICATION START: Change 'if' to 'while' ---
-    // This is the complete fix. By using a 'while' loop, we ensure that if another
-    // interrupt fires while we are processing the first one (e.g., during a slow
-    // menu change), we will immediately loop again to process the newest button state.
-    // This prevents any interrupts from being lost.
     while (buttonInterruptFired_) {
     // --- MODIFICATION END ---
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");

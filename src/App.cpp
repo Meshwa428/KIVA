@@ -687,35 +687,30 @@ void App::setup()
     };
 
     std::vector<BootTask> bootTasks = {
-        {"SD Card",         [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
-        {"Hardware Manager",[&](){ hardware_.setup(); }},
-        {"Config Manager",  [&](){ configManager_.setup(this); }},
-        {"Logger",          [&](){ Logger::getInstance().setup(); }},
-        {"WiFi System",     [&](){ wifiManager_.setup(this); }},
-        {"OTA System",      [&](){ otaManager_.setup(this, &wifiManager_); }},
-        {"Jammer",          [&](){ jammer_.setup(this); }},
-        {"Beacon Spammer",  [&](){ beaconSpammer_.setup(this); }},
-        {"Deauther",        [&](){ deauther_.setup(this); }},
-        {"Evil Twin",       [&](){ evilPortal_.setup(this); }},
-        {"Probe Sniffer",   [&](){ probeSniffer_.setup(this); }},
-        {"Karma Attacker",  [&](){ karmaAttacker_.setup(this); }},
-        {"Probe Flooder",   [&](){ probeFlooder_.setup(this); }},
+        {"SD Card",           [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
+        {"Hardware Manager",  [&](){ hardware_.setup(); }},
+        {"Config Manager",    [&](){ configManager_.setup(this); }},
+        {"Logger",            [&](){ Logger::getInstance().setup(); }},
+        {"WiFi System",       [&](){ wifiManager_.setup(this); }},
+        {"OTA System",        [&](){ otaManager_.setup(this, &wifiManager_); }},
+        {"Jammer",            [&](){ jammer_.setup(this); }},
+        {"Beacon Spammer",    [&](){ beaconSpammer_.setup(this); }},
+        {"Deauther",          [&](){ deauther_.setup(this); }},
+        {"Evil Twin",         [&](){ evilPortal_.setup(this); }},
+        {"Probe Sniffer",     [&](){ probeSniffer_.setup(this); }},
+        {"Karma Attacker",    [&](){ karmaAttacker_.setup(this); }},
+        {"Probe Flooder",     [&](){ probeFlooder_.setup(this); }},
         {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
-        {"BLE Manager",     [&](){ bleManager_.setup(); }},
-        {"BLE Spammer",     [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",          [&](){ duckyRunner_.setup(this); }},
-        {"Music Player",    [&](){ musicPlayer_.setup(this); }},
-        {"Music Library",   [&](){ musicLibraryManager_.setup(this); }},
+        {"BLE Manager",       [&](){ bleManager_.setup(); }},
+        {"BLE Spammer",       [&](){ bleSpammer_.setup(this); }},
+        {"BadUSB",            [&](){ duckyRunner_.setup(this); }},
+        {"Music Player",      [&](){ musicPlayer_.setup(this); }},
+        {"Music Library",     [&](){ musicLibraryManager_.setup(this); }},
         {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
-        {"Assoc Sleeper",   [&](){ associationSleeper_.setup(this); }},
-        {"RTC",             [&](){ 
-            rtcManager_.setup(this); 
-            // --- ADDED THIS LINE FOR THE FIX ---
-            rtcManager_.syncInternalClock(); 
-            // ------------------------------------
-        }},
-        {"System Data",     [&](){ systemDataProvider_.setup(this); }},
-        {"Game Audio",      [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
+        {"Assoc Sleeper",     [&](){ associationSleeper_.setup(this); }},
+        {"RTC",               [&](){ rtcManager_.setup(this); }},
+        {"System Data",       [&](){ systemDataProvider_.setup(this); }},
+        {"Game Audio",        [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
     };
 
     int totalTasks = bootTasks.size();

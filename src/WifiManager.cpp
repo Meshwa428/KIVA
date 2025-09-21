@@ -35,18 +35,14 @@ void WifiManager::update() {
         Serial.println("[WIFI-LOG] Connection definitively timed out.");
         state_ = WifiState::CONNECTION_FAILED; // Set the final state here.
 
-        // Increment the failure counter here, as this is the true failure point.
         KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
         if (known) {
             known->failureCount++;
             Serial.printf("[WIFI-LOG] Connection to '%s' failed on timeout. Count is now %d.\n", known->ssid, known->failureCount);
             saveKnownNetworks();
         }
-
-        // Set the final status message.
+        
         statusMessage_ = "Timeout";
-
-        // We must explicitly stop the connection attempt now.
         WiFi.disconnect();
     }
 }
@@ -229,33 +225,39 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
         case ARDUINO_EVENT_WIFI_STA_GOT_IP: { 
             state_ = WifiState::CONNECTED;
             statusMessage_ = "Connected";
+            
+            // --- START OF FIX ---
+            // Log the success immediately, before checking failure counts.
+            LOG(LogLevel::INFO, "WIFI", "Connection to '%s' successful, IP obtained.", WiFi.SSID().c_str());
+            // --- END OF FIX ---
+            
             app_->getRtcManager().onNtpSync();
             
             KnownWifiNetwork* known = findKnownNetwork(WiFi.SSID().c_str());
             if(known && known->failureCount > 0) {
-                Serial.printf("[WIFI-LOG] Connection to '%s' successful. Resetting failure count.\n", known->ssid);
+                LOG(LogLevel::INFO, "WIFI", "Resetting failure count for '%s'.", known->ssid);
                 known->failureCount = 0;
                 saveKnownNetworks();
             }
             break;
-        } 
+        }  
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t disconnected_info = info.wifi_sta_disconnected;
+            
+            // --- START OF FIX ---
+            // If we are in the process of connecting, IGNORE this event.
+            // The timeout in the main update() loop is the only source of truth for a connection failure.
+            // This prevents the race condition where a transient disconnect is mistaken for a final failure.
             if (state_ == WifiState::CONNECTING) {
-                Serial.printf("[WIFI-LOG] Intermediate disconnect during connection. Reason: %d. Waiting for timeout or success.\n", disconnected_info.reason);
-                switch(disconnected_info.reason) {
-                    case WIFI_REASON_AUTH_FAIL:
-                    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
-                    case WIFI_REASON_AUTH_EXPIRE:
-                        statusMessage_ = "Wrong Password..."; break;
-                    default:
-                        statusMessage_ = "Connecting..."; break;
-                }
-            } else if (state_ == WifiState::CONNECTED) {
+                Serial.printf("[WIFI-LOG] Intermediate disconnect during connection. Reason: %d. Ignoring...\n", disconnected_info.reason);
+            } 
+            // If we were already connected, then this is a real disconnect.
+            else if (state_ == WifiState::CONNECTED) {
                 state_ = WifiState::IDLE;
                 statusMessage_ = "Disconnected";
             }
+            // --- END OF FIX ---
             break;
         }
         default: break;

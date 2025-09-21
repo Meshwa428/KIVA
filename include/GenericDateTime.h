@@ -7,6 +7,7 @@
 struct GenericDateTime {
     uint16_t y;
     uint8_t m, d, h, min, s;
+    uint8_t dow; // Day of Week (1=Sun, 7=Sat)
 };
 
 #endif // GENERIC_DATE_TIME_H
