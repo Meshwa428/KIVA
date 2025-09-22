@@ -687,8 +687,8 @@ void App::setup()
     };
 
     std::vector<BootTask> bootTasks = {
-        {"SD Card",           [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
         {"Hardware Manager",  [&](){ hardware_.setup(); }},
+        {"SD Card",           [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
         {"Config Manager",    [&](){ configManager_.setup(this); }},
         {"Logger",            [&](){ Logger::getInstance().setup(); }},
         {"WiFi System",       [&](){ wifiManager_.setup(this); }},
