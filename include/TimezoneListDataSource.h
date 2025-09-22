@@ -20,8 +20,11 @@ public:
     void onItemSelected(App* app, ListMenu* menu, int index) override;
     
     // These can be empty for a static list
-    void onEnter(App* app, ListMenu* menu, bool isForwardNav) override {}
-    void onExit(App* app, ListMenu* menu) override {}
+    void onEnter(App* app, ListMenu* menu, bool isForwardNav) override;
+    void onExit(App* app, ListMenu* menu) override;
+
+    // a safe, lazy-loading data provider
+    const std::vector<TimezoneInfo>& getTimezones();
 
 private:
     std::vector<TimezoneInfo> timezones_;

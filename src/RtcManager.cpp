@@ -1,5 +1,3 @@
-// KIVA/src/RtcManager.cpp
-
 #include "RtcManager.h"
 #include "App.h"
 #include "Logger.h"
@@ -61,7 +59,6 @@ void RtcManager::setup(App* app) {
     checkForRtc();
     lastAttemptTime_ = millis();
 
-    // --- MODIFICATION START: The final, correct startup logic ---
     if (rtcFound_) {
         // 1. First, sync the ESP32's internal clock from the hardware RTC's UTC time.
         syncInternalClock();
@@ -121,7 +118,12 @@ void RtcManager::setup(App* app) {
     } else {
         LOG(LogLevel::ERROR, "RTC", "DS3231 RTC not found on initial setup!");
     }
-    // --- MODIFICATION END ---
+}
+
+void RtcManager::setTimezone(const char* tzString) {
+    setenv("TZ", tzString, 1);
+    tzset();
+    LOG(LogLevel::INFO, "RTC_UPDATE", "Timezone set to '%s' for display.", tzString);
 }
 
 

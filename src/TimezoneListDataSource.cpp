@@ -5,11 +5,17 @@
 #include "Event.h"
 #include "EventDispatcher.h"
 #include "ConfigManager.h"
-#include "Timezones.h" // Include the new header
+#include "Timezones.h"
 
 TimezoneListDataSource::TimezoneListDataSource() {
-    // The constructor now simply copies the data from the header file.
-    timezones_ = TIMEZONE_LIST;
+    // empty
+}
+
+const std::vector<TimezoneInfo>& TimezoneListDataSource::getTimezones() {
+    if (timezones_.empty()) {
+        timezones_ = TIMEZONE_LIST;
+    }
+    return timezones_;
 }
 
 int TimezoneListDataSource::getNumberOfItems(App* app) {
@@ -26,9 +32,19 @@ void TimezoneListDataSource::onItemSelected(App* app, ListMenu* menu, int index)
     settings.timezoneString[sizeof(settings.timezoneString) - 1] = '\0'; 
     
     app->getConfigManager().saveSettings();
+    app->getRtcManager().setTimezone(settings.timezoneString);
+    app->getRtcManager().syncInternalClock();
 
     EventDispatcher::getInstance().publish(NavigateBackEvent());
-    app->showPopUp("Timezone Set", "Will apply on next Wi-Fi sync.", nullptr, "OK", "", true);
+    app->showPopUp("Timezone Set", "Time has been updated", nullptr, "OK", "", true);
+}
+
+void TimezoneListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
+    getTimezones();
+}
+
+void TimezoneListDataSource::onExit(App* app, ListMenu* menu) {
+    timezones_.clear();
 }
 
 void TimezoneListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {

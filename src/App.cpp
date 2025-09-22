@@ -568,20 +568,19 @@ App::App() :
             [](App* app) {
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::TIMEZONE_LIST));
             },
-            true, // isInteractive = true
-            // getValue lambda to display the current short name
+            true,
             [](App* app) -> std::string {
                 const char* currentTzString = app->getConfigManager().getSettings().timezoneString;
-                for (const auto& tz : TIMEZONE_LIST) {
+                for (const auto& tz : app->getTimezoneListDataSource().getTimezones()) {
                     if (strcmp(currentTzString, tz.posixTzString) == 0) {
                         return std::string("< ") + tz.shortName + " >";
                     }
                 }
-                return "< Unknown >"; // Fallback
+                return "< Unknown >";
             },
-            // --- FIX: Implement adjustValue to enable slider functionality ---
             [](App* app, int dir) {
                 const auto& tzList = TIMEZONE_LIST;
+                const auto& tzList = app->getTimezoneListDataSource().getTimezones();
                 if (tzList.empty()) return;
 
                 auto& settings = app->getConfigManager().getSettings();
@@ -596,13 +595,7 @@ App::App() :
                 }
                 
                 if (currentIndex == -1) {
-                    for (size_t i = 0; i < tzList.size(); ++i) {
-                        if (strcmp("UTC0", tzList[i].posixTzString) == 0) {
-                            currentIndex = i;
-                            break;
-                        }
-                    }
-                    if (currentIndex == -1) currentIndex = 0; // Absolute fallback
+                    currentIndex = 0; // Absolute fallback
                 }
 
                 int newIndex = (currentIndex + dir + tzList.size()) % tzList.size();
@@ -610,6 +603,11 @@ App::App() :
                 strncpy(settings.timezoneString, tzList[newIndex].posixTzString, sizeof(settings.timezoneString) - 1);
                 settings.timezoneString[sizeof(settings.timezoneString) - 1] = '\0';
                 app->getConfigManager().saveSettings();
+
+                app->getRtcManager().setTimezone(settings.timezoneString);
+                // Re-sync internal clock to apply new TZ
+                app->getRtcManager().syncInternalClock();
+                app->requestRedraw(); // Force an immediate redraw of new time
             } 
         },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
@@ -640,8 +638,8 @@ App::App() :
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
     stationListMenu_("Select Client", MenuType::STATION_LIST, &stationListDataSource_),
     firmwareListMenu_("Update from SD", MenuType::FIRMWARE_LIST_SD, &firmwareListDataSource_),
-    beaconFileListMenu_("Select SSID File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
-    portalListMenu_("Select Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
+    beaconFileListMenu_("Select File", MenuType::BEACON_FILE_LIST, &beaconFileListDataSource_),
+    portalListMenu_("Portal", MenuType::PORTAL_LIST, &portalListDataSource_),
     duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
     musicLibraryMenu_("Music Library", MenuType::MUSIC_LIBRARY, &musicLibraryDataSource_),
     songListMenu_("Songs", MenuType::SONG_LIST, &songListDataSource_),
@@ -654,7 +652,7 @@ App::App() :
     hardwareSettingsMenu_("Hardware", MenuType::HARDWARE_SETTINGS_LIST, &hardwareSettingsDataSource_),
     connectivitySettingsMenu_("Connectivity", MenuType::CONNECTIVITY_SETTINGS_LIST, &connectivitySettingsDataSource_),
     systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_),
-    timezoneMenu_("Select Timezone", MenuType::TIMEZONE_LIST, &timezoneDataSource_),
+    timezoneMenu_("Timezone", MenuType::TIMEZONE_LIST, &timezoneDataSource_),
 
     // --- GAME LISTMENUS ---
     snakeMenu_("Snake", MenuType::SNAKE_MENU, &snakeMenuDataSource_),
@@ -741,9 +739,6 @@ void App::setup()
 
     LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing menus.");
     
-    // ... (rest of the setup function remains the same) ...
-    // --- NEW, CLEANED UP MENU REGISTRY ---
-    
     // Main Navigation
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
@@ -776,6 +771,7 @@ void App::setup()
     menuRegistry_[MenuType::CONNECTIVITY_SETTINGS_LIST] = &connectivitySettingsMenu_;
     menuRegistry_[MenuType::SYSTEM_SETTINGS_LIST] = &systemSettingsMenu_;
     menuRegistry_[MenuType::BRIGHTNESS_MENU] = &brightnessMenu_;
+    menuRegistry_[MenuType::TIMEZONE_LIST] = &timezoneMenu_;
 
     // Core Tool Screens (Lists, etc.)
     menuRegistry_[MenuType::WIFI_LIST] = &wifiListMenu_;
@@ -1338,11 +1334,9 @@ void App::drawStatusBar()
 
     // Bottom line
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
+    this->requestRedraw();
 }
 
-// This function is now responsible for drawing the boot screen on the MAIN display.
-// It no longer calculates progress; it just draws based on the current value
-// of the member variable 'currentProgressBarFillPx_'.
 void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration)
 {
     U8G2 &display = hardware_.getMainDisplay(); // Explicitly get the main display

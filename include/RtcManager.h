@@ -20,6 +20,7 @@ public:
     std::string getFormattedTime();
     std::string getFormattedDate();
     void onNtpSync();
+    void setTimezone(const char* tzString);
 
 private:
     void selectRtcMux();
@@ -33,7 +34,6 @@ private:
     unsigned long lastNtpSyncTime_;
     unsigned long lastAttemptTime_;
 
-    // --- NEW: Flag to defer work from the callback ---
     volatile bool syncPending_;
 
     static constexpr unsigned long RETRY_INTERVAL_MS = 10000;

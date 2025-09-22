@@ -105,6 +105,7 @@ public:
     StationSniffer &getStationSniffer() { return stationSniffer_; }
     AssociationSleeper &getAssociationSleeper() { return associationSleeper_; }
     RtcManager& getRtcManager() { return rtcManager_; }
+    TimezoneListDataSource& getTimezoneListDataSource() { return timezoneDataSource_; }
     SystemDataProvider& getSystemDataProvider() { return systemDataProvider_; }
 
     void toggleSecondaryWidget(SecondaryWidgetType type);
