@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "PortalListDataSource.h"
 #include "App.h"
+#include "EvilPortal.h"
 #include "SdCardManager.h"
 #include "ListMenu.h"
 #include "UI_Utils.h"

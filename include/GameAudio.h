@@ -7,7 +7,9 @@
 class App; // <-- ADD this
 class HardwareManager;
 
-class GameAudio {
+#include "Service.h"
+
+class GameAudio : public Service {
 public:
     GameAudio();
     ~GameAudio();
@@ -17,7 +19,7 @@ public:
      * @param app A pointer to the main App object to access settings.
      * @param pin The GPIO pin connected to the speaker/amplifier's audio input.
      */
-    void setup(App* app, int pin); // <-- MODIFIED signature
+    void setup(App* app) override;
 
     /**
      * @brief Plays a tone of a given frequency for a specific duration with a pop-free fade-in.

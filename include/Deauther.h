@@ -26,10 +26,12 @@ struct DeauthConfig {
     StationInfo specific_client_info; // <-- NEW
 };
 
-class Deauther {
+#include "Service.h"
+
+class Deauther : public Service {
 public:
     Deauther();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     // --- Attack Control ---

@@ -1,7 +1,7 @@
 #ifndef APP_H
 #define APP_H
 
-#include "HardwareManager.h"
+#include "BeaconFileListDataSource.h"
 #include "IMenu.h"
 #include "MainMenu.h"
 #include "CarouselMenu.h"
@@ -9,62 +9,67 @@
 #include <vector>
 #include <map>
 #include <functional>
-#include "WifiManager.h"
 #include "TextInputMenu.h"
 #include "ConnectionStatusMenu.h"
 #include "PopUpMenu.h"
-#include "OtaManager.h"
 #include "OtaStatusMenu.h"
-#include "Jammer.h"
 #include "ChannelSelectionMenu.h"
 #include "JammingActiveMenu.h"
 #include "ListMenu.h"
 #include "WifiListDataSource.h"
 #include "FirmwareListDataSource.h"
-#include "BeaconSpammer.h"
-#include "BeaconFileListDataSource.h"
 #include "BeaconSpamActiveMenu.h"
-#include "Deauther.h"
 #include "DeauthActiveMenu.h"
-#include "EvilPortal.h"
 #include "EvilPortalActiveMenu.h"
 #include "PortalListDataSource.h"
-#include "ProbeSniffer.h"
 #include "ProbeSnifferActiveMenu.h"
-#include "KarmaAttacker.h"
 #include "KarmaActiveMenu.h"
-#include "HandshakeCapture.h"
 #include "HandshakeCaptureMenu.h"
 #include "HandshakeCaptureActiveMenu.h"
-#include "ProbeFlooder.h"
 #include "ProbeFloodActiveMenu.h"
-#include "BleSpammer.h"
 #include "BleSpamActiveMenu.h"
-#include "DuckyScriptRunner.h"
 #include "DuckyScriptActiveMenu.h"
 #include "DuckyScriptListDataSource.h"
 #include "BrightnessMenu.h"
-#include "ConfigManager.h"
 #include "UsbDriveMenu.h"
-#include "MusicPlayer.h"
 #include "MusicLibraryDataSource.h"
 #include "SongListDataSource.h"
 #include "NowPlayingMenu.h"
-#include "MusicLibraryManager.h"
 #include "Logger.h"
 #include <HIDForge.h>
 #include "InfoMenu.h" 
 #include "ActionListDataSource.h"
 #include "SnakeGameMenu.h"
-#include "GameAudio.h"
 #include "EventDispatcher.h"
-#include "StationSniffer.h"
-#include "AssociationSleeper.h"
 #include "AssociationSleepActiveMenu.h"
 #include "StationListDataSource.h"
-#include "RtcManager.h"
 #include "TimezoneListDataSource.h"
-#include "SystemDataProvider.h"
+#include "ServiceManager.h"
+#include "MyBleManagerService.h"
+#include <memory>
+
+class HardwareManager;
+class WifiManager;
+class OtaManager;
+class Jammer;
+class BeaconSpammer;
+class Deauther;
+class EvilPortal;
+class ProbeSniffer;
+class KarmaAttacker;
+class HandshakeCapture;
+class ProbeFlooder;
+class BleSpammer;
+class DuckyScriptRunner;
+
+class ConfigManager;
+class MusicPlayer;
+class MusicLibraryManager;
+class GameAudio;
+class StationSniffer;
+class AssociationSleeper;
+class RtcManager;
+class SystemDataProvider;
 
 class App : public ISubscriber
 {
@@ -82,31 +87,38 @@ public:
 
     void showPopUp(std::string title, std::string message, PopUpMenu::OnConfirmCallback onConfirm,
                    const std::string &confirmText = "OK", const std::string &cancelText = "Cancel", bool executeOnConfirmBeforeExit = false);
-    HardwareManager &getHardwareManager() { return hardware_; }
-    WifiManager &getWifiManager() { return wifiManager_; }
-    OtaManager &getOtaManager() { return otaManager_; }
-    Jammer &getJammer() { return jammer_; }
-    BeaconSpammer &getBeaconSpammer() { return beaconSpammer_; }
-    Deauther &getDeauther() { return deauther_; }
-    EvilPortal &getEvilPortal() { return evilPortal_; }
-    ProbeSniffer &getProbeSniffer() { return probeSniffer_; }
-    KarmaAttacker &getKarmaAttacker() { return karmaAttacker_; }
-    HandshakeCapture &getHandshakeCapture() { return handshakeCapture_; }
-    ProbeFlooder &getProbeFlooder() { return probeFlooder_; }
-    BleSpammer &getBleSpammer() { return bleSpammer_; }
-    DuckyScriptRunner &getDuckyRunner() { return duckyRunner_; }
-    BleManager &getBleManager() { return bleManager_; } 
-    ConfigManager &getConfigManager() { return configManager_; }
-    MusicPlayer &getMusicPlayer() { return musicPlayer_; }
-    MusicLibraryManager &getMusicLibraryManager() { return musicLibraryManager_; }
-    MusicLibraryDataSource& getMusicLibraryDataSource() { return musicLibraryDataSource_; }
-    SongListDataSource& getSongListDataSource() { return songListDataSource_; }
-    GameAudio &getGameAudio() { return gameAudio_; }
-    StationSniffer &getStationSniffer() { return stationSniffer_; }
-    AssociationSleeper &getAssociationSleeper() { return associationSleeper_; }
-    RtcManager& getRtcManager() { return rtcManager_; }
-    TimezoneListDataSource& getTimezoneListDataSource() { return timezoneDataSource_; }
-    SystemDataProvider& getSystemDataProvider() { return systemDataProvider_; }
+    
+    HardwareManager &getHardwareManager();
+    WifiManager &getWifiManager();
+    OtaManager &getOtaManager();
+    Jammer &getJammer();
+    BeaconSpammer &getBeaconSpammer();
+    Deauther &getDeauther();
+    EvilPortal &getEvilPortal();
+    ProbeSniffer &getProbeSniffer();
+    KarmaAttacker &getKarmaAttacker();
+    HandshakeCapture &getHandshakeCapture();
+    ProbeFlooder &getProbeFlooder();
+    BleSpammer &getBleSpammer();
+    DuckyScriptRunner &getDuckyRunner();
+    MyBleManagerService &getBleManager();
+    ConfigManager &getConfigManager();
+    MusicPlayer &getMusicPlayer();
+    MusicLibraryManager &getMusicLibraryManager();
+    MusicLibraryDataSource& getMusicLibraryDataSource();
+    SongListDataSource& getSongListDataSource();
+    GameAudio &getGameAudio();
+    StationSniffer &getStationSniffer();
+    AssociationSleeper &getAssociationSleeper();
+    RtcManager& getRtcManager();
+    TimezoneListDataSource& getTimezoneListDataSource();
+    SystemDataProvider& getSystemDataProvider();
+
+    const ConfigManager &getConfigManager() const;
+    const HardwareManager &getHardwareManager() const;
+    const RtcManager &getRtcManager() const;
+    const SystemDataProvider &getSystemDataProvider() const;
+    const WifiManager &getWifiManager() const;
 
     void toggleSecondaryWidget(SecondaryWidgetType type);
     bool isSecondaryWidgetActive(SecondaryWidgetType type) const;
@@ -162,28 +174,7 @@ private:
     static const int MAX_LOG_LINE_LENGTH_SMALL_DISPLAY = 32;
     char smallDisplayLogBuffer_[MAX_LOG_LINES_SMALL_DISPLAY][MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];
 
-    HardwareManager hardware_;
-    WifiManager wifiManager_;
-    OtaManager otaManager_;
-    Jammer jammer_;
-    BeaconSpammer beaconSpammer_;
-    Deauther deauther_;
-    EvilPortal evilPortal_;
-    ProbeSniffer probeSniffer_;
-    KarmaAttacker karmaAttacker_;
-    HandshakeCapture handshakeCapture_;
-    ProbeFlooder probeFlooder_;
-    BleSpammer bleSpammer_;
-    DuckyScriptRunner duckyRunner_;
-    BleManager bleManager_;
-    ConfigManager configManager_;
-    MusicPlayer musicPlayer_;
-    MusicLibraryManager musicLibraryManager_;
-    GameAudio gameAudio_;
-    StationSniffer stationSniffer_;
-    AssociationSleeper associationSleeper_;
-    RtcManager rtcManager_;
-    SystemDataProvider systemDataProvider_;
+    std::unique_ptr<ServiceManager> serviceManager_;
 
     std::map<MenuType, IMenu *> menuRegistry_;
     IMenu *currentMenu_;

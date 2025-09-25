@@ -15,10 +15,12 @@ enum class BleSpamMode {
     ALL,
 };
 
-class BleSpammer {
+#include "Service.h"
+
+class BleSpammer : public Service {
 public:
     BleSpammer();
-    void setup(App* app);
+    void setup(App* app) override;
     void start(BleSpamMode mode);
     void stop();
     void loop();

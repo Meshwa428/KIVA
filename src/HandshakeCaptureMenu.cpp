@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "HandshakeCaptureMenu.h"
 #include "App.h"
+#include "HandshakeCapture.h"
 
 // --- THIS IS THE FIX ---
 // Added 'MenuType::HANDSHAKE_CAPTURE_MENU' as the second argument

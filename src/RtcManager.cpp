@@ -1,5 +1,6 @@
 #include "RtcManager.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "Logger.h"
 #include "Config.h"
 #include <Wire.h>

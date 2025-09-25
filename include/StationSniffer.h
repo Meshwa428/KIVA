@@ -22,10 +22,12 @@ struct StationInfo {
     }
 };
 
-class StationSniffer {
+#include "Service.h"
+
+class StationSniffer : public Service {
 public:
     StationSniffer();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     bool start(const WifiNetworkInfo& targetAp);

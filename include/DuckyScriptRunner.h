@@ -24,13 +24,15 @@ struct DuckyCombination {
     uint8_t key3;
 };
 
-class DuckyScriptRunner {
+#include "Service.h"
+
+class DuckyScriptRunner : public Service {
 public:
     enum class Mode { USB, BLE };
     enum class State { IDLE, WAITING_FOR_CONNECTION, POST_CONNECTION_DELAY, RUNNING, FINISHED };
 
     DuckyScriptRunner();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     bool startScript(const std::string& scriptPath, Mode mode);

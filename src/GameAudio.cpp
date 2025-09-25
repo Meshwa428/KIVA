@@ -27,9 +27,11 @@ GameAudio::~GameAudio() {
     }
 }
 
-void GameAudio::setup(App* app, int pin) { // <-- MODIFIED signature
+#include "Config.h"
+
+void GameAudio::setup(App* app) { // <-- MODIFIED signature
     app_ = app; // <-- MODIFIED
-    pin_ = pin;
+    pin_ = Pins::AMPLIFIER_PIN;
 
     pinMode(pin_, OUTPUT);
     digitalWrite(pin_, LOW); // Ensure it starts off quiet

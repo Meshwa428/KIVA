@@ -1,5 +1,7 @@
 #include "KarmaAttacker.h"
 #include "App.h"
+#include "EvilPortal.h"
+#include "ConfigManager.h"
 #include "Logger.h"
 #include "Config.h"
 

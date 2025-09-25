@@ -27,10 +27,12 @@ struct OtaProgress {
 };
 
 
-class OtaManager {
+#include "Service.h"
+
+class OtaManager : public Service {
 public:
     OtaManager();
-    void setup(App* app, WifiManager* wifiManager);
+    void setup(App* app) override;
     void loop();
 
     // --- State Control ---

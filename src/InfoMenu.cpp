@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "InfoMenu.h"
 #include "App.h"
+#include "SystemDataProvider.h"
 #include "UI_Utils.h"
 #include <vector>
 #include <string>

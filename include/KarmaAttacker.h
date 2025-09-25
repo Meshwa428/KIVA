@@ -17,10 +17,12 @@ struct SniffedNetworkInfo {
     // We can add a list of seen clients here later
 };
 
-class KarmaAttacker {
+#include "Service.h"
+
+class KarmaAttacker : public Service {
 public:
     KarmaAttacker();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     // Attack Control

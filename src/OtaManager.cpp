@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "OtaManager.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "WifiManager.h"
 #include "SdCardManager.h"
 #include "Config.h"
@@ -17,9 +18,9 @@ OtaManager::OtaManager() :
 {
 }
 
-void OtaManager::setup(App* app, WifiManager* wifiManager) {
+void OtaManager::setup(App* app) {
     app_ = app;
-    wifiManager_ = wifiManager;
+    wifiManager_ = &app->getWifiManager();
     loadCurrentFirmware();
     scanSdForFirmware();
     setupArduinoOta();

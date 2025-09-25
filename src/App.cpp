@@ -1,11 +1,6 @@
-#include <SPI.h>
 #include "App.h"
 #include "Icons.h"
 #include "UI_Utils.h"
-#include "Jammer.h"
-#include "BleSpammer.h"
-#include "ProbeFlooder.h"
-#include "DuckyScriptRunner.h"
 #include "DebugUtils.h"
 #include "Event.h"
 #include <algorithm>
@@ -13,6 +8,28 @@
 #include <SdCardManager.h>
 #include <esp_task_wdt.h>
 #include "Timezones.h"
+#include "HardwareManager.h"
+#include "WifiManager.h"
+#include "OtaManager.h"
+#include "Jammer.h"
+#include "BeaconSpammer.h"
+#include "Deauther.h"
+#include "EvilPortal.h"
+#include "ProbeSniffer.h"
+#include "KarmaAttacker.h"
+#include "HandshakeCapture.h"
+#include "ProbeFlooder.h"
+#include "BleSpammer.h"
+#include "DuckyScriptRunner.h"
+#include "BleManager.h"
+#include "ConfigManager.h"
+#include "MusicPlayer.h"
+#include "MusicLibraryManager.h"
+#include "GameAudio.h"
+#include "StationSniffer.h"
+#include "AssociationSleeper.h"
+#include "RtcManager.h"
+#include "SystemDataProvider.h"
 
 App& App::getInstance() {
     static App instance;
@@ -24,9 +41,7 @@ void App::requestRedraw() {
 }
 
 App::App() : 
-    // --- Core Managers & Hardware ---
     currentMenu_(nullptr),
-    // --- NEW: Initialize status bar marquee state ---
     statusBarMarqueeTextLenPx_(0),
     statusBarMarqueeOffset_(0.0f),
     lastStatusBarMarqueeTime_(0),
@@ -35,30 +50,6 @@ App::App() :
     statusBarMarqueePauseStartTime_(0),
     statusBarMarqueeScrollLeft_(true),
     currentProgressBarFillPx_(0.0f),
-    hardware_(),
-    wifiManager_(),
-    otaManager_(),
-    jammer_(),
-    beaconSpammer_(),
-    deauther_(),
-    evilPortal_(),
-    probeSniffer_(),
-    karmaAttacker_(),
-    handshakeCapture_(),
-    probeFlooder_(),
-    bleSpammer_(),
-    duckyRunner_(),
-    bleManager_(),
-    configManager_(),
-    musicPlayer_(),
-    musicLibraryManager_(),
-    gameAudio_(),
-    stationSniffer_(),
-    associationSleeper_(),
-    rtcManager_(),
-    systemDataProvider_(),
-
-    // --- Main Navigation Menus ---
     mainMenu_(),
     toolsMenu_("Tools", MenuType::TOOLS_CAROUSEL, {
         {"WIFI", IconType::WIFI, MenuType::WIFI_TOOLS_GRID},
@@ -71,7 +62,6 @@ App::App() :
         {"Tetris", IconType::GAME_TETRIS, MenuType::TETRIS_MENU},
         {"Back", IconType::NAV_BACK, MenuType::BACK}}),
     
-    // --- New Menu Structure (Grids) ---
     wifiToolsMenu_("WiFi Tools", MenuType::WIFI_TOOLS_GRID, {
         {"Attacks", IconType::SKULL, MenuType::WIFI_ATTACKS_LIST},
         {"Sniff/Capture", IconType::TOOL_PROBE, MenuType::WIFI_SNIFF_LIST},
@@ -579,7 +569,6 @@ App::App() :
                 return "< Unknown >";
             },
             [](App* app, int dir) {
-                const auto& tzList = TIMEZONE_LIST;
                 const auto& tzList = app->getTimezoneListDataSource().getTimezones();
                 if (tzList.empty()) return;
 
@@ -671,53 +660,40 @@ void App::setup()
     delay(100);
     Wire.begin();
 
-    hardware_.setAmplifier(false);
-    hardware_.getMainDisplay().begin();
-    hardware_.getMainDisplay().enableUTF8Print();
-    hardware_.getSmallDisplay().begin();
-    hardware_.getSmallDisplay().enableUTF8Print();
+    serviceManager_ = std::make_unique<ServiceManager>(this);
+
+    getHardwareManager().setAmplifier(false);
+    getHardwareManager().getMainDisplay().begin();
+    getHardwareManager().getMainDisplay().enableUTF8Print();
+    getHardwareManager().getSmallDisplay().begin();
+    getHardwareManager().getSmallDisplay().enableUTF8Print();
 
     logToSmallDisplay("Kiva Boot Agent v1.0", nullptr);
 
     struct BootTask {
         const char* name;
-        std::function<void()> action;
+        std::function<bool()> action;
     };
 
     std::vector<BootTask> bootTasks = {
-        {"Hardware Manager",  [&](){ hardware_.setup(); }},
-        {"SD Card",           [&](){ if (!SdCardManager::setup()) logToSmallDisplay("SD Card", "FAIL"); }},
-        {"Config Manager",    [&](){ configManager_.setup(this); }},
-        {"Logger",            [&](){ Logger::getInstance().setup(); }},
-        {"WiFi System",       [&](){ wifiManager_.setup(this); }},
-        {"OTA System",        [&](){ otaManager_.setup(this, &wifiManager_); }},
-        {"Jammer",            [&](){ jammer_.setup(this); }},
-        {"Beacon Spammer",    [&](){ beaconSpammer_.setup(this); }},
-        {"Deauther",          [&](){ deauther_.setup(this); }},
-        {"Evil Twin",         [&](){ evilPortal_.setup(this); }},
-        {"Probe Sniffer",     [&](){ probeSniffer_.setup(this); }},
-        {"Karma Attacker",    [&](){ karmaAttacker_.setup(this); }},
-        {"Probe Flooder",     [&](){ probeFlooder_.setup(this); }},
-        {"Handshake Sniffer", [&](){ handshakeCapture_.setup(this); }},
-        {"BLE Manager",       [&](){ bleManager_.setup(); }},
-        {"BLE Spammer",       [&](){ bleSpammer_.setup(this); }},
-        {"BadUSB",            [&](){ duckyRunner_.setup(this); }},
-        {"Music Player",      [&](){ musicPlayer_.setup(this); }},
-        {"Music Library",     [&](){ musicLibraryManager_.setup(this); }},
-        {"Station Sniffer",   [&](){ stationSniffer_.setup(this); }},
-        {"Assoc Sleeper",     [&](){ associationSleeper_.setup(this); }},
-        {"RTC",               [&](){ rtcManager_.setup(this); }},
-        {"System Data",       [&](){ systemDataProvider_.setup(this); }},
-        {"Game Audio",        [&](){ gameAudio_.setup(this, Pins::AMPLIFIER_PIN); }}
+        {"Hardware Manager", [&](){ getHardwareManager().setup(this); return true; }},
+        {"SD Card",          [&](){ bool success = SdCardManager::setup(); if (!success) logToSmallDisplay("SD Card", "FAIL"); return success; }},
+        {"Config Manager",   [&](){ getConfigManager().setup(this); return true; }},
+        {"Logger",           [&](){ Logger::getInstance().setup(); return true; }},
     };
 
     int totalTasks = bootTasks.size();
-    U8G2 &mainDisplay = hardware_.getMainDisplay();
+    U8G2 &mainDisplay = getHardwareManager().getMainDisplay();
     int progressBarDrawableWidth = mainDisplay.getDisplayWidth() - 40 - 2;
 
     for (int i = 0; i < totalTasks; ++i) {
         logToSmallDisplay(bootTasks[i].name, "INIT");
-        bootTasks[i].action();
+        if (bootTasks[i].action()) {
+            logToSmallDisplay(bootTasks[i].name, "OK");
+        } else {
+            logToSmallDisplay(bootTasks[i].name, "FAIL");
+            // You might want to halt or indicate a critical failure here
+        }
         
         float targetFillPx = (float)(i + 1) / totalTasks * progressBarDrawableWidth;
         while (currentProgressBarFillPx_ < targetFillPx - 0.5f) {
@@ -728,7 +704,6 @@ void App::setup()
             delay(10); 
         }
         currentProgressBarFillPx_ = targetFillPx;
-        logToSmallDisplay(bootTasks[i].name, "OK");
         delay(30);
     }
     
@@ -737,7 +712,7 @@ void App::setup()
     logToSmallDisplay("KivaOS Loading...");
     delay(500);
 
-    LOG(LogLevel::INFO, "App", "Boot sequence finished. Initializing menus.");
+
     
     // Main Navigation
     menuRegistry_[MenuType::MAIN] = &mainMenu_;
@@ -824,7 +799,7 @@ void App::setup()
 void App::loop()
 {
     // 1. Update hardware and background services
-    hardware_.update();
+    getHardwareManager().update();
 
     if (pendingMenuChange_ != MenuType::NONE) {
         changeMenu(pendingMenuChange_, isForwardNavPending_);
@@ -840,22 +815,7 @@ void App::loop()
         pendingReplaceMenu_ = MenuType::NONE;
     }
 
-    wifiManager_.update();
-    otaManager_.loop();
-    gameAudio_.update();
-    rtcManager_.update();
-    systemDataProvider_.update();
-    jammer_.loop();
-    beaconSpammer_.loop();
-    deauther_.loop();
-    evilPortal_.loop();
-    probeSniffer_.loop();
-    karmaAttacker_.loop();
-    handshakeCapture_.loop();
-    probeFlooder_.loop();
-    bleSpammer_.loop();
-    duckyRunner_.loop();
-    associationSleeper_.loop();
+    serviceManager_->loop();
 
     // 2. Let the current menu run its update logic (e.g., for animations)
     if (currentMenu_)
@@ -868,9 +828,9 @@ void App::loop()
         requestRedraw();
     }
 
-    bool perfMode = jammer_.isActive() || beaconSpammer_.isActive() || deauther_.isActive() || 
-                    evilPortal_.isActive() || karmaAttacker_.isAttacking() || probeFlooder_.isActive() || probeSniffer_.isActive() || bleSpammer_.isActive() ||
-                    duckyRunner_.isActive() || associationSleeper_.isActive();
+    bool perfMode = getJammer().isActive() || getBeaconSpammer().isActive() || getDeauther().isActive() || 
+                    getEvilPortal().isActive() || getKarmaAttacker().isAttacking() || getProbeFlooder().isActive() || getProbeSniffer().isActive() || getBleSpammer().isActive() ||
+                    getDuckyRunner().isActive() || getAssociationSleeper().isActive();
     if (perfMode) {
         requestRedraw();
     }
@@ -881,7 +841,7 @@ void App::loop()
         lastDrawTime_ = millis();
 
         // --- Drawing Logic ---
-        U8G2 &mainDisplay = hardware_.getMainDisplay();
+        U8G2 &mainDisplay = getHardwareManager().getMainDisplay();
         mainDisplay.clearBuffer();
 
         IMenu *menuForUI = currentMenu_;
@@ -930,35 +890,67 @@ void App::loop()
         {
             wifiIsRequired = true;
         }
-        else if (currentType == MenuType::OTA_STATUS && otaManager_.getState() != OtaState::IDLE)
+        else if (currentType == MenuType::OTA_STATUS && getOtaManager().getState() != OtaState::IDLE)
         {
             wifiIsRequired = true;
         }
     }
     
-    if (wifiManager_.getState() == WifiState::CONNECTED || 
-        beaconSpammer_.isActive() ||
-        deauther_.isActive() || 
-        evilPortal_.isActive() || 
-        karmaAttacker_.isAttacking() || 
-        karmaAttacker_.isSniffing() ||
-        probeFlooder_.isActive() ||
-        probeSniffer_.isActive() ||
-        handshakeCapture_.isActive() ||
-        stationSniffer_.isActive() ||
-        associationSleeper_.isActive())
+    if (getWifiManager().getState() == WifiState::CONNECTED || 
+        getBeaconSpammer().isActive() ||
+        getDeauther().isActive() || 
+        getEvilPortal().isActive() || 
+        getKarmaAttacker().isAttacking() || 
+        getKarmaAttacker().isSniffing() ||
+        getProbeFlooder().isActive() ||
+        getProbeSniffer().isActive() ||
+        getHandshakeCapture().isActive() ||
+        getStationSniffer().isActive() ||
+        getAssociationSleeper().isActive())
     {
         wifiIsRequired = true;
     }
 
-    bool hostIsActive = duckyRunner_.isActive();
+    bool hostIsActive = getDuckyRunner().isActive();
 
-    if (!wifiIsRequired && !hostIsActive && wifiManager_.isHardwareEnabled())
+    if (!wifiIsRequired && !hostIsActive && getWifiManager().isHardwareEnabled())
     {
         LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
-        wifiManager_.setHardwareState(false);
+        getWifiManager().setHardwareState(false);
     }
 }
+
+HardwareManager& App::getHardwareManager() { return *serviceManager_->getService<HardwareManager>(); }
+WifiManager& App::getWifiManager() { return *serviceManager_->getService<WifiManager>(); }
+OtaManager& App::getOtaManager() { return *serviceManager_->getService<OtaManager>(); }
+Jammer& App::getJammer() { return *serviceManager_->getService<Jammer>(); }
+BeaconSpammer& App::getBeaconSpammer() { return *serviceManager_->getService<BeaconSpammer>(); }
+Deauther& App::getDeauther() { return *serviceManager_->getService<Deauther>(); }
+EvilPortal& App::getEvilPortal() { return *serviceManager_->getService<EvilPortal>(); }
+ProbeSniffer& App::getProbeSniffer() { return *serviceManager_->getService<ProbeSniffer>(); }
+KarmaAttacker& App::getKarmaAttacker() { return *serviceManager_->getService<KarmaAttacker>(); }
+HandshakeCapture& App::getHandshakeCapture() { return *serviceManager_->getService<HandshakeCapture>(); }
+ProbeFlooder& App::getProbeFlooder() { return *serviceManager_->getService<ProbeFlooder>(); }
+BleSpammer& App::getBleSpammer() { return *serviceManager_->getService<BleSpammer>(); }
+DuckyScriptRunner& App::getDuckyRunner() { return *serviceManager_->getService<DuckyScriptRunner>(); }
+MyBleManagerService& App::getBleManager() { return *serviceManager_->getService<MyBleManagerService>(); }
+ConfigManager& App::getConfigManager() { return *serviceManager_->getService<ConfigManager>(); }
+MusicPlayer& App::getMusicPlayer() { return *serviceManager_->getService<MusicPlayer>(); }
+MusicLibraryManager& App::getMusicLibraryManager() { return *serviceManager_->getService<MusicLibraryManager>(); }
+GameAudio& App::getGameAudio() { return *serviceManager_->getService<GameAudio>(); }
+StationSniffer& App::getStationSniffer() { return *serviceManager_->getService<StationSniffer>(); }
+AssociationSleeper& App::getAssociationSleeper() { return *serviceManager_->getService<AssociationSleeper>(); }
+RtcManager& App::getRtcManager() { return *serviceManager_->getService<RtcManager>(); }
+SystemDataProvider& App::getSystemDataProvider() { return *serviceManager_->getService<SystemDataProvider>(); }
+
+TimezoneListDataSource& App::getTimezoneListDataSource() { return timezoneDataSource_; }
+SongListDataSource& App::getSongListDataSource() { return songListDataSource_; }
+
+const ConfigManager& App::getConfigManager() const { return *serviceManager_->getService<ConfigManager>(); }
+const HardwareManager& App::getHardwareManager() const { return *serviceManager_->getService<HardwareManager>(); }
+const RtcManager& App::getRtcManager() const { return *serviceManager_->getService<RtcManager>(); }
+const SystemDataProvider& App::getSystemDataProvider() const { return *serviceManager_->getService<SystemDataProvider>(); }
+const WifiManager& App::getWifiManager() const { return *serviceManager_->getService<WifiManager>(); }
 
 void App::onEvent(const Event& event) {
     switch (event.type) {
@@ -1028,12 +1020,12 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
                                     type == MenuType::WIFI_CONNECTION_STATUS);
 
     // If the destination requires Wi-Fi and it's currently off, turn it on NOW.
-    if (destinationRequiresWifi && !wifiManager_.isHardwareEnabled())
+    if (destinationRequiresWifi && !getWifiManager().isHardwareEnabled())
     {
         // Serial.printf("[APP-LOGIC] Destination menu (%d) requires WiFi. Enabling hardware...\n", (int)type);
         LOG(LogLevel::DEBUG, "App", "Destination menu (%s) requires WiFi. Enabling hardware...", toMenuName);
         
-        wifiManager_.setHardwareState(true);
+        getWifiManager().setHardwareState(true);
         delay(100); // Give hardware a moment to initialize before menu uses it.
     }
 
@@ -1148,7 +1140,7 @@ MenuType App::getPreviousMenuType() const
 
 void App::toggleSecondaryWidget(SecondaryWidgetType type) {
     uint32_t bit = 1 << static_cast<int>(type);
-    uint32_t& mask = configManager_.getSettings().secondaryWidgetMask;
+    uint32_t& mask = getConfigManager().getSettings().secondaryWidgetMask;
     bool is_active = (mask & bit) != 0;
 
     if (is_active) {
@@ -1168,19 +1160,19 @@ void App::toggleSecondaryWidget(SecondaryWidgetType type) {
         }
         mask |= bit; // Activate
     }
-    configManager_.saveSettings();
+    getConfigManager().saveSettings();
     requestRedraw();
 }
 
 bool App::isSecondaryWidgetActive(SecondaryWidgetType type) const {
     uint32_t bit = 1 << static_cast<int>(type);
-    return (configManager_.getSettings().secondaryWidgetMask & bit) != 0;
+    return (getConfigManager().getSettings().secondaryWidgetMask & bit) != 0;
 }
 
 std::vector<SecondaryWidgetType> App::getActiveSecondaryWidgets() const {
     std::vector<SecondaryWidgetType> active_widgets;
     for (int i = 0; i < 5; ++i) { // Assuming 5 possible widget types
-        if ((configManager_.getSettings().secondaryWidgetMask & (1 << i)) != 0) {
+        if ((getConfigManager().getSettings().secondaryWidgetMask & (1 << i)) != 0) {
             active_widgets.push_back(static_cast<SecondaryWidgetType>(i));
         }
     }
@@ -1191,34 +1183,33 @@ void App::drawSecondaryDisplay()
 {
     if (currentMenu_ && currentMenu_->getMenuType() == MenuType::TEXT_INPUT)
     {
-        U8G2 &smallDisplay = hardware_.getSmallDisplay();
+        U8G2 &smallDisplay = getHardwareManager().getSmallDisplay();
         static_cast<TextInputMenu *>(currentMenu_)->draw(this, smallDisplay);
         return;
     }
-
-    U8G2 &display = hardware_.getSmallDisplay();
+    U8G2 &display = getHardwareManager().getSmallDisplay();
     display.clearBuffer();
     display.setDrawColor(1);
 
     // --- Top Bar ---
     display.setFont(u8g2_font_5x7_tf);
     // Time
-    display.drawStr(2, 7, rtcManager_.getFormattedTime().c_str());
+    display.drawStr(2, 7, getRtcManager().getFormattedTime().c_str());
 
     // Battery
     char batPercentStr[5];
-    snprintf(batPercentStr, sizeof(batPercentStr), "%d%%", hardware_.getBatteryPercentage());
+    snprintf(batPercentStr, sizeof(batPercentStr), "%d%%", getHardwareManager().getBatteryPercentage());
     int percentWidth = display.getStrWidth(batPercentStr);
-    drawBatIcon(display, 128 - 12, 2, hardware_.getBatteryPercentage());
+    drawBatIcon(display, 128 - 12, 2, getHardwareManager().getBatteryPercentage());
     display.drawStr(128 - 12 - percentWidth - 2, 7, batPercentStr);
 
     // Status Icons
     int statusIconX = (128 - 18) / 2;
-    if (wifiManager_.getState() == WifiState::CONNECTED) {
+    if (getWifiManager().getState() == WifiState::CONNECTED) {
         drawCustomIcon(display, statusIconX, 1, IconType::WIFI, IconRenderSize::SMALL);
         statusIconX += 9;
     }
-    if (hardware_.isCharging()) {
+    if (getHardwareManager().isCharging()) {
         drawCustomIcon(display, statusIconX, 1, IconType::UI_CHARGING_BOLT, IconRenderSize::SMALL);
     }
 
@@ -1230,30 +1221,30 @@ void App::drawSecondaryDisplay()
 
     // Always add Voltage
     char voltStr[8];
-    snprintf(voltStr, sizeof(voltStr), "%.2fV", hardware_.getBatteryVoltage());
+    snprintf(voltStr, sizeof(voltStr), "%.2fV", getHardwareManager().getBatteryVoltage());
     widget_data.push_back({"VOLT", voltStr});
 
     for (const auto& type : active_widgets) {
         char valStr[8];
         switch (type) {
             case SecondaryWidgetType::WIDGET_RAM:
-                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getRamUsage().percentage);
+                snprintf(valStr, sizeof(valStr), "%d%%", getSystemDataProvider().getRamUsage().percentage);
                 widget_data.push_back({"RAM", valStr});
                 break;
             case SecondaryWidgetType::WIDGET_PSRAM:
-                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getPsramUsage().percentage);
+                snprintf(valStr, sizeof(valStr), "%d%%", getSystemDataProvider().getPsramUsage().percentage);
                 widget_data.push_back({"PSRAM", valStr});
                 break;
             case SecondaryWidgetType::WIDGET_SD:
-                snprintf(valStr, sizeof(valStr), "%d%%", systemDataProvider_.getSdCardUsage().percentage);
+                snprintf(valStr, sizeof(valStr), "%d%%", getSystemDataProvider().getSdCardUsage().percentage);
                 widget_data.push_back({"SD", valStr});
                 break;
             case SecondaryWidgetType::WIDGET_CPU:
-                snprintf(valStr, sizeof(valStr), "%lu", systemDataProvider_.getCpuFrequency());
+                snprintf(valStr, sizeof(valStr), "%lu", getSystemDataProvider().getCpuFrequency());
                 widget_data.push_back({"CPU", valStr});
                 break;
             case SecondaryWidgetType::WIDGET_TEMP:
-                snprintf(valStr, sizeof(valStr), "%.0fC", systemDataProvider_.getTemperature());
+                snprintf(valStr, sizeof(valStr), "%.0fC", getSystemDataProvider().getTemperature());
                 widget_data.push_back({"TEMP", valStr});
                 break;
         }
@@ -1279,7 +1270,7 @@ void App::drawSecondaryDisplay()
 
 void App::drawStatusBar()
 {
-    U8G2 &display = hardware_.getMainDisplay();
+    U8G2 &display = getHardwareManager().getMainDisplay();
     display.setFont(u8g2_font_6x10_tf);
     display.setDrawColor(1);
 
@@ -1291,13 +1282,13 @@ void App::drawStatusBar()
 
     // --- Battery Drawing Logic ---
     int battery_area_x = 128 - 2;
-    uint8_t batPercent = hardware_.getBatteryPercentage();
+    uint8_t batPercent = getHardwareManager().getBatteryPercentage();
     int bat_icon_width = 10;
     battery_area_x -= bat_icon_width;
     drawBatIcon(display, battery_area_x, 2, batPercent);
 
     // Charging Icon
-    if (hardware_.isCharging())
+    if (getHardwareManager().isCharging())
     {
         int charge_icon_width = 7;
         int charge_icon_spacing = 2;
@@ -1339,7 +1330,7 @@ void App::drawStatusBar()
 
 void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long totalBootDuration)
 {
-    U8G2 &display = hardware_.getMainDisplay(); // Explicitly get the main display
+    U8G2 &display = getHardwareManager().getMainDisplay(); // Explicitly get the main display
 
     display.clearBuffer();
     drawCustomIcon(display, 0, -4, IconType::BOOT_LOGO);
@@ -1367,7 +1358,7 @@ void App::updateAndDrawBootScreen(unsigned long bootStartTime, unsigned long tot
 // This function is responsible for drawing logs on the SMALL display.
 void App::logToSmallDisplay(const char *message, const char *status)
 {
-    U8G2 &display = hardware_.getSmallDisplay(); // Explicitly get the small display
+    U8G2 &display = getHardwareManager().getSmallDisplay(); // Explicitly get the small display
     display.setFont(u8g2_font_5x7_tf);
 
     char fullMessage[MAX_LOG_LINE_LENGTH_SMALL_DISPLAY];

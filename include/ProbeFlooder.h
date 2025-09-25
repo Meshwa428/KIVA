@@ -13,12 +13,14 @@ enum class ProbeFloodMode {
     FILE_BASED
 };
 
-class ProbeFlooder {
+#include "Service.h"
+
+class ProbeFlooder : public Service {
 public:
     ProbeFlooder();
     ~ProbeFlooder();
 
-    void setup(App* app);
+    void setup(App* app) override;
     bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeFloodMode mode, const std::string& ssidFilePath = "");
     void stop();
     void loop();

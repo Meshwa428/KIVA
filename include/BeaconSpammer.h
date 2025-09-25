@@ -13,12 +13,14 @@ enum class BeaconSsidMode {
     FILE_BASED
 };
 
-class BeaconSpammer {
+#include "Service.h"
+
+class BeaconSpammer : public Service {
 public:
     BeaconSpammer();
     ~BeaconSpammer();
 
-    void setup(App* app);
+    void setup(App* app) override;
     bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, BeaconSsidMode mode, const std::string& ssidFilePath = "");
     void stop();
     void loop();

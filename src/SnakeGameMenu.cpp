@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "SnakeGameMenu.h"
 #include "App.h"
+#include "GameAudio.h"
 #include "UI_Utils.h"
 #include "SnakeGameSprites.h"
 #include <cstdlib>

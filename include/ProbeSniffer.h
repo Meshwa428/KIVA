@@ -11,10 +11,12 @@
 // Forward declaration to avoid circular dependencies
 class App; 
 
-class ProbeSniffer {
+#include "Service.h"
+
+class ProbeSniffer : public Service {
 public:
     ProbeSniffer();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     bool start(); 

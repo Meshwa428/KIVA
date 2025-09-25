@@ -1,5 +1,6 @@
 #include "AssociationSleeper.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "Logger.h"
 #include <esp_wifi.h>
 #include "Config.h"

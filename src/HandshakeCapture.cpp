@@ -1,5 +1,6 @@
 #include "HandshakeCapture.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "Logger.h"
 #include "SdCardManager.h"
 #include <WiFi.h>

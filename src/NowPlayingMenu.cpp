@@ -4,6 +4,7 @@
 #include "EventDispatcher.h"
 #include "NowPlayingMenu.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "MusicPlayer.h"
 #include "UI_Utils.h"
 #include "Logger.h"

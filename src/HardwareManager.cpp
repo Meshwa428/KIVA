@@ -60,7 +60,7 @@ HardwareManager::HardwareManager() :
     }
 }
 
-void HardwareManager::setup()
+void HardwareManager::setup(App* app)
 {
     setLaser(false);
     setVibration(false);

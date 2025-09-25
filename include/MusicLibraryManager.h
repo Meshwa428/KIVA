@@ -6,10 +6,12 @@
 
 class App;
 
-class MusicLibraryManager {
+#include "Service.h"
+
+class MusicLibraryManager : public Service {
 public:
     MusicLibraryManager();
-    void setup(App* app);
+    void setup(App* app) override;
 
     // Main indexing function to be called at boot
     void buildIndex();

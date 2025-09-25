@@ -8,10 +8,12 @@
 
 class App;
 
-class RtcManager {
+#include "Service.h"
+
+class RtcManager : public Service {
 public:
     RtcManager();
-    void setup(App* app);
+    void setup(App* app) override;
     void update();
 
     void syncInternalClock();

@@ -29,7 +29,9 @@ enum class HostClient {
 
 static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
 
-class HardwareManager {
+#include "Service.h"
+
+class HardwareManager : public Service {
 public:
     // --- NEW RAII LOCK CLASS (defined inside HardwareManager) ---
     class RfLock {
@@ -47,7 +49,7 @@ public:
     };
 
     HardwareManager();
-    void setup();
+    void setup(App* app) override;
     void update(); 
 
     // --- NEW: RF Control Method ---

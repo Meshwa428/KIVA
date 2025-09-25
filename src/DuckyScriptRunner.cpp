@@ -1,5 +1,6 @@
 #include "DuckyScriptRunner.h"
 #include "App.h"
+#include "ConfigManager.h"
 #include "Logger.h"
 
 // Key codes are now from HIDForge/common/keys.h
@@ -81,7 +82,7 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     if (mode == Mode::BLE) {
         BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
         if (!keyboard) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard instance.");
+            LOG(LogLevel::ERROR, "DuckyRunner", "MyBleManagerService failed to provide a keyboard instance.");
             return false;
         }
         activeHid_.reset(new BleHid(keyboard));

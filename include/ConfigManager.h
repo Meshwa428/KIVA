@@ -21,10 +21,12 @@ struct DeviceSettings {
     char timezoneString[40];      // <-- MODIFIED: From int32_t to char array
 };
 
-class ConfigManager {
+#include "Service.h"
+
+class ConfigManager : public Service {
 public:
     ConfigManager();
-    void setup(App* app);
+    void setup(App* app) override;
     
     // Load/Save operations
     void loadSettings();

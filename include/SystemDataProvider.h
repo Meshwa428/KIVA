@@ -12,10 +12,12 @@ struct MemoryUsage {
     uint8_t percentage;
 };
 
-class SystemDataProvider {
+#include "Service.h"
+
+class SystemDataProvider : public Service {
 public:
     SystemDataProvider();
-    void setup(App* app);
+    void setup(App* app) override;
     void update();
 
     const MemoryUsage& getRamUsage() const;

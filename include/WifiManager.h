@@ -46,10 +46,12 @@ struct KnownWifiNetwork {
     int failureCount = 0;
 };
 
-class WifiManager {
+#include "Service.h"
+
+class WifiManager : public Service {
 public:
     WifiManager();
-    void setup(App* app);
+    void setup(App* app) override;
     void update();
 
     // --- State Control ---

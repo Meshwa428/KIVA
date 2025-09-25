@@ -16,7 +16,9 @@ class AudioGeneratorMP3;
 class AudioFileSourceSD;
 class App;
 
-class MusicPlayer {
+#include "Service.h"
+
+class MusicPlayer : public Service {
 public:
     using SongFinishedCallback = std::function<void()>;
     enum class State { STOPPED, LOADING, PLAYING, PAUSED };
@@ -26,7 +28,7 @@ public:
     MusicPlayer();
     ~MusicPlayer();
 
-    void setup(App* app);
+    void setup(App* app) override;
     
     // --- Resource management is now for the MIXER ---
     bool allocateResources();

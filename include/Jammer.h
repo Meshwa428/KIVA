@@ -34,10 +34,12 @@ struct JammerConfig {
     JammingTechnique technique = JammingTechnique::NOISE_INJECTION;
 };
 
-class Jammer {
+#include "Service.h"
+
+class Jammer : public Service {
 public:
     Jammer();
-    void setup(App* app);
+    void setup(App* app) override;
 
     bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode mode, JammerConfig config = {});
     void stop();

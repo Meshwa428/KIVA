@@ -2,6 +2,7 @@
 #include "EventDispatcher.h"
 #include "WifiListMenu.h"
 #include "App.h"
+#include "OtaManager.h"
 #include "UI_Utils.h"
 #include "TextInputMenu.h"
 

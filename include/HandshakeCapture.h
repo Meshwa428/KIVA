@@ -34,10 +34,12 @@ struct HandshakeCaptureConfig {
     WifiNetworkInfo specific_target_info;
 };
 
-class HandshakeCapture {
+#include "Service.h"
+
+class HandshakeCapture : public Service {
 public:
     HandshakeCapture();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     void prepare(HandshakeCaptureMode mode, HandshakeCaptureType type);

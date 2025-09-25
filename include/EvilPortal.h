@@ -17,10 +17,12 @@ struct VictimCredentials {
     std::string password;
 };
 
-class EvilPortal {
+#include "Service.h"
+
+class EvilPortal : public Service {
 public:
     EvilPortal();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     void prepareAttack();

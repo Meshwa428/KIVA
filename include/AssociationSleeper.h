@@ -10,7 +10,9 @@
 
 class App;
 
-class AssociationSleeper {
+#include "Service.h"
+
+class AssociationSleeper : public Service {
 public:
     // --- MODIFICATION: New enum ---
     enum class AttackType {
@@ -20,7 +22,7 @@ public:
     };
 
     AssociationSleeper();
-    void setup(App* app);
+    void setup(App* app) override;
     void loop();
 
     bool start(const WifiNetworkInfo& ap); // For NORMAL
