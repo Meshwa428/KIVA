@@ -22,6 +22,7 @@ public:
 private:
     BeaconSsidMode modeToStart_;
     std::string filePathToUse_;
+    bool initialFrameDrawn_ = false;
 };
 
 #endif // BEACON_SPAM_ACTIVE_MENU_H

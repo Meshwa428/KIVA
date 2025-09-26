@@ -679,6 +679,7 @@ void App::setup()
         {"Hardware Manager", [&](){ getHardwareManager().setup(this); return true; }},
         {"SD Card",          [&](){ bool success = SdCardManager::setup(); if (!success) logToSmallDisplay("SD Card", "FAIL"); return success; }},
         {"Config Manager",   [&](){ getConfigManager().setup(this); return true; }},
+        {"System Data",      [&](){ getSystemDataProvider().setup(this); return true; }}, // Pre-loads data for the secondary display
         {"Logger",           [&](){ Logger::getInstance().setup(); return true; }},
     };
 
@@ -710,7 +711,9 @@ void App::setup()
     currentProgressBarFillPx_ = progressBarDrawableWidth;
     updateAndDrawBootScreen(0, 0);
     logToSmallDisplay("KivaOS Loading...");
-    delay(500);
+
+    drawSecondaryDisplay();
+    // delay(500);
 
 
     
@@ -792,7 +795,6 @@ void App::setup()
     
     navigationStack_.clear();
     changeMenu(MenuType::MAIN, true);
-    Serial.println("[APP-LOG] App setup finished.");
     LOG(LogLevel::INFO, "App", "App setup finished.");
 }
 
@@ -821,6 +823,12 @@ void App::loop()
     if (currentMenu_)
     {
         currentMenu_->onUpdate(this);
+    }
+
+    // UI pause check
+    if (getHardwareManager().isUiRenderingPaused()) {
+        delay(10); // Yield CPU time
+        return;
     }
 
     // 3. Determine if a redraw is needed

@@ -83,7 +83,7 @@ bool Deauther::start(const StationInfo& targetClient) {
 
     isActive_ = true;
     isAttackPending_ = false;
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -108,7 +108,7 @@ void Deauther::stop() {
     allTargets_.clear();
     currentTargetIndex_ = -1;
     currentTargetSsid_ = "";
-    app_->getHardwareManager().setPerformanceMode(false);
+    // app_->getHardwareManager().setPerformanceMode(false);
     
     // Explicitly turn off WiFi to be safe
     WiFi.mode(WIFI_OFF);
@@ -209,7 +209,7 @@ void Deauther::executeAttackForCurrentTarget() {
 
     const WifiNetworkInfo& newTarget = allTargets_[currentTargetIndex_];
     currentTargetSsid_ = newTarget.ssid;
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
 
     if (currentConfig_.type == DeauthAttackType::EVIL_TWIN || currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
         rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);

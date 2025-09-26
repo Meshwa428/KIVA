@@ -13,11 +13,13 @@ public:
     void draw(App* app, U8G2& display) override;
     void handleInput(InputEvent event, App* app) override;
 
-    // --- NEW: Override for custom status bar ---
     bool drawCustomStatusBar(App* app, U8G2& display) override;
 
     const char* getTitle() const override { return "Deauther Active"; }
     MenuType getMenuType() const override { return MenuType::DEAUTH_ACTIVE; }
+
+private:
+    bool initialFrameDrawn_ = false;
 };
 
 #endif // DEAUTH_ACTIVE_MENU_H

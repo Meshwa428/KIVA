@@ -15,6 +15,9 @@ public:
 
     const char* getTitle() const override { return "Assoc Sleep"; }
     MenuType getMenuType() const override { return MenuType::ASSOCIATION_SLEEP_ACTIVE; }
+
+private:
+    bool initialFrameDrawn_ = false;
 };
 
 #endif // ASSOCIATION_SLEEP_ACTIVE_MENU_H

@@ -5,16 +5,7 @@
 #include <esp_wifi.h>
 #include "Config.h"
 
-// --- INITIALIZE STATIC MEMBERS ---
 EvilPortal* EvilPortal::instance_ = nullptr;
-
-// const uint8_t EvilPortal::deauth_frame_template[] = {
-//     0xc0, 0x00, 0x3a, 0x01,
-//     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Destination: BROADCAST
-//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source: Set to target BSSID
-//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID: Set to target BSSID
-//     0xf0, 0xff, 0x02, 0x00 // Reason code: 2 (Previous auth no longer valid)
-// };
 
 EvilPortal::EvilPortal() :
     app_(nullptr),
@@ -94,7 +85,7 @@ bool EvilPortal::start(const WifiNetworkInfo& target) {
     int cloneChannel = (targetNetwork_.channel == 1) ? 6 : 1;
     WiFi.softAP(targetNetwork_.ssid, nullptr, cloneChannel);
     startWebServer();
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -112,7 +103,7 @@ void EvilPortal::stop() {
     rfLock_.reset(); 
     isActive_ = false;
     isAttackPending_ = false;
-    app_->getHardwareManager().setPerformanceMode(false);
+    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void EvilPortal::loop() {

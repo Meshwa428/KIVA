@@ -17,7 +17,6 @@ EvilPortalActiveMenu::EvilPortalActiveMenu() :
 void EvilPortalActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (isForwardNav) {
-        // Reset list state when the menu is entered
         topDisplayIndex_ = 0;
         selectedIndex_ = 0;
     }
@@ -34,13 +33,14 @@ void EvilPortalActiveMenu::onUpdate(App* app) {
     if (evilTwin.getVictimCount() != lastKnownVictimCount_) {
         lastKnownVictimCount_ = evilTwin.getVictimCount();
         
-        // Auto-scroll to show the newest victim
         selectedIndex_ = lastKnownVictimCount_ - 1;
         const int maxVisibleItems = 4;
         if (selectedIndex_ >= maxVisibleItems) {
             topDisplayIndex_ = selectedIndex_ - (maxVisibleItems - 1);
         }
     }
+    // update cycle to keep the information live.
+    app->requestRedraw();
 }
 
 void EvilPortalActiveMenu::handleInput(InputEvent event, App* app) {

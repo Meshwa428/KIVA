@@ -14,7 +14,6 @@ public:
     void draw(App* app, U8G2& display) override;
     void handleInput(InputEvent event, App* app) override;
 
-    // --- NEW: Override for custom status bar ---
     bool drawCustomStatusBar(App* app, U8G2& display) override;
 
     void setAttackParameters(ProbeFloodMode mode, const std::string& filePath = "");

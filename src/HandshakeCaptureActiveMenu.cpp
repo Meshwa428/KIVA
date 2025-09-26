@@ -1,5 +1,4 @@
-#include "Event.h"
-#include "EventDispatcher.h"
+
 #include "Event.h"
 #include "EventDispatcher.h"
 #include "HandshakeCaptureActiveMenu.h"
@@ -15,7 +14,6 @@ void HandshakeCaptureActiveMenu::onEnter(App* app, bool isForwardNav) {
     if (capture.getConfig().type == HandshakeCaptureType::SCANNER) {
         capture.startScanner();
     }
-    // For targeted, the start is called after a network is selected from the list.
     startTime_ = millis();
 }
 
@@ -25,13 +23,14 @@ void HandshakeCaptureActiveMenu::onExit(App* app) {
 }
 
 void HandshakeCaptureActiveMenu::onUpdate(App* app) {
-    // Nothing to do here, the capture runs in the background
+    // --- ADD THIS LINE ---
+    // Since the stats (packet count, timer) are always changing,
+    // we need to request a redraw on every update loop.
+    app->requestRedraw();
 }
 
-// --- THIS IS THE MISSING FUNCTION IMPLEMENTATION ---
 void HandshakeCaptureActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS) {
-        // Use returnToMenu to reliably get back to the grid menu
         EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::HANDSHAKE_CAPTURE_MENU));
     }
 }

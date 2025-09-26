@@ -20,6 +20,8 @@ void IRAM_ATTR HardwareManager::handleButtonInterrupt() {
 
 // --- Constructor ---
 HardwareManager::HardwareManager() : 
+                                     lastSelectedChannel_(255), 
+                                     i2c_mux_mutex_(xSemaphoreCreateMutex()), 
                                      u8g2_main_(U8G2_R0, U8X8_PIN_NONE),
                                      u8g2_small_(U8G2_R0, U8X8_PIN_NONE),
                                      radio1_(Pins::NRF1_CE_PIN, Pins::NRF1_CSN_PIN, SPI_SPEED_NRF), 
@@ -32,7 +34,7 @@ HardwareManager::HardwareManager() :
                                      pcf0_output_state_(0xFF), laserOn_(false), vibrationOn_(false), amplifierOn_(false),
                                      batteryIndex_(0), batteryInitialized_(false), currentSmoothedVoltage_(4.5f),
                                      isCharging_(false), lastBatteryCheckTime_(0), lastValidRawVoltage_(4.5f),
-                                     trendBufferIndex_(0), trendBufferFilled_(false), highPerformanceMode_(false)
+                                     trendBufferIndex_(0), trendBufferFilled_(false), uiRenderingPaused_(false)
 {
     // Initialize the static instance pointer
     instance_ = this;
@@ -290,9 +292,14 @@ void HardwareManager::releaseHostControl() {
     currentHostClient_ = HostClient::NONE;
 }
 
-void HardwareManager::setPerformanceMode(bool highPerf) {
-    highPerformanceMode_ = highPerf;
-    Serial.printf("[HW-LOG] Performance mode set to: %s\n", highPerf ? "HIGH" : "NORMAL (UI)");
+void HardwareManager::setUiRenderingPaused(bool paused) {
+    uiRenderingPaused_ = paused;
+    // Log message updated for clarity
+    LOG(LogLevel::INFO, "HW_MANAGER", "UI Rendering Paused set to: %s", paused ? "TRUE" : "FALSE");
+}
+
+bool HardwareManager::isUiRenderingPaused() const {
+    return uiRenderingPaused_;
 }
 
 void HardwareManager::setMainBrightness(uint8_t contrast) {
@@ -498,10 +505,19 @@ U8G2 &HardwareManager::getSmallDisplay()
     return u8g2_small_;
 }
 
+HardwareManager::I2CMuxLock::I2CMuxLock(HardwareManager& manager, uint8_t channel) : manager_(manager) {
+    xSemaphoreTake(manager_.i2c_mux_mutex_, portMAX_DELAY);
+    manager_.selectMux(channel);
+}
+
+HardwareManager::I2CMuxLock::~I2CMuxLock() {
+    manager_.selectMux(Pins::MUX_CHANNEL_MAIN_DISPLAY);
+    xSemaphoreGive(manager_.i2c_mux_mutex_);
+}
+
 void HardwareManager::selectMux(uint8_t channel)
 {
-    static uint8_t lastSelectedChannel = 255;
-    if (channel == lastSelectedChannel)
+    if (channel == lastSelectedChannel_)
     {
         return;
     }
@@ -513,7 +529,7 @@ void HardwareManager::selectMux(uint8_t channel)
     Wire.write(1 << channel);
     Wire.endTransmission();
     delayMicroseconds(350);
-    lastSelectedChannel = channel;
+    lastSelectedChannel_ = channel;
 }
 
 void HardwareManager::writePCF(uint8_t pcfAddress, uint8_t data)

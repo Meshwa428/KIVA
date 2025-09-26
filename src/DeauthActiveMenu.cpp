@@ -10,24 +10,50 @@ DeauthActiveMenu::DeauthActiveMenu() {}
 
 void DeauthActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+    initialFrameDrawn_ = false; // Reset flag
+
     auto& deauther = app->getDeauther();
     if (deauther.isAttackPending()) {
         const auto& config = deauther.getPendingConfig();
-        // --- FIX: Use correct enum ---
         if (config.type == DeauthAttackType::BROADCAST_NORMAL || config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
-            // --- FIX: Use correct method name ---
             deauther.startBroadcast();
         }
     }
 }
 
+
 void DeauthActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
+    app->getHardwareManager().setUiRenderingPaused(false); // Always unpause on exit
     app->getDeauther().stop();
 }
 
 void DeauthActiveMenu::onUpdate(App* app) {
-    // Deauther::loop is called from App::loop
+    auto& deauther = app->getDeauther();
+    const auto& config = deauther.getPendingConfig();
+
+    // Determine if the UI should be paused based on the attack type
+    bool shouldPauseUi = false;
+    switch (config.type) {
+        case DeauthAttackType::NORMAL:
+        case DeauthAttackType::EVIL_TWIN:
+        case DeauthAttackType::PINPOINT_CLIENT:
+            shouldPauseUi = true; // These modes have a static display
+            break;
+        case DeauthAttackType::BROADCAST_NORMAL:
+        case DeauthAttackType::BROADCAST_EVIL_TWIN:
+            shouldPauseUi = false; // These modes need to update the target SSID
+            break;
+    }
+
+    if (shouldPauseUi) {
+        if (initialFrameDrawn_ && !app->getHardwareManager().isUiRenderingPaused()) {
+            app->getHardwareManager().setUiRenderingPaused(true);
+        }
+    } else {
+        // If we should not be paused, ensure we request redraws for live updates.
+        app->requestRedraw();
+    }
 }
 
 void DeauthActiveMenu::handleInput(InputEvent event, App* app) {
@@ -76,7 +102,6 @@ void DeauthActiveMenu::draw(App* app, U8G2& display) {
     const auto& config = deauther.getPendingConfig();
     if ((config.type == DeauthAttackType::BROADCAST_NORMAL ||
          config.type == DeauthAttackType::BROADCAST_EVIL_TWIN) && deauther.getCurrentTargetSsid().empty()) {
-        // --- THIS IS THE FIX ---
         // Replace the simple drawStr with the word-wrapping utility
         const char* msg = "Scanning for targets...";
         
@@ -91,11 +116,8 @@ void DeauthActiveMenu::draw(App* app, U8G2& display) {
         
         // Call the utility function to draw the wrapped text.
         drawWrappedText(display, msg, textAreaX, textAreaY, textAreaW, textAreaH, fonts);
-        // --- END OF FIX ---
         return;
     }
-
-    // --- Refined Main Drawing Area ---
     
     // 1. Attack Mode Title (using a smaller font)
     display.setFont(u8g2_font_6x10_tf);
@@ -121,4 +143,6 @@ void DeauthActiveMenu::draw(App* app, U8G2& display) {
     display.setFont(u8g2_font_5x7_tf);
     const char* instruction = "Press BACK to Stop";
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 63, instruction);
+
+    initialFrameDrawn_ = true;
 }

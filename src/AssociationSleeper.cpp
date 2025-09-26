@@ -44,7 +44,7 @@ bool AssociationSleeper::start(const WifiNetworkInfo& ap) {
         return false;
     }
     
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -71,7 +71,7 @@ bool AssociationSleeper::start() {
     esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
     lastChannelHopTime_ = millis();
 
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -95,7 +95,7 @@ bool AssociationSleeper::start(const StationInfo& client) {
     
     isActive_ = true;
     packetCounter_ = 0;
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -108,7 +108,7 @@ void AssociationSleeper::stop() {
         stationSniffer_->stop();
     }
     rfLock_.reset();
-    app_->getHardwareManager().setPerformanceMode(false);
+    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void AssociationSleeper::loop() {
@@ -208,15 +208,13 @@ void AssociationSleeper::handlePacket(wifi_promiscuous_pkt_t *packet) {
         newStation.channel = packet->rx_ctrl.channel;
         newClientsFound_.push_back(newStation);
 
-        // --- NEW LOGGING ---
         // Log the discovery of a new client in broadcast mode.
-        // We log the client MAC and the BSSID of the AP it's connected to.
+        // log the client MAC and the BSSID of the AP it's connected to.
         char clientMacStr[18];
         char bssidStr[18];
         sprintf(clientMacStr, "%02X:%02X:%02X:%02X:%02X:%02X", client_mac[0], client_mac[1], client_mac[2], client_mac[3], client_mac[4], client_mac[5]);
         sprintf(bssidStr, "%02X:%02X:%02X:%02X:%02X:%02X", bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
         LOG(LogLevel::INFO, "ASSOC_SLEEP", "Broadcast: Found station %s -> BSSID %s", clientMacStr, bssidStr);
-        // --- END OF NEW LOGGING ---
     }
 }
 

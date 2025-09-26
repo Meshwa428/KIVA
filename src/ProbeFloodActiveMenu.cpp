@@ -1,7 +1,5 @@
 #include "Event.h"
 #include "EventDispatcher.h"
-#include "Event.h"
-#include "EventDispatcher.h"
 #include "ProbeFloodActiveMenu.h"
 #include "App.h"
 
@@ -14,12 +12,10 @@ void ProbeFloodActiveMenu::setAttackParameters(ProbeFloodMode mode, const std::s
 
 void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    app->getHardwareManager().setPerformanceMode(true);
     auto& flooder = app->getProbeFlooder();
     auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
     
     if (!flooder.start(std::move(rfLock), modeToStart_, filePathToUse_)) {
-        app->getHardwareManager().setPerformanceMode(false);
         app->showPopUp("Error", "Failed to start attack.", [](App* app_cb){
             EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
@@ -28,11 +24,12 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
 
 void ProbeFloodActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    app->getHardwareManager().setPerformanceMode(false);
     app->getProbeFlooder().stop();
 }
 
-void ProbeFloodActiveMenu::onUpdate(App* app) {}
+void ProbeFloodActiveMenu::onUpdate(App* app) {
+    app->requestRedraw();
+}
 
 void ProbeFloodActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
@@ -46,19 +43,16 @@ bool ProbeFloodActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     display.setFont(u8g2_font_6x10_tf);
     display.setDrawColor(1);
 
-    // Left side: Attack Title
     display.drawStr(2, 8, getTitle());
 
-    // Right side: Current Channel
     char channelStr[16];
     snprintf(channelStr, sizeof(channelStr), "CH: %d", flooder.getCurrentChannel());
     int textWidth = display.getStrWidth(channelStr);
     display.drawStr(128 - textWidth - 2, 8, channelStr);
     
-    // Bottom line
     display.drawLine(0, STATUS_BAR_H - 1, 127, STATUS_BAR_H - 1);
 
-    return true; // We handled the status bar drawing.
+    return true;
 }
 
 void ProbeFloodActiveMenu::draw(App* app, U8G2& display) {
@@ -81,4 +75,5 @@ void ProbeFloodActiveMenu::draw(App* app, U8G2& display) {
 
     const char* instruction = "Press BACK to Stop";
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 60, instruction);
+
 }

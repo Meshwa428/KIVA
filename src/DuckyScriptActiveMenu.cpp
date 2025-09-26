@@ -10,7 +10,7 @@ DuckyScriptActiveMenu::DuckyScriptActiveMenu() : entryTime_(0) {}
 void DuckyScriptActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     entryTime_ = millis();
-    app->getHardwareManager().setPerformanceMode(true);
+    // app->getHardwareManager().setPerformanceMode(true);
 }
 
 void DuckyScriptActiveMenu::onExit(App* app) {
@@ -20,7 +20,7 @@ void DuckyScriptActiveMenu::onExit(App* app) {
         app->getDuckyRunner().stopScript();
     }
     
-    app->getHardwareManager().setPerformanceMode(false);
+    // app->getHardwareManager().setPerformanceMode(false);
 }
 
 void DuckyScriptActiveMenu::onUpdate(App* app) {

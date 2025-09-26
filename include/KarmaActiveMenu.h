@@ -25,6 +25,8 @@ private:
     int topDisplayIndex_;
     int selectedIndex_;
     size_t lastKnownSsidCount_;
+    
+    bool initialFrameDrawn_ = false;
 };
 
 #endif // KARMA_ACTIVE_MENU_H

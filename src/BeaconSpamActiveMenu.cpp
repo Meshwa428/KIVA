@@ -4,7 +4,7 @@
 #include "App.h"
 #include "BeaconSpammer.h"
 
-BeaconSpamActiveMenu::BeaconSpamActiveMenu() : modeToStart_(BeaconSsidMode::RANDOM) {}
+BeaconSpamActiveMenu::BeaconSpamActiveMenu() : modeToStart_(BeaconSsidMode::RANDOM), initialFrameDrawn_(false) {}
 
 void BeaconSpamActiveMenu::setAttackParameters(BeaconSsidMode mode, const std::string& filePath) {
     modeToStart_ = mode;
@@ -13,15 +13,12 @@ void BeaconSpamActiveMenu::setAttackParameters(BeaconSsidMode mode, const std::s
 
 void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    app->getHardwareManager().setPerformanceMode(true);
+    initialFrameDrawn_ = false; // Reset the flag
 
     auto& spammer = app->getBeaconSpammer();
     auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
     
-    // This now only handles a low-level hardware lock failure, which is the correct behavior.
     if (!spammer.start(std::move(rfLock), modeToStart_, filePathToUse_)) {
-        app->getHardwareManager().setPerformanceMode(false);
-        // This popup will now only show if there's a hardware-level problem.
         app->showPopUp("Error", "Failed to acquire RF lock.", [](App* app_cb){
             EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
@@ -30,11 +27,16 @@ void BeaconSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
 
 void BeaconSpamActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    app->getHardwareManager().setPerformanceMode(false);
+    app->getHardwareManager().setUiRenderingPaused(false); // Ensure UI is unpaused on exit
     app->getBeaconSpammer().stop();
 }
 
-void BeaconSpamActiveMenu::onUpdate(App* app) {}
+void BeaconSpamActiveMenu::onUpdate(App* app) {
+    // After the first frame has been drawn, pause the UI rendering.
+    if (initialFrameDrawn_ && !app->getHardwareManager().isUiRenderingPaused()) {
+        app->getHardwareManager().setUiRenderingPaused(true);
+    }
+}
 
 void BeaconSpamActiveMenu::handleInput(InputEvent event, App* app) {
     switch (event) {
@@ -52,14 +54,15 @@ void BeaconSpamActiveMenu::draw(App* app, U8G2& display) {
         const char* startingMsg = "Starting Attack...";
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(startingMsg))/2, 38, startingMsg);
-        return;
+    } else {
+        const char* titleMsg = "Beacon Spam Active";
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 28, titleMsg);
+
+        display.setFont(u8g2_font_6x10_tf);
+        const char* instruction = "Press BACK to Stop";
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 52, instruction);
     }
     
-    const char* titleMsg = "Beacon Spam Active";
-    display.setFont(u8g2_font_7x13B_tr);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 28, titleMsg);
-
-    display.setFont(u8g2_font_6x10_tf);
-    const char* instruction = "Press BACK to Stop";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 52, instruction);
+    initialFrameDrawn_ = true; // Signal that the first frame has been drawn
 }

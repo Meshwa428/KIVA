@@ -20,13 +20,11 @@ uint8_t RtcManager::decToBcd(uint8_t val) {
     return ((val / 10 * 16) + (val % 10));
 }
 
-void RtcManager::selectRtcMux() {
-    app_->getHardwareManager().selectMux(Pins::MUX_CHANNEL_RTC);
-}
+
 
 void RtcManager::adjust(const GenericDateTime& dt) {
     if (!rtcFound_) return;
-    selectRtcMux();
+    HardwareManager::I2CMuxLock lock(app_->getHardwareManager(), Pins::MUX_CHANNEL_RTC);
     Wire.beginTransmission(DS3231_ADDR);
     Wire.write(0x00);
     Wire.write(decToBcd(dt.s));
@@ -40,7 +38,7 @@ void RtcManager::adjust(const GenericDateTime& dt) {
 }
 
 void RtcManager::checkForRtc() {
-    selectRtcMux();
+    HardwareManager::I2CMuxLock lock(app_->getHardwareManager(), Pins::MUX_CHANNEL_RTC);
     Wire.beginTransmission(DS3231_ADDR);
     if (Wire.endTransmission() == 0) {
         if (!rtcFound_) {
@@ -71,50 +69,51 @@ void RtcManager::setup(App* app) {
         LOG(LogLevel::INFO, "RTC", "Applied timezone from settings: %s", tz_string);
         
         // 3. Check if the RTC lost power and needs to be reset to compile time.
-        selectRtcMux();
-        Wire.beginTransmission(DS3231_ADDR);
-        Wire.write(0x0F);
-        Wire.endTransmission();
-        Wire.requestFrom(DS3231_ADDR, 1);
-        uint8_t status = Wire.read();
-
-        if (status & 0x80) {
-            LOG(LogLevel::WARN, "RTC", "RTC lost power. Setting time to firmware compile time.");
-            GenericDateTime compiled_dt;
-            const char* comp_date = __DATE__;
-            const char* comp_time = __TIME__;
-            char month_str[4];
-            sscanf(comp_date, "%s %hhu %hu", month_str, &compiled_dt.d, &compiled_dt.y);
-            sscanf(comp_time, "%hhu:%hhu:%hhu", &compiled_dt.h, &compiled_dt.min, &compiled_dt.s);
-            const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-            for(int i=0; i<12; ++i) {
-                if(strcmp(month_str, months[i]) == 0) {
-                    compiled_dt.m = i + 1;
-                    break;
-                }
-            }
-            
-            struct tm timeinfo_compile;
-            timeinfo_compile.tm_year = compiled_dt.y - 1900;
-            timeinfo_compile.tm_mon = compiled_dt.m - 1;
-            timeinfo_compile.tm_mday = compiled_dt.d;
-            timeinfo_compile.tm_hour = compiled_dt.h;
-            timeinfo_compile.tm_min = compiled_dt.min;
-            timeinfo_compile.tm_sec = compiled_dt.s;
-            timeinfo_compile.tm_isdst = -1;
-            mktime(&timeinfo_compile); 
-            compiled_dt.dow = timeinfo_compile.tm_wday + 1; 
-
-            adjust(compiled_dt);
-
-            // After adjusting, re-sync the internal clock to be sure.
-            syncInternalClock();
-
-            selectRtcMux();
+        {
+            HardwareManager::I2CMuxLock lock(app_->getHardwareManager(), Pins::MUX_CHANNEL_RTC);
             Wire.beginTransmission(DS3231_ADDR);
             Wire.write(0x0F);
-            Wire.write(status & ~0x80);
             Wire.endTransmission();
+            Wire.requestFrom(DS3231_ADDR, 1);
+            uint8_t status = Wire.read();
+
+            if (status & 0x80) {
+                LOG(LogLevel::WARN, "RTC", "RTC lost power. Setting time to firmware compile time.");
+                GenericDateTime compiled_dt;
+                const char* comp_date = __DATE__;
+                const char* comp_time = __TIME__;
+                char month_str[4];
+                sscanf(comp_date, "%s %hhu %hu", month_str, &compiled_dt.d, &compiled_dt.y);
+                sscanf(comp_time, "%hhu:%hhu:%hhu", &compiled_dt.h, &compiled_dt.min, &compiled_dt.s);
+                const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+                for(int i=0; i<12; ++i) {
+                    if(strcmp(month_str, months[i]) == 0) {
+                        compiled_dt.m = i + 1;
+                        break;
+                    }
+                }
+                
+                struct tm timeinfo_compile;
+                timeinfo_compile.tm_year = compiled_dt.y - 1900;
+                timeinfo_compile.tm_mon = compiled_dt.m - 1;
+                timeinfo_compile.tm_mday = compiled_dt.d;
+                timeinfo_compile.tm_hour = compiled_dt.h;
+                timeinfo_compile.tm_min = compiled_dt.min;
+                timeinfo_compile.tm_sec = compiled_dt.s;
+                timeinfo_compile.tm_isdst = -1;
+                mktime(&timeinfo_compile); 
+                compiled_dt.dow = timeinfo_compile.tm_wday + 1; 
+
+                adjust(compiled_dt);
+
+                // After adjusting, re-sync the internal clock to be sure.
+                syncInternalClock();
+
+                Wire.beginTransmission(DS3231_ADDR);
+                Wire.write(0x0F);
+                Wire.write(status & ~0x80);
+                Wire.endTransmission();
+            }
         }
     } else {
         LOG(LogLevel::ERROR, "RTC", "DS3231 RTC not found on initial setup!");
@@ -234,7 +233,7 @@ GenericDateTime RtcManager::now() {
     GenericDateTime dt = {0,0,0,0,0,0,0};
     if (!rtcFound_) return dt;
 
-    selectRtcMux();
+    HardwareManager::I2CMuxLock lock(app_->getHardwareManager(), Pins::MUX_CHANNEL_RTC);
     Wire.beginTransmission(DS3231_ADDR);
     Wire.write(0x00);
     

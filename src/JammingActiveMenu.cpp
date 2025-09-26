@@ -15,19 +15,12 @@ void JammingActiveMenu::setJammingConfig(const JammerConfig& config) {
 
 void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+    initialFrameDrawn_ = false; // Reset the flag on entry
+
     if (modeToStart_ != JammingMode::IDLE) {
-        app->getHardwareManager().setPerformanceMode(true);
-
-        // --- NEW RAII-BASED STARTUP ---
-        // 1. Request the RF hardware lock from the single source of truth.
+        // We do NOT pause the UI here yet.
         auto rfLock = app->getHardwareManager().requestRfControl(RfClient::NRF_JAMMER);
-
-        // 2. Pass the lock (or its failure) to the jammer to start with the full config.
-        if (app->getJammer().start(std::move(rfLock), modeToStart_, startConfig_)) {
-            // Success, the menu will just display the active state.
-        } else {
-            // If starting failed, immediately go back and show an error.
-            app->getHardwareManager().setPerformanceMode(false);
+        if (!app->getJammer().start(std::move(rfLock), modeToStart_, startConfig_)) {
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             app->showPopUp("Error", "Failed to start jammer.", nullptr, "OK", "", true);
         }
@@ -35,20 +28,24 @@ void JammingActiveMenu::onEnter(App* app, bool isForwardNav) {
 }
 
 void JammingActiveMenu::onUpdate(App* app) {
-    // The main App::loop() throttles updates, so this might not be called often.
+    // This logic ensures the pause happens on the frame AFTER the first draw.
+    if (initialFrameDrawn_ && !app->getHardwareManager().isUiRenderingPaused()) {
+        app->getHardwareManager().setUiRenderingPaused(true);
+    }
 }
 
 void JammingActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    // This now correctly triggers the RAII cleanup.
+    
+    // Un-pause the UI FIRST to ensure the next menu renders correctly.
+    app->getHardwareManager().setUiRenderingPaused(false);
+
     if (app->getJammer().isActive()) {
         app->getJammer().stop();
     }
-    app->getHardwareManager().setPerformanceMode(false);
     
-    // Reset state for the next time we enter.
     modeToStart_ = JammingMode::IDLE;
-    startConfig_ = JammerConfig(); // Reset to default config
+    startConfig_ = JammerConfig();
 }
 
 void JammingActiveMenu::handleInput(InputEvent event, App* app) {
@@ -67,14 +64,15 @@ void JammingActiveMenu::draw(App* app, U8G2& display) {
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(startingMsg))/2, 38, startingMsg);
         return;
+    } else {
+        const char* modeText = jammer.getModeString();
+        display.setFont(u8g2_font_7x13B_tr);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeText))/2, 28, modeText);
+        display.setFont(u8g2_font_6x10_tf);
+        const char* instruction = "Press BACK to Stop";
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction))/2, 52, instruction);
     }
-
-    const char* modeText = jammer.getModeString();
     
-    display.setFont(u8g2_font_7x13B_tr);
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(modeText))/2, 28, modeText);
-
-    display.setFont(u8g2_font_6x10_tf);
-    const char* instruction = "Press BACK to Stop";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction))/2, 52, instruction);
+    // Signal that the first frame has been drawn.
+    initialFrameDrawn_ = true;
 }

@@ -71,7 +71,7 @@ bool HandshakeCapture::start(const WifiNetworkInfo& targetNetwork) {
     isAttackPending_ = false;
     targetedState_ = TargetedAttackState::WAITING_FOR_DEAUTH;
     lastDeauthTime_ = millis();
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -115,7 +115,7 @@ void HandshakeCapture::stop() {
     isAttackPending_ = false;
     esp_wifi_set_promiscuous(false);
     rfLock_.reset();
-    app_->getHardwareManager().setPerformanceMode(false);
+    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void HandshakeCapture::loop() {

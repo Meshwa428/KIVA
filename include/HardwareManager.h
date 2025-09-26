@@ -31,8 +31,17 @@ static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
 
 #include "Service.h"
 
+#include <freertos/semphr.h>
+
 class HardwareManager : public Service {
 public:
+    class I2CMuxLock {
+    public:
+        I2CMuxLock(HardwareManager& manager, uint8_t channel);
+        ~I2CMuxLock();
+    private:
+        HardwareManager& manager_;
+    };
     // --- NEW RAII LOCK CLASS (defined inside HardwareManager) ---
     class RfLock {
     public:
@@ -75,7 +84,9 @@ public:
 
     void selectMux(uint8_t channel);
 
-    void setPerformanceMode(bool highPerf);
+    void setUiRenderingPaused(bool paused);
+    bool isUiRenderingPaused() const;
+
     void setMainBrightness(uint8_t contrast);
     void setAuxBrightness(uint8_t contrast);
 
@@ -85,6 +96,8 @@ public:
     bool isCharging() const;
 
 private:
+    uint8_t lastSelectedChannel_;
+    SemaphoreHandle_t i2c_mux_mutex_;
     void releaseRfControl(); // <-- NEW private helper
 
     // --- MODIFIED: Input methods now take state as a parameter ---
@@ -138,7 +151,7 @@ private:
     // --- NEW: Input Grace Period ---
     unsigned long setupTime_;
 
-    bool highPerformanceMode_; 
+    bool uiRenderingPaused_; 
     
     // Output State
     uint8_t pcf0_output_state_;

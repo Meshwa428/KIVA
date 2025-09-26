@@ -11,18 +11,20 @@ void BleSpamActiveMenu::setSpamModeToStart(BleSpamMode mode) {
 
 void BleSpamActiveMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    app->getHardwareManager().setPerformanceMode(true);
+    // REMOVED: app->getHardwareManager().setPerformanceMode(true);
     app->getBleSpammer().start(modeToStart_);
 }
 
 void BleSpamActiveMenu::onUpdate(App* app) {
-    // Logic is handled by BleSpammer::loop()
+    // BLE Spam needs to update the screen to show the current attack type when in "ALL" mode.
+    // Request a redraw to keep the UI live.
+    app->requestRedraw();
 }
 
 void BleSpamActiveMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     app->getBleSpammer().stop();
-    app->getHardwareManager().setPerformanceMode(false);
+    // REMOVED: app->getHardwareManager().setPerformanceMode(false);
 }
 
 void BleSpamActiveMenu::handleInput(InputEvent event, App* app) {

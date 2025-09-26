@@ -65,7 +65,7 @@ bool KarmaAttacker::launchAttack(const SniffedNetworkInfo& target) {
 
     isAttacking_ = true;
     lastDeauthTime_ = millis();
-    app_->getHardwareManager().setPerformanceMode(true);
+    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
@@ -77,7 +77,7 @@ void KarmaAttacker::stopAttack() {
     WiFi.softAPdisconnect(true); // Manually stop our AP
 
     isAttacking_ = false;
-    app_->getHardwareManager().setPerformanceMode(false);
+    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void KarmaAttacker::loop() {

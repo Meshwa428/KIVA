@@ -23,6 +23,8 @@ public:
 private:
     JammingMode modeToStart_;     
     JammerConfig startConfig_;
+
+    bool initialFrameDrawn_ = false;
 };
 
 #endif // JAMMING_ACTIVE_MENU_H
