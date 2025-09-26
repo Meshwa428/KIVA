@@ -3,8 +3,7 @@
 
 #include <cstdint>
 
-// Forward declarations
-class App; // <-- ADD this
+class App;
 class HardwareManager;
 
 #include "Service.h"
@@ -36,7 +35,7 @@ public:
     /**
      * @brief Must be called in the main application loop to handle tone durations.
      */
-    void update();
+    void loop() override;
 
 private:
     App* app_; // <-- MODIFIED from HardwareManager* to App*

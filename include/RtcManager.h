@@ -1,5 +1,3 @@
-// KIVA/include/RtcManager.h
-
 #ifndef RTC_MANAGER_H
 #define RTC_MANAGER_H
 
@@ -14,7 +12,7 @@ class RtcManager : public Service {
 public:
     RtcManager();
     void setup(App* app) override;
-    void update();
+    void loop() override;
 
     void syncInternalClock();
     bool isRtcFound() const;

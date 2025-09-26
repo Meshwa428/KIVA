@@ -1,3 +1,4 @@
+    
 #ifndef SYSTEM_DATA_PROVIDER_H
 #define SYSTEM_DATA_PROVIDER_H
 
@@ -18,7 +19,7 @@ class SystemDataProvider : public Service {
 public:
     SystemDataProvider();
     void setup(App* app) override;
-    void update();
+    void loop() override;
 
     const MemoryUsage& getRamUsage() const;
     const MemoryUsage& getPsramUsage() const;
@@ -42,3 +43,5 @@ private:
 };
 
 #endif // SYSTEM_DATA_PROVIDER_H
+
+  

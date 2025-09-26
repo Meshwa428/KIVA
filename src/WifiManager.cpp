@@ -30,7 +30,7 @@ void WifiManager::setup(App* app) {
     statusMessage_ = "WiFi Off";
 }
 
-void WifiManager::update() {
+void WifiManager::loop() {
     if (state_ == WifiState::CONNECTING && (millis() - connectionStartTime_) > WIFI_CONNECTION_TIMEOUT_MS) {
         Serial.println("[WIFI-LOG] Connection definitively timed out.");
         state_ = WifiState::CONNECTION_FAILED; // Set the final state here.

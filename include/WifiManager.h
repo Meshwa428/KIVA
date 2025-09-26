@@ -52,7 +52,7 @@ class WifiManager : public Service {
 public:
     WifiManager();
     void setup(App* app) override;
-    void update();
+    void loop() override;
 
     // --- State Control ---
     void setHardwareState(bool enable, WifiMode mode = WifiMode::STA, const char* ap_ssid = nullptr, const char* ap_password = nullptr);

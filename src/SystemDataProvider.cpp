@@ -21,7 +21,7 @@ void SystemDataProvider::setup(App* app) {
     updateData(); // Initial data fetch
 }
 
-void SystemDataProvider::update() {
+void SystemDataProvider::loop() {
     if (millis() - lastUpdateTime_ > 1000) { // Update every second
         updateData();
     }

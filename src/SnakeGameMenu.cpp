@@ -124,9 +124,9 @@ void SnakeGameMenu::initNewGame() {
 }
 
 void SnakeGameMenu::onUpdate(App* app) {
-    unsigned long currentTime = millis();
-    if (currentTime - lastUpdateTime_ < 33) return; // ~30 FPS lock
+    app->requestRedraw(); // Force a redraw every frame for smooth animation.
     
+    unsigned long currentTime = millis();
     animCounter_++;
 
     if (gameState_ == GameState::PLAYING) {

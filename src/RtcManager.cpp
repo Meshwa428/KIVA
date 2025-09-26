@@ -127,7 +127,7 @@ void RtcManager::setTimezone(const char* tzString) {
 }
 
 
-void RtcManager::update() {
+void RtcManager::loop() {
     if (syncPending_) {
         if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
             syncPending_ = false;
@@ -289,12 +289,8 @@ void RtcManager::onNtpSync() {
     if (lastNtpSyncTime_ != 0 && millis() - lastNtpSyncTime_ < 600000) return;
 
     LOG(LogLevel::INFO, "RTC_CB", "Starting NTP time synchronization process...");
-    
-    // --- MODIFICATION START: Revert to simple UTC config ---
-    // This tells the SNTP client to get pure UTC time and set the internal
-    // clock to it, without any timezone meddling at this stage.
+
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-    // --- MODIFICATION END ---
     
     syncPending_ = true;
 }
