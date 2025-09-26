@@ -511,7 +511,7 @@ HardwareManager::I2CMuxLock::I2CMuxLock(HardwareManager& manager, uint8_t channe
 }
 
 HardwareManager::I2CMuxLock::~I2CMuxLock() {
-    manager_.selectMux(Pins::MUX_CHANNEL_MAIN_DISPLAY);
+    manager_.selectMux(Pins::MUX_CHANNEL_SECOND_DISPLAY);
     xSemaphoreGive(manager_.i2c_mux_mutex_);
 }
 
