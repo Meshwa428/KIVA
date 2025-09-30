@@ -210,7 +210,6 @@ App::App() :
                 auto& stationDS = app_cb->getStationListDataSource();
                 stationDS.setMode(true, net); // Live scan mode for this AP
                 stationDS.setAttackCallback([](App* attack_app, const StationInfo& client){
-                    // --- FIX START ---
                     // STEP 3: A client was chosen. Stop the sniffer to release the RF lock.
                     attack_app->getStationSniffer().stop();
 
@@ -219,7 +218,6 @@ App::App() :
                     if(attack_app->getDeauther().start(client)) {
                         EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DEAUTH_ACTIVE));
                     }
-                    // --- FIX END ---
                 });
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
             });
@@ -236,6 +234,20 @@ App::App() :
                     menu->setAttackParameters(ProbeFloodMode::RANDOM);
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
+            }
+        },
+        {"Pinpoint Flood", IconType::TARGET, MenuType::NONE,
+            [](App* app) {
+                auto& ds = app->getWifiListDataSource();
+                ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net) {
+                    auto* menu = static_cast<ProbeFloodActiveMenu*>(app_cb->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
+                    if (menu) {
+                        menu->setAttackParameters(net);
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
+                    }
+                });
+                ds.setScanOnEnter(true);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }
         },
         {"Sniffed List", IconType::SD_CARD, MenuType::NONE,
@@ -271,14 +283,12 @@ App::App() :
                 auto& stationDS = app_cb->getStationListDataSource();
                 stationDS.setMode(true, net);
                 stationDS.setAttackCallback([](App* attack_app, const StationInfo& client){
-                    // --- FIX START ---
                     // Stop the sniffer first to release the hardware lock
                     attack_app->getStationSniffer().stop();
                     // Now start the sleeper, which can acquire its own lock
                     if(attack_app->getAssociationSleeper().start(client)) {
                          EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::ASSOCIATION_SLEEP_ACTIVE));
                     }
-                    // --- FIX END ---
                 });
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
             });
@@ -1051,11 +1061,6 @@ void App::changeMenu(MenuType type, bool isForwardNav) {
             currentMenu_->onExit(this);
         }
         currentMenu_ = newMenu;
-
-        // if (isForwardNav || exitingMenuType != MenuType::POPUP)
-        // {
-        //     currentMenu_->onEnter(this, isForwardNav); // <-- MODIFIED: Pass the flag
-        // }
         currentMenu_->onEnter(this, isForwardNav);
 
         if (isForwardNav)

@@ -2,12 +2,22 @@
 #include "EventDispatcher.h"
 #include "ProbeFloodActiveMenu.h"
 #include "App.h"
+#include "UI_Utils.h" // For truncateText
 
 ProbeFloodActiveMenu::ProbeFloodActiveMenu() : modeToStart_(ProbeFloodMode::RANDOM) {}
 
 void ProbeFloodActiveMenu::setAttackParameters(ProbeFloodMode mode, const std::string& filePath) {
     modeToStart_ = mode;
     filePathToUse_ = filePath;
+    // Clear the target network to avoid confusion
+    memset(&targetNetwork_, 0, sizeof(WifiNetworkInfo));
+}
+
+// --- NEW: Overload for pinpoint mode ---
+void ProbeFloodActiveMenu::setAttackParameters(const WifiNetworkInfo& targetNetwork) {
+    modeToStart_ = ProbeFloodMode::PINPOINT_AP;
+    targetNetwork_ = targetNetwork;
+    filePathToUse_ = "";
 }
 
 void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
@@ -15,7 +25,14 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
     auto& flooder = app->getProbeFlooder();
     auto rfLock = app->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
     
-    if (!flooder.start(std::move(rfLock), modeToStart_, filePathToUse_)) {
+    bool success = false;
+    if (modeToStart_ == ProbeFloodMode::PINPOINT_AP) {
+        success = flooder.start(std::move(rfLock), targetNetwork_);
+    } else {
+        success = flooder.start(std::move(rfLock), modeToStart_, filePathToUse_);
+    }
+
+    if (!success) {
         app->showPopUp("Error", "Failed to start attack.", [](App* app_cb){
             EventDispatcher::getInstance().publish(NavigateBackEvent());
         }, "OK", "", false);
@@ -46,7 +63,13 @@ bool ProbeFloodActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     display.drawStr(2, 8, getTitle());
 
     char channelStr[16];
-    snprintf(channelStr, sizeof(channelStr), "CH: %d", flooder.getCurrentChannel());
+    // --- MODIFIED: Display correct channel info for the mode ---
+    if (flooder.getMode() == ProbeFloodMode::PINPOINT_AP) {
+        snprintf(channelStr, sizeof(channelStr), "CH: %ld", flooder.getTargetAp().channel);
+    } else {
+        snprintf(channelStr, sizeof(channelStr), "CH: %d", flooder.getCurrentChannel());
+    }
+    
     int textWidth = display.getStrWidth(channelStr);
     display.drawStr(128 - textWidth - 2, 8, channelStr);
     
@@ -66,14 +89,22 @@ void ProbeFloodActiveMenu::draw(App* app, U8G2& display) {
     
     display.setFont(u8g2_font_7x13B_tr);
     const char* titleMsg = "Probe Flood Active";
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 28, titleMsg);
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 22, titleMsg);
 
     display.setFont(u8g2_font_6x10_tf);
+
+    // --- MODIFIED: Show target SSID in pinpoint mode ---
+    if (flooder.getMode() == ProbeFloodMode::PINPOINT_AP) {
+        char targetStr[48];
+        snprintf(targetStr, sizeof(targetStr), "Target: %s", flooder.getTargetAp().ssid);
+        char* truncated = truncateText(targetStr, 124, display);
+        display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
+    }
+
     char packetStr[32];
     snprintf(packetStr, sizeof(packetStr), "Packets Sent: %u", flooder.getPacketCounter());
-    display.drawStr((display.getDisplayWidth() - display.getStrWidth(packetStr)) / 2, 44, packetStr);
+    display.drawStr((display.getDisplayWidth() - display.getStrWidth(packetStr)) / 2, 48, packetStr);
 
     const char* instruction = "Press BACK to Stop";
     display.drawStr((display.getDisplayWidth() - display.getStrWidth(instruction)) / 2, 60, instruction);
-
 }

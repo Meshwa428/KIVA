@@ -3,6 +3,7 @@
 
 #include "IMenu.h"
 #include "ProbeFlooder.h"
+#include "WifiManager.h" // Added for WifiNetworkInfo
 
 class ProbeFloodActiveMenu : public IMenu {
 public:
@@ -16,7 +17,9 @@ public:
 
     bool drawCustomStatusBar(App* app, U8G2& display) override;
 
+    // --- Overloaded methods for setting parameters ---
     void setAttackParameters(ProbeFloodMode mode, const std::string& filePath = "");
+    void setAttackParameters(const WifiNetworkInfo& targetNetwork); // <-- NEW
 
     const char* getTitle() const override { return "Probe Flood"; }
     MenuType getMenuType() const override { return MenuType::PROBE_FLOOD_ACTIVE; }
@@ -24,6 +27,7 @@ public:
 private:
     ProbeFloodMode modeToStart_;
     std::string filePathToUse_;
+    WifiNetworkInfo targetNetwork_; // <-- NEW
 };
 
 #endif // PROBE_FLOOD_ACTIVE_MENU_H
