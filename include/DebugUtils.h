@@ -12,6 +12,9 @@ namespace DebugUtils {
 
     // Converts a MUX channel number to a string for logging
     const char* muxChannelToString(uint8_t channel);
+
+    // Converts a PCF8574 input state byte to a human-readable string
+    const char* pcfStateToString(uint8_t pcfAddress, uint8_t state);
 }
 
 #endif // DEBUG_UTILS_H

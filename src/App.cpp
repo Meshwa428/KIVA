@@ -689,8 +689,9 @@ void App::setup()
         {"Hardware Manager", [&](){ getHardwareManager().setup(this); return true; }},
         {"SD Card",          [&](){ bool success = SdCardManager::setup(); if (!success) logToSmallDisplay("SD Card", "FAIL"); return success; }},
         {"Config Manager",   [&](){ getConfigManager().setup(this); return true; }},
-        {"System Data",      [&](){ getSystemDataProvider().setup(this); return true; }}, // Pre-loads data for the secondary display
-        {"Logger",           [&](){ Logger::getInstance().setup(); return true; }},
+        {"RTC Manager",      [&](){ getRtcManager().setup(this); return true; }}, // <-- MOVED UP
+        {"System Data",      [&](){ getSystemDataProvider().setup(this); return true; }},
+        {"Logger",           [&](){ Logger::getInstance().setup(); return true; }}, // <-- NOW AFTER RTC
     };
 
     int totalTasks = bootTasks.size();

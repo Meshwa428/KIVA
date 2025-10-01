@@ -108,29 +108,25 @@ void HardwareManager::update()
     processButtonRepeats(); 
 
     while (buttonInterruptFired_) {
-    // --- MODIFICATION END ---
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");
         
-        // 1. Atomically clear the flag at the START of processing.
-        // This is crucial for detecting new interrupts that occur during processing.
         buttonInterruptFired_ = false;
 
-        // 2. Read the state of BOTH modules once.
         selectMux(Pins::MUX_CHANNEL_PCF0_ENCODER);
         uint8_t pcf0State = readPCF(Pins::PCF0_ADDR);
 
         selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
         uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
 
-        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF0 (Encoder) Raw: 0x%02X", pcf0State);
-        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF1 (Nav Btns) Raw: 0x%02X", pcf1State);
+        // --- MODIFIED LOG MESSAGES ---
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF0 State (0x%02X): %s", pcf0State, DebugUtils::pcfStateToString(Pins::PCF0_ADDR, pcf0State));
+        LOG(LogLevel::DEBUG, "HW_MANAGER", false, "  > PCF1 State (0x%02X): %s", pcf1State, DebugUtils::pcfStateToString(Pins::PCF1_ADDR, pcf1State));
+        // --- END OF MODIFICATION ---
         
-        // 3. Process the captured states.
         processEncoder(pcf0State);
         processButton_PCF0(pcf0State);
         processButtons_PCF1(pcf1State);
         
-        // The flag is no longer cleared at the end of the block.
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt handled. Re-checking flag for new events.");
     }
 }
@@ -151,7 +147,6 @@ void HardwareManager::releaseRfControl() {
     if (currentRfClient_ == RfClient::NRF_JAMMER) {
         if (radio1_.isChipConnected()) radio1_.powerDown();
         if (radio2_.isChipConnected()) radio2_.powerDown();
-        SPI.end();
 
     } else if (currentRfClient_ == RfClient::WIFI) {
         WiFi.mode(WIFI_OFF);

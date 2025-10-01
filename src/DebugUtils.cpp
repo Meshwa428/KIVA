@@ -7,9 +7,18 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::NONE: return "NONE";
         case MenuType::BACK: return "BACK";
         case MenuType::POPUP: return "POPUP";
+
+        // --- Main Navigation ---
         case MenuType::MAIN: return "MAIN";
         case MenuType::TOOLS_CAROUSEL: return "TOOLS_CAROUSEL";
         case MenuType::GAMES_CAROUSEL: return "GAMES_CAROUSEL";
+
+        // --- GAME LOBBY MENUS (NEW) ---
+        case MenuType::SNAKE_MENU: return "SNAKE_MENU";
+        case MenuType::SNAKE_GAME: return "SNAKE_GAME";
+        case MenuType::TETRIS_MENU: return "TETRIS_MENU";
+
+        // --- Tools Sub-menus ---
         case MenuType::WIFI_TOOLS_GRID: return "WIFI_TOOLS_GRID";
         case MenuType::BLE_TOOLS_GRID: return "BLE_TOOLS_GRID";
         case MenuType::NRF_JAMMER_GRID: return "NRF_JAMMER_GRID";
@@ -21,6 +30,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DEAUTH_MODE_GRID: return "DEAUTH_MODE_GRID";
         case MenuType::PROBE_FLOOD_MODE_GRID: return "PROBE_FLOOD_MODE_GRID";
         case MenuType::ASSOCIATION_SLEEP_MODES_GRID: return "ASSOCIATION_SLEEP_MODES_GRID";
+
+        // --- Core Attack/Tool Screens ---
         case MenuType::WIFI_LIST: return "WIFI_LIST";
         case MenuType::BEACON_FILE_LIST: return "BEACON_FILE_LIST";
         case MenuType::PORTAL_LIST: return "PORTAL_LIST";
@@ -28,6 +39,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DUCKY_SCRIPT_LIST: return "DUCKY_SCRIPT_LIST";
         case MenuType::CHANNEL_SELECTION: return "CHANNEL_SELECTION";
         case MenuType::HANDSHAKE_CAPTURE_MENU: return "HANDSHAKE_CAPTURE_MENU";
+
+        // --- Active Screens ---
         case MenuType::BEACON_SPAM_ACTIVE: return "BEACON_SPAM_ACTIVE";
         case MenuType::DEAUTH_ACTIVE: return "DEAUTH_ACTIVE";
         case MenuType::EVIL_PORTAL_ACTIVE: return "EVIL_PORTAL_ACTIVE";
@@ -38,23 +51,31 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::BLE_SPAM_ACTIVE: return "BLE_SPAM_ACTIVE";
         case MenuType::DUCKY_SCRIPT_ACTIVE: return "DUCKY_SCRIPT_ACTIVE";
         case MenuType::JAMMING_ACTIVE: return "JAMMING_ACTIVE";
+        case MenuType::ASSOCIATION_SLEEP_ACTIVE: return "ASSOCIATION_SLEEP_ACTIVE"; // <-- NEW
+
+        // --- Settings Sub-menus ---
         case MenuType::SETTINGS_GRID: return "SETTINGS_GRID";
         case MenuType::UI_SETTINGS_LIST: return "UI_SETTINGS_LIST";
         case MenuType::HARDWARE_SETTINGS_LIST: return "HARDWARE_SETTINGS_LIST";
         case MenuType::CONNECTIVITY_SETTINGS_LIST: return "CONNECTIVITY_SETTINGS_LIST";
         case MenuType::SYSTEM_SETTINGS_LIST: return "SYSTEM_SETTINGS_LIST";
         case MenuType::BRIGHTNESS_MENU: return "BRIGHTNESS_MENU";
+        case MenuType::TIMEZONE_LIST: return "TIMEZONE_LIST";
+
+        // --- Firmware Update Menus ---
         case MenuType::FIRMWARE_UPDATE_GRID: return "FIRMWARE_UPDATE_GRID";
         case MenuType::FIRMWARE_LIST_SD: return "FIRMWARE_LIST_SD";
         case MenuType::OTA_STATUS: return "OTA_STATUS";
+
+        // --- Utilities/Misc ---
         case MenuType::USB_DRIVE_MODE: return "USB_DRIVE_MODE";
         case MenuType::TEXT_INPUT: return "TEXT_INPUT";
         case MenuType::WIFI_CONNECTION_STATUS: return "WIFI_CONNECTION_STATUS";
-        case MenuType::MUSIC_LIBRARY: return "MUSIC_PLAYER_LIST";
+        case MenuType::MUSIC_LIBRARY: return "MUSIC_LIBRARY";
         case MenuType::SONG_LIST: return "SONG_LIST";
         case MenuType::NOW_PLAYING: return "NOW_PLAYING";
         case MenuType::INFO_MENU: return "INFO_MENU";
-        case MenuType::TIMEZONE_LIST: return "TIMEZONE_LIST";
+        
         default: return "UNKNOWN_MENU";
     }
 }
@@ -80,9 +101,7 @@ const char* inputEventToString(InputEvent event) {
     }
 }
 
-} // namespace DebugUtils
-
-const char* DebugUtils::muxChannelToString(uint8_t channel) {
+const char* muxChannelToString(uint8_t channel) {
     switch (channel) {
         case Pins::MUX_CHANNEL_PCF0_ENCODER:
             return "PCF0 (Encoder)";
@@ -100,3 +119,52 @@ const char* DebugUtils::muxChannelToString(uint8_t channel) {
             return "Unknown";
     }
 }
+
+const char* pcfStateToString(uint8_t pcfAddress, uint8_t state) {
+    static char buffer[128];
+    buffer[0] = '\0';
+    bool first = true;
+
+    strcat(buffer, "[");
+
+    for (int i = 0; i < 8; ++i) {
+        // A '0' bit means the button is pressed (active low)
+        if (!(state & (1 << i))) {
+            if (!first) {
+                strcat(buffer, ", ");
+            }
+
+            const char* btnName = "???";
+            if (pcfAddress == Pins::PCF0_ADDR) {
+                switch(i) {
+                    case Pins::ENC_BTN: btnName = "ENC_BTN"; break;
+                    case Pins::AI_BTN:  btnName = "AI_BTN"; break;
+                    case Pins::RIGHT_UP: btnName = "R_UP"; break;
+                    case Pins::RIGHT_DOWN: btnName = "R_DOWN"; break;
+                    // Note: We don't log ENC_A/B as button presses
+                }
+            } else if (pcfAddress == Pins::PCF1_ADDR) {
+                switch(i) {
+                    case Pins::NAV_OK:    btnName = "OK"; break;
+                    case Pins::NAV_BACK:  btnName = "BACK"; break;
+                    case Pins::NAV_A:     btnName = "A"; break;
+                    case Pins::NAV_B:     btnName = "B"; break;
+                    case Pins::NAV_LEFT:  btnName = "LEFT"; break;
+                    case Pins::NAV_UP:    btnName = "UP"; break;
+                    case Pins::NAV_DOWN:  btnName = "DOWN"; break;
+                    case Pins::NAV_RIGHT: btnName = "RIGHT"; break;
+                }
+            }
+            strcat(buffer, btnName);
+            first = false;
+        }
+    }
+
+    if (first) {
+        strcat(buffer, "None");
+    }
+    strcat(buffer, "]");
+    return buffer;
+}
+
+} // namespace DebugUtils

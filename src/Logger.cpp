@@ -2,6 +2,7 @@
 #include "SdCardManager.h"
 #include <vector>
 #include <algorithm>
+#include <time.h>
 
 // Singleton instance definition
 Logger& Logger::getInstance() {
@@ -49,9 +50,20 @@ void Logger::manageLogFiles() {
 
     // 1. Archive the previous "latest" log file if it exists
     if (SdCardManager::exists(previousLatestPath)) {
-        // Generate a new unique name for the old file using the current boot time (millis)
+        // --- MODIFICATION: Use a proper timestamp ---
+        time_t now;
+        time(&now);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+
+        char timestamp[20];
+        // Format as YYYYMMDD-HHMMSS for easy sorting
+        strftime(timestamp, sizeof(timestamp), "%Y%m%d-%H%M%S", &timeinfo);
+
         char archivePath[64];
-        snprintf(archivePath, sizeof(archivePath), "%s/%s%lu%s", logDir, logPrefix, millis(), logExtension);
+        // Use the new timestamp instead of millis()
+        snprintf(archivePath, sizeof(archivePath), "%s/%s%s%s", logDir, logPrefix, timestamp, logExtension);
+        // --- END OF MODIFICATION ---
         
         if (SdCardManager::renameFile(previousLatestPath, archivePath)) {
             Serial.printf("[LOGGER] Archived previous log to: %s\n", archivePath);
