@@ -17,9 +17,13 @@ public:
 
     bool drawCustomStatusBar(App* app, U8G2& display) override;
 
-    // --- Overloaded methods for setting parameters ---
+    // --- CORRECTED OVERLOADS ---
+    // This single function now handles all modes that don't take a WifiNetworkInfo struct.
+    // The default argument `""` makes it work for modes without a file path.
     void setAttackParameters(ProbeFloodMode mode, const std::string& filePath = "");
-    void setAttackParameters(const WifiNetworkInfo& targetNetwork); // <-- NEW
+    
+    // This overload is for the specific PINPOINT_AP mode.
+    void setAttackParameters(const WifiNetworkInfo& targetNetwork);
 
     const char* getTitle() const override { return "Probe Flood"; }
     MenuType getMenuType() const override { return MenuType::PROBE_FLOOD_ACTIVE; }
@@ -27,7 +31,7 @@ public:
 private:
     ProbeFloodMode modeToStart_;
     std::string filePathToUse_;
-    WifiNetworkInfo targetNetwork_; // <-- NEW
+    WifiNetworkInfo targetNetwork_;
 };
 
 #endif // PROBE_FLOOD_ACTIVE_MENU_H

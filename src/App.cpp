@@ -250,18 +250,28 @@ App::App() :
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
             }
         },
-        {"Sniffed List", IconType::SD_CARD, MenuType::NONE,
+        {"Auto Random Flood", IconType::WIFI, MenuType::NONE,
             [](App *app) {
                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
+                if (menu) {
+                    menu->setAttackParameters(ProbeFloodMode::AUTO_BROADCAST_PINPOINT);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
+                }
+            }
+        },
+        {"Auto Sniffed Flood", IconType::TOOL_PROBE, MenuType::NONE,
+            [](App* app) {
+                 auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
                     if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
                         app->showPopUp("Error", "Run Probe Sniffer to create a list first.", nullptr, "OK", "", true);
                         return;
                     }
-                    menu->setAttackParameters(ProbeFloodMode::FILE_BASED, SD_ROOT::DATA_PROBES_SSID_SESSION);
+                    menu->setAttackParameters(ProbeFloodMode::AUTO_SNIFFED_PINPOINT);
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::PROBE_FLOOD_ACTIVE));
                 }
-            }},
+            }
+        },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     associationSleepModeMenu_("Assoc Sleep Attack", MenuType::ASSOCIATION_SLEEP_MODES_GRID, {

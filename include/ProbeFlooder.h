@@ -5,6 +5,7 @@
 #include "SdCardManager.h"
 #include <string>
 #include <memory>
+#include <vector>
 #include "WifiManager.h" // Added for WifiNetworkInfo
 
 class App;
@@ -12,7 +13,14 @@ class App;
 enum class ProbeFloodMode {
     RANDOM,
     FILE_BASED,
-    PINPOINT_AP // <-- NEW: Pinpoint mode
+    PINPOINT_AP,
+    AUTO_BROADCAST_PINPOINT,
+    AUTO_SNIFFED_PINPOINT
+};
+
+enum class AutoPinpointState {
+    SCANNING,
+    FLOODING
 };
 
 #include "Service.h"
@@ -24,9 +32,9 @@ public:
 
     void setup(App* app) override;
 
-    // --- Overloaded start methods ---
-    bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeFloodMode mode, const std::string& ssidFilePath = "");
-    bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, const WifiNetworkInfo& targetNetwork); // <-- NEW
+    // Overloaded start methods
+    bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeFloodMode mode); // For RANDOM, FILE_BASED, and AUTO modes
+    bool start(std::unique_ptr<HardwareManager::RfLock> rfLock, const WifiNetworkInfo& targetNetwork); // For PINPOINT_AP
 
     void stop();
     void loop();
@@ -34,8 +42,9 @@ public:
     bool isActive() const;
     uint32_t getPacketCounter() const;
     int getCurrentChannel() const;
-    const WifiNetworkInfo& getTargetAp() const; // <-- NEW
-    ProbeFloodMode getMode() const; // <-- NEW
+    const std::string getCurrentTargetSsid() const;
+    ProbeFloodMode getMode() const;
+    AutoPinpointState getAutoPinpointState() const;
 
 private:
     std::string getNextSsid();
@@ -49,17 +58,26 @@ private:
     ProbeFloodMode currentMode_;
     uint8_t currentChannel_;
     
-    SdCardManager::LineReader ssidReader_;
+    SdCardManager::LineReader fileSsidReader_;
     uint32_t packetCounter_;
 
-    // --- NEW: State for Pinpoint mode ---
+    // State for Pinpoint mode
     WifiNetworkInfo targetAp_;
+
+    // State for Auto Broadcast Pinpoint modes
+    AutoPinpointState autoPinpointState_;
+    std::vector<WifiNetworkInfo> currentTargetsOnChannel_;
+    int currentTargetIndex_;
+    unsigned long lastTargetHopTime_;
+    uint32_t lastScanCount_;
+    
+    // State for Auto Sniffed Pinpoint mode
+    std::vector<std::string> sniffedSsids_;
+    int sniffedSsidIndex_;
 
     // Timing
     unsigned long lastChannelHopTime_;
     int channelHopIndex_;
-
-    static const int CHANNELS_TO_SPAM[];
 };
 
 #endif // PROBE_FLOODER_H

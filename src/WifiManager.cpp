@@ -115,6 +115,19 @@ void WifiManager::startScan() {
     WiFi.scanNetworks(true);
 }
 
+void WifiManager::startScanOnChannel(int channel) {
+    if (!hardwareEnabled_ || WiFi.getMode() != WIFI_STA) {
+        setHardwareState(true, WifiMode::STA);
+        delay(100);
+    }
+    if (state_ == WifiState::SCANNING) return;
+
+    if (state_ != WifiState::CONNECTED) {
+        state_ = WifiState::SCANNING;
+        statusMessage_ = "Scanning...";
+    }
+    WiFi.scanNetworks(true, false, false, 300, channel);
+}
 
 bool WifiManager::tryConnectKnown(const char* ssid) {
     if (!networksLoaded_) {
@@ -226,10 +239,7 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
             state_ = WifiState::CONNECTED;
             statusMessage_ = "Connected";
             
-            // --- START OF FIX ---
-            // Log the success immediately, before checking failure counts.
             LOG(LogLevel::INFO, "WIFI", "Connection to '%s' successful, IP obtained.", WiFi.SSID().c_str());
-            // --- END OF FIX ---
             
             app_->getRtcManager().onNtpSync();
             
@@ -245,19 +255,13 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t disconnected_info = info.wifi_sta_disconnected;
             
-            // --- START OF FIX ---
-            // If we are in the process of connecting, IGNORE this event.
-            // The timeout in the main update() loop is the only source of truth for a connection failure.
-            // This prevents the race condition where a transient disconnect is mistaken for a final failure.
             if (state_ == WifiState::CONNECTING) {
                 Serial.printf("[WIFI-LOG] Intermediate disconnect during connection. Reason: %d. Ignoring...\n", disconnected_info.reason);
             } 
-            // If we were already connected, then this is a real disconnect.
             else if (state_ == WifiState::CONNECTED) {
                 state_ = WifiState::IDLE;
                 statusMessage_ = "Disconnected";
             }
-            // --- END OF FIX ---
             break;
         }
         default: break;

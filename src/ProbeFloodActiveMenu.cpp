@@ -2,18 +2,17 @@
 #include "EventDispatcher.h"
 #include "ProbeFloodActiveMenu.h"
 #include "App.h"
-#include "UI_Utils.h" // For truncateText
+#include "UI_Utils.h"
 
 ProbeFloodActiveMenu::ProbeFloodActiveMenu() : modeToStart_(ProbeFloodMode::RANDOM) {}
 
 void ProbeFloodActiveMenu::setAttackParameters(ProbeFloodMode mode, const std::string& filePath) {
     modeToStart_ = mode;
     filePathToUse_ = filePath;
-    // Clear the target network to avoid confusion
+    // Clear the target network to ensure this mode is used
     memset(&targetNetwork_, 0, sizeof(WifiNetworkInfo));
 }
 
-// --- NEW: Overload for pinpoint mode ---
 void ProbeFloodActiveMenu::setAttackParameters(const WifiNetworkInfo& targetNetwork) {
     modeToStart_ = ProbeFloodMode::PINPOINT_AP;
     targetNetwork_ = targetNetwork;
@@ -29,7 +28,8 @@ void ProbeFloodActiveMenu::onEnter(App* app, bool isForwardNav) {
     if (modeToStart_ == ProbeFloodMode::PINPOINT_AP) {
         success = flooder.start(std::move(rfLock), targetNetwork_);
     } else {
-        success = flooder.start(std::move(rfLock), modeToStart_, filePathToUse_);
+        // This now correctly calls the start overload for RANDOM, FILE_BASED, and both AUTO modes
+        success = flooder.start(std::move(rfLock), modeToStart_);
     }
 
     if (!success) {
@@ -63,12 +63,7 @@ bool ProbeFloodActiveMenu::drawCustomStatusBar(App* app, U8G2& display) {
     display.drawStr(2, 8, getTitle());
 
     char channelStr[16];
-    // --- MODIFIED: Display correct channel info for the mode ---
-    if (flooder.getMode() == ProbeFloodMode::PINPOINT_AP) {
-        snprintf(channelStr, sizeof(channelStr), "CH: %ld", flooder.getTargetAp().channel);
-    } else {
-        snprintf(channelStr, sizeof(channelStr), "CH: %d", flooder.getCurrentChannel());
-    }
+    snprintf(channelStr, sizeof(channelStr), "CH: %d", flooder.getCurrentChannel());
     
     int textWidth = display.getStrWidth(channelStr);
     display.drawStr(128 - textWidth - 2, 8, channelStr);
@@ -93,12 +88,20 @@ void ProbeFloodActiveMenu::draw(App* app, U8G2& display) {
 
     display.setFont(u8g2_font_6x10_tf);
 
-    // --- MODIFIED: Show target SSID in pinpoint mode ---
     if (flooder.getMode() == ProbeFloodMode::PINPOINT_AP) {
         char targetStr[48];
-        snprintf(targetStr, sizeof(targetStr), "Target: %s", flooder.getTargetAp().ssid);
+        snprintf(targetStr, sizeof(targetStr), "Target: %s", flooder.getCurrentTargetSsid().c_str());
         char* truncated = truncateText(targetStr, 124, display);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
+    } else if (flooder.getMode() == ProbeFloodMode::AUTO_BROADCAST_PINPOINT || flooder.getMode() == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
+        if (flooder.getAutoPinpointState() == AutoPinpointState::SCANNING) {
+            display.drawStr((display.getDisplayWidth() - display.getStrWidth("Scanning...")) / 2, 36, "Scanning...");
+        } else {
+            char targetStr[48];
+            snprintf(targetStr, sizeof(targetStr), "Target: %s", flooder.getCurrentTargetSsid().c_str());
+            char* truncated = truncateText(targetStr, 124, display);
+            display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
+        }
     }
 
     char packetStr[32];

