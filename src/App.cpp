@@ -163,7 +163,7 @@ App::App() :
             [](App* app) {
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
                 if (menu) {
-                    if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE)) {
+                    if (!SdCardManager::getInstance().exists(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE)) {
                         app->showPopUp("Error", "Run Probe Sniffer to create a list first.", nullptr, "OK", "", true);
                         return;
                     }
@@ -263,7 +263,7 @@ App::App() :
             [](App* app) {
                  auto* menu = static_cast<ProbeFloodActiveMenu*>(app->getMenu(MenuType::PROBE_FLOOD_ACTIVE));
                 if (menu) {
-                    if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
+                    if (!SdCardManager::getInstance().exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
                         app->showPopUp("Error", "Run Probe Sniffer to create a list first.", nullptr, "OK", "", true);
                         return;
                     }
@@ -697,11 +697,11 @@ void App::setup()
 
     std::vector<BootTask> bootTasks = {
         {"Hardware Manager", [&](){ getHardwareManager().setup(this); return true; }},
-        {"SD Card",          [&](){ bool success = SdCardManager::setup(); if (!success) logToSmallDisplay("SD Card", "FAIL"); return success; }},
+        {"SD Card",          [&](){ return SdCardManager::getInstance().setup(); }},
         {"Config Manager",   [&](){ getConfigManager().setup(this); return true; }},
-        {"RTC Manager",      [&](){ getRtcManager().setup(this); return true; }}, // <-- MOVED UP
+        {"RTC Manager",      [&](){ getRtcManager().setup(this); return true; }},
         {"System Data",      [&](){ getSystemDataProvider().setup(this); return true; }},
-        {"Logger",           [&](){ Logger::getInstance().setup(); return true; }}, // <-- NOW AFTER RTC
+        {"Logger",           [&](){ Logger::getInstance().setup(); return true; }},
     };
 
     int totalTasks = bootTasks.size();
@@ -709,12 +709,18 @@ void App::setup()
     int progressBarDrawableWidth = mainDisplay.getDisplayWidth() - 40 - 2;
 
     for (int i = 0; i < totalTasks; ++i) {
+        // --- ENHANCED LOGGING ---
+        Serial.printf("[BOOT] Starting Task: %s\n", bootTasks[i].name);
         logToSmallDisplay(bootTasks[i].name, "INIT");
-        if (bootTasks[i].action()) {
+        
+        bool success = bootTasks[i].action();
+
+        if (success) {
+            Serial.printf("[BOOT] > Task '%s' completed successfully.\n", bootTasks[i].name);
             logToSmallDisplay(bootTasks[i].name, "OK");
         } else {
+            Serial.printf("[BOOT] > Task '%s' FAILED.\n", bootTasks[i].name);
             logToSmallDisplay(bootTasks[i].name, "FAIL");
-            // You might want to halt or indicate a critical failure here
         }
         
         float targetFillPx = (float)(i + 1) / totalTasks * progressBarDrawableWidth;

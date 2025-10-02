@@ -27,7 +27,7 @@ void ProbeSniffer::setup(App* app) {
 void ProbeSniffer::openPcapFile() {
     snprintf(currentPcapFilename_, sizeof(currentPcapFilename_), "%s/probes_%lu.pcap", SD_ROOT::DATA_PROBES, millis());
 
-    pcapFile_ = SdCardManager::openFile(currentPcapFilename_, FILE_WRITE);
+    pcapFile_ = SdCardManager::getInstance().openFileUncached(currentPcapFilename_, FILE_WRITE);
     if (!pcapFile_) {
         LOG(LogLevel::ERROR, "PROBE", "Failed to create PCAP file: %s", currentPcapFilename_);
         return;
@@ -45,7 +45,7 @@ void ProbeSniffer::openPcapFile() {
     pcapFile_.write(header, sizeof(header));
     
     // Clear the session SSID list file for this new session
-    SdCardManager::deleteFile(SD_ROOT::DATA_PROBES_SSID_SESSION);
+    SdCardManager::getInstance().deleteFile(SD_ROOT::DATA_PROBES_SSID_SESSION);
 
     LOG(LogLevel::INFO, "PROBE", "PCAP file created: %s", currentPcapFilename_);
 }
@@ -161,7 +161,7 @@ void ProbeSniffer::handlePacket(wifi_promiscuous_pkt_t *packet) {
             uniqueSsids_.push_back(ssid);
 
             // 1. Write to the session file
-            File sessionFile = SdCardManager::openFile(SD_ROOT::DATA_PROBES_SSID_SESSION, FILE_APPEND);
+            File sessionFile = SdCardManager::getInstance().openFileUncached(SD_ROOT::DATA_PROBES_SSID_SESSION, FILE_APPEND);
             if (sessionFile) {
                 sessionFile.println(ssid);
                 sessionFile.close();
@@ -169,7 +169,7 @@ void ProbeSniffer::handlePacket(wifi_promiscuous_pkt_t *packet) {
 
             // 2. Check cumulative file and append if not present
             bool alreadyInCumulative = false;
-            auto reader = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE);
+            auto reader = SdCardManager::getInstance().openLineReader(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE);
             if(reader.isOpen()) {
                 while(true) {
                     String line = reader.readLine();
@@ -183,7 +183,7 @@ void ProbeSniffer::handlePacket(wifi_promiscuous_pkt_t *packet) {
             }
 
             if (!alreadyInCumulative) {
-                File cumulativeFile = SdCardManager::openFile(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE, FILE_APPEND);
+                File cumulativeFile = SdCardManager::getInstance().openFileUncached(SD_ROOT::DATA_PROBES_SSID_CUMULATIVE, FILE_APPEND);
                 if (cumulativeFile) {
                     cumulativeFile.println(ssid);
                     cumulativeFile.close();

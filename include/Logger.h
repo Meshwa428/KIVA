@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "Config.h"
 #include <cstdarg>
-#include "SdCardManager.h" // <-- ADD THIS LINE
+#include "SdCardManager.h" // Include the API header
 
 // Define a log level for filtering
 enum class LogLevel {
@@ -18,8 +18,6 @@ class Logger {
 public:
     static Logger& getInstance();
     void setup();
-
-    // --- TEMPLATE-BASED SOLUTION ---
 
     // Base implementation with the file flag
     template<typename... Args>
@@ -45,7 +43,9 @@ public:
         #endif
 
         if (toFile && isInitialized_ && !currentLogFile_.isEmpty()) {
-            File logFile = SdCardManager::openFile(currentLogFile_.c_str(), FILE_APPEND);
+            // --- THIS IS THE FIX ---
+            // Use openFileUncached for direct, non-cached file access suitable for logging.
+            File logFile = SdCardManager::getInstance().openFileUncached(currentLogFile_.c_str(), FILE_APPEND);
             if (logFile) {
                 logFile.println(buffer);
                 logFile.close();
@@ -54,7 +54,6 @@ public:
     }
 
     // Overload that defaults to file logging.
-    // This is a better match for calls where the third argument is a string literal.
     template<typename... Args>
     void log(LogLevel level, const char* component, const char* format, Args... args) {
         // Call the main implementation with toFile = true
@@ -73,7 +72,7 @@ private:
     String currentLogFile_;
 };
 
-// This macro now works perfectly with the template overloads.
+// This macro works with the template overloads.
 #define LOG(level, component, ...) Logger::getInstance().log(level, component, ##__VA_ARGS__)
 
 #endif // LOGGER_H

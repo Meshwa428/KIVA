@@ -33,7 +33,7 @@ void MusicLibraryDataSource::loadPlaylists() {
     
     // This now only loads PLAYLISTS (directories) from the root music folder
     std::string indexPath = std::string(SD_ROOT::USER_MUSIC) + "/" + MusicLibraryManager::INDEX_FILENAME;
-    auto reader = SdCardManager::openLineReader(indexPath.c_str());
+    auto reader = SdCardManager::getInstance().openLineReader(indexPath.c_str());
     if (reader.isOpen()) {
         while(true) {
             String line = reader.readLine();

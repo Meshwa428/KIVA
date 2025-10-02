@@ -10,12 +10,12 @@
 void PortalListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardNav) {
     portalNames_.clear();
     const char* dirPath = SD_ROOT::USER_PORTALS;
-    if (!SdCardManager::isAvailable()) {
+    if (!SdCardManager::getInstance().isAvailable()) {
         app->showPopUp("Error", "SD Card not found.", nullptr, "OK", "", true);
         return;
     }
     
-    File root = SdCardManager::openFile(dirPath);
+    File root = SdCardManager::getInstance().openFileUncached(dirPath);
     if (!root || !root.isDirectory()) return;
 
     File file = root.openNextFile();

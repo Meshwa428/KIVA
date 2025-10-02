@@ -41,19 +41,19 @@ bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeF
     packetCounter_ = 0;
     
     if (currentMode_ == ProbeFloodMode::FILE_BASED) {
-        fileSsidReader_ = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+        fileSsidReader_ = SdCardManager::getInstance().openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
         if (!fileSsidReader_.isOpen()) {
             LOG(LogLevel::ERROR, "PROBE_FLOOD", "SSID file is invalid or not found.");
             rfLock_.reset();
             return false;
         }
     } else if (currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) {
-        if (!SdCardManager::exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
+        if (!SdCardManager::getInstance().exists(SD_ROOT::DATA_PROBES_SSID_SESSION)) {
             LOG(LogLevel::ERROR, "PROBE_FLOOD", "Sniffed SSID file not found. Run Probe Sniffer first.");
             rfLock_.reset();
             return false;
         }
-        auto reader = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+        auto reader = SdCardManager::getInstance().openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
         sniffedSsids_.clear();
         while(reader.isOpen()) {
             String line = reader.readLine();
@@ -76,6 +76,7 @@ bool ProbeFlooder::start(std::unique_ptr<HardwareManager::RfLock> rfLock, ProbeF
         lastScanCount_ = app_->getWifiManager().getScanCompletionCount();
         currentChannel_ = Channels::WIFI_2_4GHZ[channelHopIndex_];
         app_->getWifiManager().startScanOnChannel(currentChannel_);
+        lastChannelHopTime_ = millis(); // Initialize the channel hop timer at the start
     } else {
         channelHopIndex_ = 0;
         currentChannel_ = Channels::WIFI_2_4GHZ[0];
@@ -131,7 +132,7 @@ void ProbeFlooder::loop() {
                     packetCounter_++;
                 } else if (currentMode_ == ProbeFloodMode::FILE_BASED) {
                     fileSsidReader_.close();
-                    fileSsidReader_ = SdCardManager::openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
+                    fileSsidReader_ = SdCardManager::getInstance().openLineReader(SD_ROOT::DATA_PROBES_SSID_SESSION);
                 }
             }
             if (millis() - lastChannelHopTime_ > 250) {
@@ -160,7 +161,11 @@ void ProbeFlooder::loop() {
                     currentTargetIndex_ = 0;
                     autoPinpointState_ = AutoPinpointState::FLOODING;
                     lastTargetHopTime_ = millis();
-                    LOG(LogLevel::INFO, "PROBE_FLOOD", "Scan on CH %d complete. Found %d targets.", currentChannel_, currentTargetsOnChannel_.size());
+                    
+                    // to start the 5-second flood period for this channel.
+                    lastChannelHopTime_ = millis(); 
+
+                    LOG(LogLevel::INFO, "PROBE_FLOOD", false, "Scan on CH %d complete. Found %d targets. Flooding for 5s...", currentChannel_, currentTargetsOnChannel_.size());
                 }
             } else if (autoPinpointState_ == AutoPinpointState::FLOODING) {
                 if (millis() - lastChannelHopTime_ > 5000) { // Flood on one channel for 5 seconds
@@ -169,7 +174,7 @@ void ProbeFlooder::loop() {
                     lastScanCount_ = app_->getWifiManager().getScanCompletionCount();
                     app_->getWifiManager().startScanOnChannel(currentChannel_);
                     autoPinpointState_ = AutoPinpointState::SCANNING;
-                    LOG(LogLevel::INFO, "PROBE_FLOOD", "Hopping to next channel. Now scanning CH %d.", currentChannel_);
+                    LOG(LogLevel::INFO, "PROBE_FLOOD", false, "Hopping to next channel. Now scanning CH %d.", currentChannel_);
                     return;
                 }
 
@@ -259,7 +264,7 @@ const std::string ProbeFlooder::getCurrentTargetSsid() const {
         return targetAp_.ssid;
     }
     if ((currentMode_ == ProbeFloodMode::AUTO_BROADCAST_PINPOINT || currentMode_ == ProbeFloodMode::AUTO_SNIFFED_PINPOINT) 
-        && !currentTargetsOnChannel_.empty() && currentTargetIndex_ < currentTargetsOnChannel_.size()) {
+        && !currentTargetsOnChannel_.empty() && currentTargetIndex_ < (int)currentTargetsOnChannel_.size()) {
         return currentTargetsOnChannel_[currentTargetIndex_].ssid;
     }
     return "N/A";

@@ -11,8 +11,8 @@ void BeaconFileListDataSource::onEnter(App* app, ListMenu* menu, bool isForwardN
     fileNames_.clear();
     const char* dirPath = SD_ROOT::USER_BEACON_LISTS;
     
-    // The directory is created at boot by SdCardManager::ensureStandardDirs()
-    File root = SdCardManager::openFile(dirPath);
+    // The directory is created at boot by SdCardManager::getInstance().ensureStandardDirs()
+    File root = SdCardManager::getInstance().openFileUncached(dirPath);
     if (!root || !root.isDirectory()) return;
 
     File file = root.openNextFile();

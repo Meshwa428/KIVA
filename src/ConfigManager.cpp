@@ -130,12 +130,12 @@ void ConfigManager::saveToEEPROM() {
 
 void ConfigManager::loadFromSdCard() {
     const char* path = "/config/settings.json";
-    if (!SdCardManager::exists(path)) {
+    if (!SdCardManager::getInstance().exists(path)) {
         isEepromValid_ = false;
         return;
     }
 
-    String jsonStr = SdCardManager::readFile(path);
+    String jsonStr = SdCardManager::getInstance().readFile(path);
     JsonDocument doc;
     if (deserializeJson(doc, jsonStr)) {
         isEepromValid_ = false;
@@ -174,7 +174,7 @@ void ConfigManager::saveToSdCard() {
 
     String jsonStr;
     serializeJson(doc, jsonStr);
-    SdCardManager::writeFile(path, jsonStr.c_str());
+    SdCardManager::getInstance().writeFile(path, jsonStr.c_str());
 }
 
 void ConfigManager::useDefaultSettings() {

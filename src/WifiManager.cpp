@@ -271,7 +271,7 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 void WifiManager::loadKnownNetworks() {
     if (networksLoaded_) return;
     knownNetworks_.clear();
-    String content = SdCardManager::readFile(SD_ROOT::WIFI_KNOWN_NETWORKS);
+    String content = SdCardManager::getInstance().readFile(SD_ROOT::WIFI_KNOWN_NETWORKS);
     int currentIndex = 0;
     while(currentIndex < content.length()) {
         int ssidEnd = content.indexOf(';', currentIndex);
@@ -300,7 +300,7 @@ void WifiManager::saveKnownNetworks() {
         content += net.password; content += ";";
         content += String(net.failureCount); content += "\n";
     }
-    SdCardManager::writeFile(SD_ROOT::WIFI_KNOWN_NETWORKS, content.c_str());
+    SdCardManager::getInstance().writeFile(SD_ROOT::WIFI_KNOWN_NETWORKS, content.c_str());
 }
 
 KnownWifiNetwork* WifiManager::findKnownNetwork(const char* ssid) {

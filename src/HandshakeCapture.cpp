@@ -229,7 +229,7 @@ void HandshakeCapture::saveHandshake(const wifi_promiscuous_pkt_t *packet, bool 
     char filename[64];
     sprintf(filename, "/data/captures/handshakes/HS_%02X%02X%02X%02X%02X%02X.pcap", apAddr[0], apAddr[1], apAddr[2], apAddr[3], apAddr[4], apAddr[5]);
 
-    File pcapFile = SdCardManager::openFile(filename, fileExists ? FILE_APPEND : FILE_WRITE);
+    File pcapFile = SdCardManager::getInstance().openFileUncached(filename, fileExists ? FILE_APPEND : FILE_WRITE);
     if (!pcapFile) {
         LOG(LogLevel::ERROR, "HS_CAPTURE", "Failed to open pcap file: %s", filename);
         return;
@@ -313,7 +313,7 @@ void HandshakeCapture::parsePMKID(const wifi_promiscuous_pkt_t *packet) {
             for (size_t i = 0; i < ssid.length(); i++) sprintf(&ssid_hex[i*2], "%02x", ssid[i]);
             char output_str[200];
             sprintf(output_str, "%s*%s*%s*%s", pmkid_str, bssid_str, station_mac_str, ssid_hex);
-            File pmkid_file = SdCardManager::openFile("/data/captures/pmkid.txt", FILE_APPEND);
+            File pmkid_file = SdCardManager::getInstance().openFileUncached("/data/captures/pmkid.txt", FILE_APPEND);
             if (pmkid_file) {
                 pmkid_file.println(output_str);
                 pmkid_file.close();

@@ -149,7 +149,7 @@ void OtaManager::saveCurrentFirmware(const FirmwareInfo& info) {
 
 void OtaManager::scanSdForFirmware() {
     availableSdFirmwares_.clear();
-    if (!SdCardManager::isAvailable() || !SdCardManager::exists(SD_ROOT::FIRMWARE)) {
+    if (!SdCardManager::getInstance().isAvailable() || !SdCardManager::getInstance().exists(SD_ROOT::FIRMWARE)) {
         return;
     }
     File root = SD.open(SD_ROOT::FIRMWARE);
@@ -323,7 +323,7 @@ bool OtaManager::startWebUpdate() {
 void OtaManager::setupWebServer() {
     webServer_.on("/", HTTP_GET, [this](AsyncWebServerRequest *request){
         String path = SD_ROOT::WEB_OTA_PAGE;
-        if (SdCardManager::exists(path.c_str())) {
+        if (SdCardManager::getInstance().exists(path.c_str())) {
             request->send(SD, path, "text/html");
         } else {
             request->send(404, "text/plain", "OTA Page not found on SD card.");
@@ -379,7 +379,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     String md5 = FirmwareUtils::calculateFileMD5(SD, tempPath);
 
     if (md5.isEmpty()) {
-        SdCardManager::deleteFile(tempPath.c_str());
+        SdCardManager::getInstance().deleteFile(tempPath.c_str());
         statusMessage_ = "MD5 Calc Failed";
         state_ = OtaState::ERROR;
         request->send(200, "text/plain", statusMessage_);
@@ -387,7 +387,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     }
     
     if (currentFirmware_.isValid && md5.equalsIgnoreCase(currentFirmware_.checksum_md5)) {
-        SdCardManager::deleteFile(tempPath.c_str());
+        SdCardManager::getInstance().deleteFile(tempPath.c_str());
         statusMessage_ = "Already up-to-date";
         state_ = OtaState::ERROR;
         request->send(200, "text/plain", statusMessage_);
@@ -401,7 +401,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     String permanentBinFilename = baseFilename + ".bin";
     String permanentBinPath = String(SD_ROOT::FIRMWARE) + "/" + permanentBinFilename;
 
-    if (SdCardManager::renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
+    if (SdCardManager::getInstance().renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
         Serial.printf("[OTA-WEB] Saved new firmware as %s\n", permanentBinPath.c_str());
         
         FirmwareInfo newFwInfo;

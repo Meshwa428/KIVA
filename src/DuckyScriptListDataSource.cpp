@@ -6,10 +6,8 @@
 #include "Event.h"
 #include "EventDispatcher.h"
 
-// --- ADD CONSTRUCTOR ---
 DuckyScriptListDataSource::DuckyScriptListDataSource() : modeToExecute_(DuckyScriptRunner::Mode::USB) {}
 
-// --- ADD SETTER IMPLEMENTATION ---
 void DuckyScriptListDataSource::setExecutionMode(DuckyScriptRunner::Mode mode) {
     modeToExecute_ = mode;
 }
@@ -19,7 +17,8 @@ void DuckyScriptListDataSource::onEnter(App* app, ListMenu* menu, bool isForward
     filePaths_.clear();
     const char* dirPath = SD_ROOT::USER_DUCKY;
     
-    File root = SdCardManager::openFile(dirPath);
+    // --- THIS IS THE FIX ---
+    File root = SdCardManager::getInstance().openFileUncached(dirPath);
     if (!root || !root.isDirectory()) return;
 
     File file = root.openNextFile();

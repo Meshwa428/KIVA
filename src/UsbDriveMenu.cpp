@@ -57,7 +57,7 @@ void UsbDriveMenu::onExit(App* app) {
     Serial.begin(115200);
 
     LOG(LogLevel::INFO, "USB_DRIVE", "Re-initializing SD card for firmware use.");
-    if (!SdCardManager::setup()) {
+    if (!SdCardManager::getInstance().setup()) {
         LOG(LogLevel::ERROR, "USB_DRIVE", "Failed to re-mount SD Card after USB mode!");
         app->showPopUp("SD Card Error", "Could not re-mount SD Card!", nullptr, "OK", "", true);
     }

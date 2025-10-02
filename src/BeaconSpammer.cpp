@@ -12,9 +12,6 @@ static uint8_t open_beacon_post_ssid_tags[] = {0x01, 0x08, 0x82, 0x84, 0x8b, 0x9
 static uint8_t wpa2_beacon_template[] = {0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x64, 0x00, 0x31, 0x04, 0x00};
 static uint8_t wpa2_beacon_post_ssid_tags[] = {0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c, 0x03, 0x01, 0x01, 0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x00, 0x00};
 
-// Cycle through the best channels for maximum impact
-const int BeaconSpammer::CHANNELS_TO_SPAM[] = {1, 6, 11, 2, 7, 12, 3, 8, 4, 9, 5, 10};
-
 BeaconSpammer::BeaconSpammer() :
     app_(nullptr),
     isActive_(false),
@@ -47,7 +44,7 @@ bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, Beaco
     currentMode_ = mode;
     
     if (currentMode_ == BeaconSsidMode::FILE_BASED) {
-        ssidReader_ = SdCardManager::openLineReader(ssidFilePath.c_str());
+        ssidReader_ = SdCardManager::getInstance().openLineReader(ssidFilePath.c_str());
         // --- VALIDATION LOGIC ---
         // Try to read one line. If it's empty, our new readLine() implementation
         // has determined the file has no valid content.
@@ -60,7 +57,7 @@ bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, Beaco
         // The check was successful, but readLine() advanced the file pointer.
         // We must close and reopen the reader to ensure the attack starts from the first line.
         ssidReader_.close();
-        ssidReader_ = SdCardManager::openLineReader(ssidFilePath.c_str());
+        ssidReader_ = SdCardManager::getInstance().openLineReader(ssidFilePath.c_str());
     }
 
     ssidCounter_ = 0;
@@ -188,7 +185,7 @@ void BeaconSpammer::sendBeaconPacket(const FakeAP& ap) {
 
 bool BeaconSpammer::isSsidFileValid(const std::string& ssidFilePath) {
     // Use our robust line reader to perform the check.
-    auto reader = SdCardManager::openLineReader(ssidFilePath.c_str());
+    auto reader = SdCardManager::getInstance().openLineReader(ssidFilePath.c_str());
     if (!reader.isOpen()) {
         return false;
     }

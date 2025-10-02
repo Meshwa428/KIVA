@@ -43,7 +43,7 @@ void SystemDataProvider::updateData() {
     }
 
     // SD Card
-    if (SdCardManager::isAvailable()) {
+    if (SdCardManager::getInstance().isAvailable()) {
         sdCardUsage_.total = SD.cardSize();
         sdCardUsage_.used = SD.usedBytes();
         sdCardUsage_.percentage = (sdCardUsage_.total > 0) ? (uint8_t)((sdCardUsage_.used * 100) / sdCardUsage_.total) : 0;

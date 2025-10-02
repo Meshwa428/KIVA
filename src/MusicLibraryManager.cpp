@@ -19,18 +19,18 @@ void MusicLibraryManager::createIndexForDirectory(const char* path) {
     std::string indexPath = std::string(path) + "/" + INDEX_FILENAME;
     
     // Always create a fresh index
-    if (SdCardManager::exists(indexPath.c_str())) {
-        SdCardManager::deleteFile(indexPath.c_str());
+    if (SdCardManager::getInstance().exists(indexPath.c_str())) {
+        SdCardManager::getInstance().deleteFile(indexPath.c_str());
     }
 
-    File indexFile = SdCardManager::openFile(indexPath.c_str(), FILE_WRITE);
+    File indexFile = SdCardManager::getInstance().openFileUncached(indexPath.c_str(), FILE_WRITE);
     if (!indexFile) {
         LOG(LogLevel::ERROR, "MUSIC_LIB", "Failed to create index file at %s", path);
         return;
     }
 
     // 2. Scan the directory for items
-    File root = SdCardManager::openFile(path);
+    File root = SdCardManager::getInstance().openFileUncached(path);
     if (!root || !root.isDirectory()) {
         if (root) root.close();
         indexFile.close();

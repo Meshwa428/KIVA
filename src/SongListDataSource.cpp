@@ -33,7 +33,7 @@ void SongListDataSource::loadTracksFromIndex() {
     // Construct the path to the index file *inside* the chosen playlist directory.
     std::string indexPath = playlistPath_ + "/" + MusicLibraryManager::INDEX_FILENAME;
 
-    auto reader = SdCardManager::openLineReader(indexPath.c_str());
+    auto reader = SdCardManager::getInstance().openLineReader(indexPath.c_str());
     if (!reader.isOpen()) {
         // Fallback or error handling can go here if needed
         return;

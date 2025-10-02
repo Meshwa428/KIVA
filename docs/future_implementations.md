@@ -122,7 +122,7 @@ These attacks make the KIVA device pretend to be a Human Interface Device (keybo
     2.  **Create Manager Class:** `HidManager.h` and `.cpp`.
     3.  **Ducky Script Parser:**
         *   Create a function `parseAndExecute(scriptPath)` in `HidManager`.
-        *   It will use `SdCardManager::openLineReader` to read a script file (e.g., from `/user/hid_scripts/`) line by line.
+        *   It will use `SdCardManager::getInstance().openLineReader` to read a script file (e.g., from `/user/hid_scripts/`) line by line.
         *   Implement a parser for basic commands: `STRING`, `DELAY`, `ENTER`, `GUI` (Windows key), `COMMAND` (macOS key), etc.
         *   The parser translates these commands into `TinyUSB_Keyboard` functions like `keyboard.press()`, `keyboard.release()`, `keyboard.print()`.
     4.  **Core Logic:**

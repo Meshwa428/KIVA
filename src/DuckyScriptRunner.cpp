@@ -92,7 +92,8 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     
     activeHid_->begin(layout);
 
-    scriptReader_ = SdCardManager::openLineReader(scriptPath.c_str());
+    // --- THIS IS THE FIX ---
+    scriptReader_ = SdCardManager::getInstance().openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
         stopScript();
@@ -144,23 +145,22 @@ void DuckyScriptRunner::loop() {
             state_ = State::POST_CONNECTION_DELAY;
             connectionTime_ = millis();
         }
-        return; // Important: exit loop iteration here
+        return;
     }
 
     if (state_ == State::POST_CONNECTION_DELAY) {
-        // Wait for 750ms after connection before starting the script.
         if (millis() - connectionTime_ > 750) {
              LOG(LogLevel::INFO, "DuckyRunner", "Delay complete. Changing state to RUNNING.");
              state_ = State::RUNNING;
         }
-        return; // Don't proceed to RUNNING state in the same loop iteration
+        return;
     }
 
     if (state_ == State::RUNNING) {
         if (millis() < delayUntil_) return;
         
         activeHid_->releaseAll();
-        delay(defaultDelay_); // This is the inter-command delay
+        delay(defaultDelay_);
         
         currentLine_ = scriptReader_.readLine().c_str(); 
 
