@@ -23,17 +23,44 @@ void GridMenu::onEnter(App *app, bool isForwardNav)
 {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
 
+    // --- THIS IS THE CORRECTED LOGIC ---
+    animation_.resize(menuItems_.size()); // Always ensure vectors are sized correctly.
+
     if (isForwardNav) {
+        // Forward Navigation: Reset everything and play the intro from the top.
         selectedIndex_ = 0;
         marqueeScrollLeft_ = true;
+        animation_.init(); // Resets scroll offsets and scales.
+        animation_.startIntro(menuItems_.size(), columns_);
+    } else {
+        // Backward Navigation: Preserve selection and animate into the correct view.
+        animation_.init(); // Reset scales/timers for a fresh animation.
+
+        // Calculate the correct scroll offset to make the selected item visible.
+        const int itemRowHeight = 28 + 4; // Item height + vertical padding
+        const int gridVisibleAreaH = 64 - (STATUS_BAR_H + 1) - 4;
+        const int visibleRows = gridVisibleAreaH / itemRowHeight;
+        int currentSelectionRow = selectedIndex_ / columns_;
+
+        // Aim to center the selected row, but clamp the scroll position to avoid empty space.
+        int targetTopRow = currentSelectionRow - (visibleRows / 2);
+        if (targetTopRow < 0) {
+            targetTopRow = 0;
+        }
+        int totalRows = (menuItems_.size() + columns_ - 1) / columns_;
+        int maxTopRow = totalRows - visibleRows;
+        if (maxTopRow < 0) {
+            maxTopRow = 0; // Happens if all items fit on screen
+        }
+        if (targetTopRow > maxTopRow) {
+            targetTopRow = maxTopRow;
+        }
+        
+        animation_.setScrollTarget(targetTopRow * itemRowHeight); // Set the scroll destination.
+        animation_.startIntro(menuItems_.size(), columns_);      // Start the staggered item fade-in animation.
     }
     
-    // Setup and start animation via the animation object
-    animation_.resize(menuItems_.size());
-    animation_.init();
-    animation_.startIntro(menuItems_.size(), columns_);
-    
-    marqueeActive_ = false;
+    marqueeActive_ = false; // Reset marquee for both cases.
 }
 
 void GridMenu::onUpdate(App *app)

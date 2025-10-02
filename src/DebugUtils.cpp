@@ -128,7 +128,7 @@ const char* pcfStateToString(uint8_t pcfAddress, uint8_t state) {
     strcat(buffer, "[");
 
     for (int i = 0; i < 8; ++i) {
-        // A '0' bit means the button is pressed (active low)
+        // A '0' bit means the pin is LOW
         if (!(state & (1 << i))) {
             if (!first) {
                 strcat(buffer, ", ");
@@ -136,12 +136,17 @@ const char* pcfStateToString(uint8_t pcfAddress, uint8_t state) {
 
             const char* btnName = "???";
             if (pcfAddress == Pins::PCF0_ADDR) {
+                // --- THIS IS THE FIX ---
+                // Add labels for all pins on PCF0
                 switch(i) {
-                    case Pins::ENC_BTN: btnName = "ENC_BTN"; break;
-                    case Pins::AI_BTN:  btnName = "AI_BTN"; break;
-                    case Pins::RIGHT_UP: btnName = "R_UP"; break;
-                    case Pins::RIGHT_DOWN: btnName = "R_DOWN"; break;
-                    // Note: We don't log ENC_A/B as button presses
+                    case Pins::ENC_BTN:        btnName = "ENC_BTN"; break;
+                    case Pins::ENC_A:          btnName = "ENC_A"; break;
+                    case Pins::ENC_B:          btnName = "ENC_B"; break;
+                    case Pins::AI_BTN:         btnName = "AI_BTN"; break;
+                    case Pins::RIGHT_UP:       btnName = "R_UP"; break;
+                    case Pins::RIGHT_DOWN:     btnName = "R_DOWN"; break;
+                    case Pins::LASER_PIN_PCF0: btnName = "LASER"; break;
+                    case Pins::MOTOR_PIN_PCF0: btnName = "MOTOR"; break;
                 }
             } else if (pcfAddress == Pins::PCF1_ADDR) {
                 switch(i) {
