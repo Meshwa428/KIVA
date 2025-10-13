@@ -16,7 +16,8 @@ public:
     MenuType getMenuType() const override { return MenuType::WIFI_CONNECTION_STATUS; }
 
 private:
-    unsigned long entryTime_;
+    unsigned long successTime_; // Will be 0 until a connection is made
+    unsigned long failTime_; 
 };
 
 #endif // CONNECTION_STATUS_MENU_H

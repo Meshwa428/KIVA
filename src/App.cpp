@@ -28,6 +28,7 @@
 #include "GameAudio.h"
 #include "StationSniffer.h"
 #include "AssociationSleeper.h"
+#include "BadMsgAttacker.h"
 #include "RtcManager.h"
 #include "SystemDataProvider.h"
 
@@ -58,8 +59,12 @@ App::App() :
         {"Host/Other", IconType::TOOL_INJECTION, MenuType::HOST_OTHER_GRID},
         {"Back", IconType::NAV_BACK, MenuType::BACK}}),
     gamesMenu_("Games", MenuType::GAMES_CAROUSEL, {
-        {"Snake", IconType::GAME_SNAKE, MenuType::SNAKE_MENU},
-        {"Tetris", IconType::GAME_TETRIS, MenuType::TETRIS_MENU},
+        {"Snake", IconType::GAME_SNAKE, MenuType::SNAKE_GAME},
+        {"Tetris", IconType::GAME_TETRIS, MenuType::NONE, 
+            [](App* app) {
+                app->showPopUp("Info", "Tetris is coming soon!", nullptr, "OK", "", true);
+            }
+        },
         {"Back", IconType::NAV_BACK, MenuType::BACK}}),
     
     wifiToolsMenu_("WiFi Tools", MenuType::WIFI_TOOLS_GRID, {
@@ -307,6 +312,37 @@ App::App() :
         }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
+    badMsgModesMenu_("Bad Msg Attack", MenuType::BAD_MSG_MODES_GRID, {
+        {"Target AP", IconType::TARGET, MenuType::NONE, [](App* app){
+            app->getBadMsgAttacker().prepareAttack(BadMsgAttacker::AttackType::TARGET_AP);
+            auto& ds = app->getWifiListDataSource();
+            ds.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                if (app_cb->getBadMsgAttacker().start(net)) {
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BAD_MSG_ACTIVE));
+                }
+            });
+            ds.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
+        {"Pinpoint Client", IconType::TOOL_INJECTION, MenuType::NONE, [](App* app){
+            app->getBadMsgAttacker().prepareAttack(BadMsgAttacker::AttackType::PINPOINT_CLIENT);
+            auto& wifiDS = app->getWifiListDataSource();
+            wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                auto& stationDS = app_cb->getStationListDataSource();
+                stationDS.setMode(true, net); // Live scan for this AP
+                stationDS.setAttackCallback([](App* attack_app, const StationInfo& client){
+                    attack_app->getStationSniffer().stop(); // Release lock for attacker
+                    if(attack_app->getBadMsgAttacker().start(client)) {
+                        EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::BAD_MSG_ACTIVE));
+                    }
+                });
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
+            });
+            wifiDS.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
         {"UI & Interaction", IconType::SETTING_DISPLAY, MenuType::UI_SETTINGS_LIST},
         {"Hardware", IconType::SETTINGS, MenuType::HARDWARE_SETTINGS_LIST},
@@ -353,6 +389,7 @@ App::App() :
     duckyScriptActiveMenu_(),
     nowPlayingMenu_(),
     associationSleepActiveMenu_(),
+    badMsgActiveMenu_(),
 
     // --- Data Sources ---
     wifiListDataSource_(),
@@ -367,6 +404,7 @@ App::App() :
         {"Beacon Spam", IconType::BEACON, MenuType::BEACON_MODE_GRID},
         {"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_MODE_GRID},
         {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODES_GRID},
+        {"Bad Msg", IconType::SKULL, MenuType::BAD_MSG_MODES_GRID},
         {"Evil Portal", IconType::SKULL, MenuType::PORTAL_LIST},
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
@@ -632,17 +670,6 @@ App::App() :
         {"System Info", IconType::INFO, MenuType::INFO_MENU},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }),
-    // --- NEW GAME DATASOURCES ---
-    snakeMenuDataSource_({
-        {"Play", IconType::PLAY, MenuType::SNAKE_GAME},
-        {"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Snake High Score selected."); }},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
-    }),
-    tetrisMenuDataSource_({
-        {"Play", IconType::PLAY, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris Play selected."); }},
-        {"High Score", IconType::SETTINGS, MenuType::NONE, [](App* app){ LOG(LogLevel::INFO, "GAME", "Tetris High Score selected."); }},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}
-    }),
     // --- ListMenu Instances ---
     wifiListMenu_("Wi-Fi Setup", MenuType::WIFI_LIST, &wifiListDataSource_),
     stationListMenu_("Select Client", MenuType::STATION_LIST, &stationListDataSource_),
@@ -661,11 +688,7 @@ App::App() :
     hardwareSettingsMenu_("Hardware", MenuType::HARDWARE_SETTINGS_LIST, &hardwareSettingsDataSource_),
     connectivitySettingsMenu_("Connectivity", MenuType::CONNECTIVITY_SETTINGS_LIST, &connectivitySettingsDataSource_),
     systemSettingsMenu_("System", MenuType::SYSTEM_SETTINGS_LIST, &systemSettingsDataSource_),
-    timezoneMenu_("Timezone", MenuType::TIMEZONE_LIST, &timezoneDataSource_),
-
-    // --- GAME LISTMENUS ---
-    snakeMenu_("Snake", MenuType::SNAKE_MENU, &snakeMenuDataSource_),
-    tetrisMenu_("Tetris", MenuType::TETRIS_MENU, &tetrisMenuDataSource_)
+    timezoneMenu_("Timezone", MenuType::TIMEZONE_LIST, &timezoneDataSource_)
 {
     for (int i = 0; i < MAX_LOG_LINES_SMALL_DISPLAY; ++i)
     {
@@ -749,9 +772,7 @@ void App::setup()
     menuRegistry_[MenuType::TOOLS_CAROUSEL] = &toolsMenu_;
     menuRegistry_[MenuType::GAMES_CAROUSEL] = &gamesMenu_;
 
-    menuRegistry_[MenuType::SNAKE_MENU] = &snakeMenu_;
     menuRegistry_[MenuType::SNAKE_GAME] = &snakeGameMenu_;
-    menuRegistry_[MenuType::TETRIS_MENU] = &tetrisMenu_;
 
     // Tools Sub-menus
     menuRegistry_[MenuType::WIFI_TOOLS_GRID] = &wifiToolsMenu_;
@@ -767,6 +788,7 @@ void App::setup()
     menuRegistry_[MenuType::DEAUTH_MODE_GRID] = &deauthModeMenu_;
     menuRegistry_[MenuType::PROBE_FLOOD_MODE_GRID] = &probeFloodModeMenu_;
     menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODES_GRID] = &associationSleepModeMenu_;
+    menuRegistry_[MenuType::BAD_MSG_MODES_GRID] = &badMsgModesMenu_;
     menuRegistry_[MenuType::STATION_LIST] = &stationListMenu_;
 
     // Settings Sub-menus
@@ -799,6 +821,7 @@ void App::setup()
     menuRegistry_[MenuType::DUCKY_SCRIPT_ACTIVE] = &duckyScriptActiveMenu_;
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
     menuRegistry_[MenuType::ASSOCIATION_SLEEP_ACTIVE] = &associationSleepActiveMenu_;
+    menuRegistry_[MenuType::BAD_MSG_ACTIVE] = &badMsgActiveMenu_;
 
     // Utilities / Misc
     menuRegistry_[MenuType::USB_DRIVE_MODE] = &usbDriveMenu_;
@@ -975,6 +998,7 @@ MusicLibraryManager& App::getMusicLibraryManager() { return *serviceManager_->ge
 GameAudio& App::getGameAudio() { return *serviceManager_->getService<GameAudio>(); }
 StationSniffer& App::getStationSniffer() { return *serviceManager_->getService<StationSniffer>(); }
 AssociationSleeper& App::getAssociationSleeper() { return *serviceManager_->getService<AssociationSleeper>(); }
+BadMsgAttacker& App::getBadMsgAttacker() { return *serviceManager_->getService<BadMsgAttacker>(); }
 RtcManager& App::getRtcManager() { return *serviceManager_->getService<RtcManager>(); }
 SystemDataProvider& App::getSystemDataProvider() { return *serviceManager_->getService<SystemDataProvider>(); }
 

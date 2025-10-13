@@ -41,7 +41,7 @@ private:
         std::string label;
         ListItemType type;
         int8_t rssi;
-        bool isSecure;
+        bool isSecure; // This is fine to keep here. We will calculate it.
         int originalNetworkIndex; 
     };
 
@@ -51,7 +51,6 @@ private:
     bool isScanning_ = false;
     bool backNavOverride_ = false;
 
-    // --- RENAMED MEMBER VARIABLE ---
     SelectionCallback selectionCallback_ = nullptr;
 };
 

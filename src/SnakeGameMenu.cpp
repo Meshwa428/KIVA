@@ -1,10 +1,9 @@
-#include "Event.h"
-#include "EventDispatcher.h"
 #include "SnakeGameMenu.h"
 #include "App.h"
 #include "GameAudio.h"
 #include "UI_Utils.h"
 #include "SnakeGameSprites.h"
+#include "GameManager.h"
 #include <cstdlib>
 
 // --- Point Constants ---
@@ -78,7 +77,10 @@ void SnakeGameMenu::onEnter(App* app, bool isForwardNav) {
     gameState_ = GameState::TITLE_SCREEN;
     lastUpdateTime_ = millis();
     animCounter_ = 0;
+    // The high score is now read directly from the SD card upon entering the game.
+    highScore_ = GameManager::getHighScore("snake");
 }
+
 void SnakeGameMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     // Make sure the amplifier is off when we leave the game
@@ -155,6 +157,7 @@ void SnakeGameMenu::onUpdate(App* app) {
                 if (score_ > highScore_) {
                     highScore_ = score_;
                     newHighScoreFlag_ = true;
+                    GameManager::updateHighScore("snake", highScore_);
                     playWinTune(app);
                 } else {
                     newHighScoreFlag_ = false;

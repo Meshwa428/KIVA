@@ -157,7 +157,6 @@ void MusicPlayer::stop() {
     currentTrackName_ = "";
 }
 
-// ... the rest of MusicPlayer.cpp remains unchanged ...
 void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
     _isLoadingTrack = true;

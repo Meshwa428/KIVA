@@ -13,6 +13,7 @@ WifiAttacksDataSource::WifiAttacksDataSource() {
         {"Probe Flood", IconType::TOOL_PROBE, MenuType::PROBE_FLOOD_MODE_GRID},
         {"Karma Attack", IconType::TOOL_INJECTION, MenuType::KARMA_ACTIVE},
         {"Assoc Sleep", IconType::SKULL, MenuType::ASSOCIATION_SLEEP_MODES_GRID},
+        {"Bad Msg", IconType::ERROR, MenuType::BAD_MSG_MODES_GRID}, // <-- ADD THIS LINE
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     };
 }

@@ -42,6 +42,7 @@
 #include "SnakeGameMenu.h"
 #include "EventDispatcher.h"
 #include "AssociationSleepActiveMenu.h"
+#include "BadMsgActiveMenu.h"
 #include "StationListDataSource.h"
 #include "TimezoneListDataSource.h"
 #include "ServiceManager.h"
@@ -68,6 +69,7 @@ class MusicLibraryManager;
 class GameAudio;
 class StationSniffer;
 class AssociationSleeper;
+class BadMsgAttacker;
 class RtcManager;
 class SystemDataProvider;
 
@@ -110,6 +112,7 @@ public:
     GameAudio &getGameAudio();
     StationSniffer &getStationSniffer();
     AssociationSleeper &getAssociationSleeper();
+    BadMsgAttacker &getBadMsgAttacker();
     RtcManager& getRtcManager();
     TimezoneListDataSource& getTimezoneListDataSource();
     SystemDataProvider& getSystemDataProvider();
@@ -198,6 +201,7 @@ private:
     GridMenu deauthModeMenu_;
     GridMenu probeFloodModeMenu_;
     GridMenu associationSleepModeMenu_;
+    GridMenu badMsgModesMenu_;
     GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
 
@@ -222,6 +226,7 @@ private:
     DuckyScriptActiveMenu duckyScriptActiveMenu_;
     NowPlayingMenu nowPlayingMenu_;
     AssociationSleepActiveMenu associationSleepActiveMenu_;
+    BadMsgActiveMenu badMsgActiveMenu_;
 
     // DataSources
     WifiListDataSource wifiListDataSource_;
@@ -242,9 +247,6 @@ private:
     ActionListDataSource hardwareSettingsDataSource_;
     ActionListDataSource connectivitySettingsDataSource_;
     ActionListDataSource systemSettingsDataSource_;
-    // --- NEW GAME DATASOURCES ---
-    ActionListDataSource snakeMenuDataSource_;
-    ActionListDataSource tetrisMenuDataSource_;
 
     // ListMenu Instances
     ListMenu wifiListMenu_;
@@ -265,10 +267,6 @@ private:
     ListMenu connectivitySettingsMenu_;
     ListMenu systemSettingsMenu_;
     ListMenu timezoneMenu_;
-
-    // --- GAME LISTMENUS ---
-    ListMenu snakeMenu_;
-    ListMenu tetrisMenu_;
 };
 
 #endif

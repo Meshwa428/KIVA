@@ -13,10 +13,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::TOOLS_CAROUSEL: return "TOOLS_CAROUSEL";
         case MenuType::GAMES_CAROUSEL: return "GAMES_CAROUSEL";
 
-        // --- GAME LOBBY MENUS (NEW) ---
-        case MenuType::SNAKE_MENU: return "SNAKE_MENU";
+        // --- GAME LOBBY MENUS ---
         case MenuType::SNAKE_GAME: return "SNAKE_GAME";
-        case MenuType::TETRIS_MENU: return "TETRIS_MENU";
 
         // --- Tools Sub-menus ---
         case MenuType::WIFI_TOOLS_GRID: return "WIFI_TOOLS_GRID";

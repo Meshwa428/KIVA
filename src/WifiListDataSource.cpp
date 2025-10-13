@@ -44,6 +44,8 @@ void WifiListDataSource::onExit(App* app, ListMenu* menu) {
     scanOnEnter_ = true;
     isScanning_ = false;
     backNavOverride_ = false;
+    // --- NEW: Clear the callback on exit to prevent unintended behavior ---
+    selectionCallback_ = nullptr;
 }
 
 void WifiListDataSource::onUpdate(App* app, ListMenu* menu) {
@@ -69,7 +71,10 @@ void WifiListDataSource::rebuildDisplayItems(App* app) {
         for (size_t i = 0; i < scannedNetworks.size(); ++i) {
             if (String(scannedNetworks[i].ssid) == connectedSsid) {
                 String label = "* " + connectedSsid;
-                displayItems_.push_back({label.c_str(), ListItemType::NETWORK, scannedNetworks[i].rssi, scannedNetworks[i].isSecure, (int)i});
+                // --- FIX 1 ---
+                bool isSecure = (scannedNetworks[i].securityType != WIFI_AUTH_OPEN);
+                displayItems_.push_back({label.c_str(), ListItemType::NETWORK, scannedNetworks[i].rssi, isSecure, (int)i});
+                // --- END FIX ---
                 foundInScan = true;
                 break;
             }
@@ -81,10 +86,11 @@ void WifiListDataSource::rebuildDisplayItems(App* app) {
     }
 
     for (size_t i = 0; i < scannedNetworks.size(); ++i) {
-        // This was the line with the error. It's no longer needed because the vectors are dynamic.
-        // if (displayItems_.size() >= MAX_ANIM_ITEMS - 2) break; 
         if (String(scannedNetworks[i].ssid) != connectedSsid) {
-            displayItems_.push_back({scannedNetworks[i].ssid, ListItemType::NETWORK, scannedNetworks[i].rssi, scannedNetworks[i].isSecure, (int)i});
+            // --- FIX 2 ---
+            bool isSecure = (scannedNetworks[i].securityType != WIFI_AUTH_OPEN);
+            displayItems_.push_back({scannedNetworks[i].ssid, ListItemType::NETWORK, scannedNetworks[i].rssi, isSecure, (int)i});
+            // --- END FIX ---
         }
     }
     
@@ -113,16 +119,13 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
         case ListItemType::NETWORK: {
-            // --- RENAMED ---
             if (selectionCallback_) {
+                // This logic is safe because it uses the original index
                 const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
-                // Execute the callback that was set by the calling menu.
                 selectionCallback_(app, netInfo);
-                // The callback is responsible for navigation, so we are done.
                 return;
             }
 
-            // --- FALLBACK: Original connection logic if no callback is set ---
             if (selectedItem.label.rfind("* ", 0) == 0) {
                 app->showPopUp("Disconnect?", selectedItem.label.substr(2), [this, app, menu](App* app_cb) {
                     app_cb->getWifiManager().disconnect();
@@ -133,7 +136,10 @@ void WifiListDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
                 const auto& netInfo = wifi.getScannedNetworks()[selectedItem.originalNetworkIndex];
                 wifi.setSsidToConnect(netInfo.ssid);
 
-                if (netInfo.isSecure) {
+                // --- FIX 3 ---
+                bool isSecure = (netInfo.securityType != WIFI_AUTH_OPEN);
+                if (isSecure) {
+                // --- END FIX ---
                     if (wifi.tryConnectKnown(netInfo.ssid)) {
                         EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_CONNECTION_STATUS));
                     } else {
@@ -165,6 +171,7 @@ bool WifiListDataSource::drawCustomEmptyMessage(App* app, U8G2& display) {
     return false;
 }
 
+// ... the rest of the file (drawItem and drawWifiSignal) is correct and needs no changes ...
 void WifiListDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, int index, int x, int y, int w, int h, bool isSelected) {
     if (index >= displayItems_.size()) return;
     const auto &item = displayItems_[index];

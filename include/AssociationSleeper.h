@@ -54,8 +54,6 @@ private:
     WifiNetworkInfo targetAp_;
     unsigned long lastTargetedPacketTime_;
     int currentClientIndex_;
-    enum class State { SNIFFING, ATTACKING };
-    State state_;
 
     // State for BROADCAST mode
     std::vector<StationInfo> newClientsFound_;

@@ -248,7 +248,21 @@ namespace SdCardManager {
     bool SdCardManagerAPI::createDir(const char *path) { if (!sdCardInitialized_) return false; return SD.mkdir(path); }
     void SdCardManagerAPI::ensureStandardDirs() {
         if (!sdCardInitialized_) return;
-        const char* dirs[] = {SD_ROOT::CONFIG, SD_ROOT::DATA, SD_ROOT::USER, SD_ROOT::FIRMWARE, SD_ROOT::WEB, SD_ROOT::DATA_LOGS, SD_ROOT::DATA_CAPTURES, SD_ROOT::DATA_PROBES, SD_ROOT::USER_BEACON_LISTS, SD_ROOT::USER_PORTALS, SD_ROOT::USER_DUCKY, SD_ROOT::USER_MUSIC};
+        const char* dirs[] = {
+            SD_ROOT::CONFIG,
+            SD_ROOT::DATA,
+            SD_ROOT::USER,
+            SD_ROOT::FIRMWARE,
+            SD_ROOT::WEB,
+            SD_ROOT::DATA_LOGS, 
+            SD_ROOT::DATA_CAPTURES,
+            SD_ROOT::DATA_PROBES,
+            SD_ROOT::USER_BEACON_LISTS,
+            SD_ROOT::USER_PORTALS,
+            SD_ROOT::USER_DUCKY,
+            SD_ROOT::USER_MUSIC,
+            SD_ROOT::DATA_GAMES
+        };
         for (const char* dir : dirs) { if (!exists(dir)) createDir(dir); }
     }
 

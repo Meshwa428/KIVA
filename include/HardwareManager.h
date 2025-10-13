@@ -10,6 +10,8 @@
 #include <SPI.h>
 #include "USB.h"
 #include <NimBLEDevice.h>
+#include "Service.h"
+#include <freertos/semphr.h>
 
 // Enum to identify which system is requesting RF control
 enum class RfClient {
@@ -28,10 +30,6 @@ enum class HostClient {
 };
 
 static const uint32_t SPI_SPEED_NRF = 16000000; // 16 MHz
-
-#include "Service.h"
-
-#include <freertos/semphr.h>
 
 class HardwareManager : public Service {
 public:

@@ -5,19 +5,39 @@
 #include "UI_Utils.h"
 #include "WifiManager.h"
 
-ConnectionStatusMenu::ConnectionStatusMenu() : entryTime_(0) {}
+ConnectionStatusMenu::ConnectionStatusMenu() : successTime_(0), failTime_(0) {}
 
 void ConnectionStatusMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    entryTime_ = millis();
+    successTime_ = 0;
+    failTime_ = 0;
 }
 
 void ConnectionStatusMenu::onUpdate(App* app) {
     WifiManager& wifi = app->getWifiManager();
     WifiState state = wifi.getState();
 
-    if (state == WifiState::CONNECTED && millis() - entryTime_ > 2000) {
-        EventDispatcher::getInstance().publish(NavigateBackEvent());
+    if (state == WifiState::CONNECTED) {
+        if (successTime_ == 0) {
+            successTime_ = millis();
+        }
+        if (successTime_ != 0 && millis() - successTime_ > 2000) {
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
+        }
+    } 
+    else if (state == WifiState::CONNECTION_FAILED) {
+        if (failTime_ == 0) {
+            failTime_ = millis(); // Start the failure display timer
+        }
+        // Wait 3 seconds before automatically going back
+        if (failTime_ != 0 && millis() - failTime_ > 3000) {
+            EventDispatcher::getInstance().publish(NavigateBackEvent());
+        }
+    }
+
+    // Keep the screen alive with redraw requests while active
+    if (state == WifiState::CONNECTING || successTime_ != 0 || failTime_ != 0) {
+        app->requestRedraw();
     }
 }
 
@@ -51,7 +71,6 @@ void ConnectionStatusMenu::draw(App* app, U8G2& display) {
         static char connecting_buf[16];
         strcpy(connecting_buf, "Connecting");
         for (int i=0; i<dots; ++i) strcat(connecting_buf, ".");
-        app->requestRedraw();
         top_text = connecting_buf;
     } else if (state == WifiState::CONNECTED) {
         icon = IconType::INFO;

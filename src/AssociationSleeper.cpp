@@ -14,7 +14,7 @@ AssociationSleeper::AssociationSleeper() :
     packetCounter_(0),
     lastTargetedPacketTime_(0),
     currentClientIndex_(0),
-    state_(State::SNIFFING),
+    // <-- FIX: state_ member removed
     channelHopIndex_(0),
     lastChannelHopTime_(0)
 {
@@ -30,11 +30,9 @@ bool AssociationSleeper::start(const WifiNetworkInfo& ap) {
     if (isActive_) stop();
     LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting NORMAL Association Sleep attack on %s", ap.ssid);
 
-    // <-- FIX: Use new enum and member variable
     attackType_ = AttackType::NORMAL;
     targetAp_ = ap;
     isActive_ = true;
-    state_ = State::SNIFFING;
     packetCounter_ = 0;
     currentClientIndex_ = 0;
 
@@ -52,7 +50,6 @@ bool AssociationSleeper::start() {
     if (isActive_) stop();
     LOG(LogLevel::INFO, "ASSOC_SLEEP", "Starting BROADCAST Association Sleep attack.");
 
-    // <-- FIX: Use new enum and member variable
     attackType_ = AttackType::BROADCAST;
     isActive_ = true;
     packetCounter_ = 0;
@@ -71,11 +68,9 @@ bool AssociationSleeper::start() {
     esp_wifi_set_channel(Channels::WIFI_2_4GHZ[channelHopIndex_], WIFI_SECOND_CHAN_NONE);
     lastChannelHopTime_ = millis();
 
-    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
 
-// <-- NEW: Implementation for Pinpoint Client attack ---
 bool AssociationSleeper::start(const StationInfo& client) {
     if (isActive_) stop();
     char macStr[18];
@@ -84,7 +79,7 @@ bool AssociationSleeper::start(const StationInfo& client) {
 
     attackType_ = AttackType::PINPOINT_CLIENT;
     pinpointTarget_ = client;
-    targetAp_.channel = client.channel; // Store the channel for packet sending
+    targetAp_.channel = client.channel; 
     memcpy(targetAp_.bssid, client.ap_bssid, 6);
 
     rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
@@ -95,46 +90,44 @@ bool AssociationSleeper::start(const StationInfo& client) {
     
     isActive_ = true;
     packetCounter_ = 0;
-    // app_->getHardwareManager().setPerformanceMode(true);
     return true;
 }
+
 
 void AssociationSleeper::stop() {
     if (!isActive_) return;
     LOG(LogLevel::INFO, "ASSOC_SLEEP", "Stopping Association Sleep attack.");
     isActive_ = false;
-    // <-- FIX: Use new enum
     if (attackType_ == AttackType::NORMAL) {
         stationSniffer_->stop();
     }
     rfLock_.reset();
-    // app_->getHardwareManager().setPerformanceMode(false);
 }
 
 void AssociationSleeper::loop() {
     if (!isActive_) return;
 
-    // <-- FIX: Use new enum and add new case
     switch(attackType_) {
-        case AttackType::NORMAL:
-            if (state_ == State::SNIFFING && stationSniffer_->getFoundStations().size() > 0) {
-                LOG(LogLevel::INFO, "ASSOC_SLEEP", "Clients found, starting targeted attack phase.");
-                state_ = State::ATTACKING;
+        // --- FIX: Simplified and corrected NORMAL mode logic ---
+        case AttackType::NORMAL: {
+            const auto& clients = stationSniffer_->getFoundStations();
+            if (clients.empty()) {
+                return; // Nothing to do yet
             }
-            if (state_ == State::ATTACKING) {
-                const auto& clients = stationSniffer_->getFoundStations();
-                if (clients.empty()) return;
 
-                if (millis() - lastTargetedPacketTime_ > 200) { 
-                    lastTargetedPacketTime_ = millis();
-                    if (currentClientIndex_ >= (int)clients.size()) {
-                        currentClientIndex_ = 0;
-                    }
-                    sendSleepPacket(clients[currentClientIndex_]);
-                    currentClientIndex_++;
+            if (millis() - lastTargetedPacketTime_ > 200) { 
+                lastTargetedPacketTime_ = millis();
+                
+                // Ensure the index is valid for the potentially growing list of clients
+                if (currentClientIndex_ >= (int)clients.size()) {
+                    currentClientIndex_ = 0;
                 }
+                
+                sendSleepPacket(clients[currentClientIndex_]);
+                currentClientIndex_++; // Cycle to the next client for the next iteration
             }
             break;
+        }
 
         case AttackType::BROADCAST:
             if (millis() - lastChannelHopTime_ > app_->getConfigManager().getSettings().channelHopDelayMs) {
@@ -256,7 +249,9 @@ int AssociationSleeper::getClientCount() const {
             return 0;
     }
 }
-bool AssociationSleeper::isSniffing() const { return state_ == State::SNIFFING; }
 
-// <-- FIX: Correct the function signature and return value ---
+bool AssociationSleeper::isSniffing() const { 
+    return getClientCount() == 0;
+}
+
 AssociationSleeper::AttackType AssociationSleeper::getAttackType() const { return attackType_; }

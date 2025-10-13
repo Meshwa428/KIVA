@@ -37,11 +37,6 @@ void AssociationSleepActiveMenu::onUpdate(App* app) {
             shouldPauseUi = true;
             break;
         case AssociationSleeper::AttackType::NORMAL:
-            // Only pause if we are in the attacking phase, not the initial sniffing phase.
-            if (!sleeper.isSniffing()) {
-                shouldPauseUi = true;
-            }
-            break;
         case AssociationSleeper::AttackType::BROADCAST:
             // This screen needs to update the client count, so we should never pause.
             shouldPauseUi = false;
@@ -97,7 +92,7 @@ void AssociationSleepActiveMenu::draw(App* app, U8G2& display) {
                 display.drawStr((display.getDisplayWidth() - display.getStrWidth(truncated)) / 2, 36, truncated);
                 char statusStr[32];
                 if (sleeper.isSniffing()) {
-                    snprintf(statusStr, sizeof(statusStr), "Sniffing for clients...");
+                    snprintf(statusStr, sizeof(statusStr), "Sniffing clients...");
                 } else {
                     snprintf(statusStr, sizeof(statusStr), "Attacking %d clients", sleeper.getClientCount());
                 }

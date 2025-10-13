@@ -36,7 +36,7 @@ struct WifiNetworkInfo {
     uint8_t bssid[6];
     int32_t channel;
     int8_t rssi;
-    bool isSecure;
+    uint8_t securityType; // store the specific encryption type
 };
 
 // For storing credentials

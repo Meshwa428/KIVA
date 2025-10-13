@@ -223,7 +223,7 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
                     memcpy(net.bssid, WiFi.BSSID(i), 6);
                     net.channel = WiFi.channel(i);
                     net.rssi = WiFi.RSSI(i);
-                    net.isSecure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+                    net.securityType = WiFi.encryptionType(i); 
                     scannedNetworks_.push_back(net);
                 }
                 std::sort(scannedNetworks_.begin(), scannedNetworks_.end(), [](const WifiNetworkInfo& a, const WifiNetworkInfo& b) { return a.rssi > b.rssi; });
@@ -256,11 +256,36 @@ void WifiManager::onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
             wifi_event_sta_disconnected_t disconnected_info = info.wifi_sta_disconnected;
             
             if (state_ == WifiState::CONNECTING) {
-                Serial.printf("[WIFI-LOG] Intermediate disconnect during connection. Reason: %d. Ignoring...\n", disconnected_info.reason);
+                state_ = WifiState::CONNECTION_FAILED;
+
+                // Provide a more user-friendly error message based on the reason code.
+                switch(disconnected_info.reason) {
+                    case WIFI_REASON_AUTH_FAIL: // This is the only one that's definitively a wrong password.
+                        statusMessage_ = "Wrong Password";
+                        break;
+                    case WIFI_REASON_NO_AP_FOUND:
+                        statusMessage_ = "AP not found";
+                        break;
+                    case WIFI_REASON_AUTH_EXPIRE:
+                    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+                    default: // All other reasons (like going out of range during handshake) are generic failures.
+                        statusMessage_ = "Connection Failed";
+                        break;
+                }
+                
+                LOG(LogLevel::WARN, "WIFI", "Connection to '%s' failed. Reason: %d (%s)", ssidToConnect_, disconnected_info.reason, statusMessage_.c_str());
+
+                KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
+                if (known) {
+                    known->failureCount++;
+                    LOG(LogLevel::INFO, "WIFI", "Incrementing failure count for '%s' to %d.", known->ssid, known->failureCount);
+                    saveKnownNetworks();
+                }
             } 
             else if (state_ == WifiState::CONNECTED) {
                 state_ = WifiState::IDLE;
                 statusMessage_ = "Disconnected";
+                LOG(LogLevel::INFO, "WIFI", "Disconnected from AP. Reason: %d", disconnected_info.reason);
             }
             break;
         }

