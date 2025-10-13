@@ -261,16 +261,18 @@ char *truncateText(const char *text, int maxWidth, U8G2 &display)
 
 void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScrollLeft,
                    unsigned long &marqueePauseStartTime, unsigned long &lastMarqueeTime,
-                   float &marqueeOffset, char *marqueeText, int &marqueeTextLenPx,
+                   float &marqueeOffset, char *marqueeText, size_t marqueeTextSize, int &marqueeTextLenPx,
                    const char *textToDisplay, int availableWidth, U8G2 &display)
 {
-
     bool shouldBeActive = display.getStrWidth(textToDisplay) > availableWidth;
 
-    if (!marqueeActive && shouldBeActive)
+    // This block handles starting the marquee or updating its text if it changes.
+    if (shouldBeActive && (!marqueeActive || strcmp(marqueeText, textToDisplay) != 0))
     {
-        strncpy(marqueeText, textToDisplay, 39);
-        marqueeText[39] = '\0';
+        // Use the provided size to safely copy the string.
+        strncpy(marqueeText, textToDisplay, marqueeTextSize - 1);
+        marqueeText[marqueeTextSize - 1] = '\0'; // Ensure null termination.
+        
         marqueeTextLenPx = display.getStrWidth(marqueeText);
         marqueeOffset = 0;
         marqueeActive = true;
@@ -281,20 +283,8 @@ void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScroll
     }
     else if (marqueeActive && !shouldBeActive)
     {
+        // If the text becomes short enough to fit, deactivate the marquee.
         marqueeActive = false;
-    }
-    else if (marqueeActive && shouldBeActive)
-    {
-        if (strcmp(marqueeText, textToDisplay) != 0)
-        {
-            strncpy(marqueeText, textToDisplay, 39);
-            marqueeText[39] = '\0';
-            marqueeTextLenPx = display.getStrWidth(marqueeText);
-            marqueeOffset = 0;
-            marqueePaused = true;
-            marqueeScrollLeft = true;
-            marqueePauseStartTime = millis();
-        }
     }
 
     if (!marqueeActive)
@@ -311,7 +301,8 @@ void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScroll
         return;
     }
 
-    if (curTime - lastMarqueeTime > 70)
+    // Scroll speed can be adjusted here. A smaller number means faster scrolling.
+    if (curTime - lastMarqueeTime > 70) 
     {
         if (marqueeScrollLeft)
         {

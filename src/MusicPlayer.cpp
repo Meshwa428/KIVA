@@ -5,7 +5,8 @@
 #include <random>
 #include <chrono>
 
-#include "AudioFileSourceSD.h"
+#include "AudioFileSourceKivaSD.h"
+#include "AudioFileSourceID3.h"
 #include "AudioGeneratorMP3.h"
 
 MusicPlayer::MusicPlayer() : 
@@ -17,14 +18,17 @@ MusicPlayer::MusicPlayer() :
     mixerTaskHandle_(nullptr)
 {
     for (int i = 0; i < 2; ++i) {
-        file_[i] = nullptr;
+        source_file_[i] = nullptr;
+        id3_filter_[i] = nullptr;
         mp3_[i] = nullptr;
         stub_[i] = nullptr;
     }
+    audioSlotMutex_ = xSemaphoreCreateMutex();
 }
 
 MusicPlayer::~MusicPlayer() {
     releaseResources();
+    vSemaphoreDelete(audioSlotMutex_);
 }
 
 void MusicPlayer::setup(App* app) {
@@ -68,7 +72,6 @@ void MusicPlayer::releaseResources() {
         mixerTaskHandle_ = nullptr;
     }
     stopPlayback();
-    // Destructor of out_ will handle driver uninstall
     delete mixer_; mixer_ = nullptr;
     delete out_; out_ = nullptr;
     app_->getHardwareManager().setAmplifier(false);
@@ -84,20 +87,20 @@ void MusicPlayer::mixerTaskLoop() {
     LOG(LogLevel::INFO, "PLAYER_TASK", "Mixer task started.");
     while (true) {
         bool any_running = false;
-
+        
+        // --- MODIFICATION: The loop itself is NOT locked ---
         for (int i = 0; i < 2; i++) {
-            if (mp3_[i] == nullptr) {
-                continue;
-            }
-
-            bool isCurrent = (i == currentSlot_);
-
-            // This is the currently active track
+            // A local, volatile-safe copy of the current slot is crucial for thread safety.
+            int activeSlot = currentSlot_;
+            
+            if (mp3_[i] == nullptr) continue;
+            
+            bool isCurrent = (i == activeSlot);
+            
             if (isCurrent) {
-                // And we're in a playing state
                 if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
+                    // Process audio OUTSIDE of a lock. This is the key fix.
                     if (!mp3_[i]->loop()) {
-                        // Song has finished naturally
                         mp3_[i]->stop();
                         if (songFinishedCallback_) {
                             songFinishedCallback_();
@@ -105,20 +108,23 @@ void MusicPlayer::mixerTaskLoop() {
                     }
                     any_running = true;
                 }
-            }
-            // This is an old track that needs to be stopped and/or cleaned up
-            else if (currentSlot_ != -1) {
+            } else { // This is an old, non-active slot
                 if (mp3_[i]->isRunning()) {
-                    // If it's still running, stop it first.
-                    LOG(LogLevel::INFO, "PLAYER_TASK", "Stopping old slot %d", i);
                     mp3_[i]->stop();
-                    any_running = true; // Still running for now, don't sleep
+                    any_running = true; 
                 } else {
-                    // If it's not running and not current, it's safe to clean up.
-                    LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up old slot %d", i);
-                    delete mp3_[i]; mp3_[i] = nullptr;
-                    delete stub_[i]; stub_[i] = nullptr;
-                    delete file_[i]; file_[i] = nullptr;
+                    // It's old and stopped. Time to clean up. THIS is now a critical section.
+                    if (xSemaphoreTake(audioSlotMutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
+                        // Double-check the state AFTER acquiring the lock to prevent race conditions.
+                        if (i != currentSlot_ && mp3_[i] != nullptr) {
+                            LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up old slot %d", i);
+                            delete mp3_[i]; mp3_[i] = nullptr;
+                            delete stub_[i]; stub_[i] = nullptr;
+                            delete id3_filter_[i]; id3_filter_[i] = nullptr;
+                            delete source_file_[i]; source_file_[i] = nullptr;
+                        }
+                        xSemaphoreGive(audioSlotMutex_);
+                    }
                 }
             }
         }
@@ -132,7 +138,7 @@ void MusicPlayer::mixerTaskLoop() {
 void MusicPlayer::pause() {
     if (currentState_ == State::PLAYING) {
         currentState_ = State::PAUSED;
-        if (out_) out_->stop(); // Use the lightweight stop, as you requested.
+        if (out_) out_->stop();
         LOG(LogLevel::INFO, "PLAYER", "Playback paused.");
     }
 }
@@ -140,15 +146,13 @@ void MusicPlayer::pause() {
 void MusicPlayer::resume() {
     if (currentState_ == State::PAUSED) {
         currentState_ = State::PLAYING;
-        if (out_) out_->begin(); // Use the lightweight begin/resume, as you requested.
+        if (out_) out_->begin();
         LOG(LogLevel::INFO, "PLAYER", "Playback resumed.");
     }
 }
 
 void MusicPlayer::stop() {
     if (currentState_ == State::PAUSED && out_) {
-        // If we stop from a paused state, we must resume the hardware stream
-        // so it's ready for the next song.
         out_->begin();
     }
     stopPlayback();
@@ -213,56 +217,63 @@ void MusicPlayer::setVolume(uint8_t volumePercent) {
     }
 }
 
-void MusicPlayer::stopPlayback() {
-    LOG(LogLevel::INFO, "PLAYER", "Stopping all playback and cleaning up both slots.");
-    for (int i = 0; i < 2; ++i) {
-        if (mp3_[i] && mp3_[i]->isRunning()) {
-            mp3_[i]->stop();
-        }
-        delete mp3_[i]; mp3_[i] = nullptr;
-        delete stub_[i]; stub_[i] = nullptr;
-        delete file_[i]; file_[i] = nullptr;
-    }
-    currentSlot_ = -1;
-}
-
 void MusicPlayer::startPlayback(const std::string& path) {
     int prevSlot = currentSlot_;
     int nextSlot = (currentSlot_ == -1) ? 0 : (currentSlot_ + 1) % 2;
 
     LOG(LogLevel::INFO, "PLAYER", "Attempting to start '%s' in slot %d", path.c_str(), nextSlot);
 
-    // --- Prepare the next track ---
-    file_[nextSlot] = new AudioFileSourceSD(path.c_str());
-    if (!file_[nextSlot]->isOpen()) {
+    // This block is now protected by the mutex and cleans up the target slot
+    if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) == pdTRUE) {
+        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
+        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
+        delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
+        delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
+        xSemaphoreGive(audioSlotMutex_);
+    }
+
+    // MODIFICATION: Use our new Kiva-specific class here
+    source_file_[nextSlot] = new AudioFileSourceKivaSD(path.c_str());
+    if (!source_file_[nextSlot]->isOpen()) {
         LOG(LogLevel::ERROR, "PLAYER", "Failed to open file for slot %d", nextSlot);
-        delete file_[nextSlot];
-        file_[nextSlot] = nullptr;
-        playNextInPlaylist(false); // Try next song
+        delete source_file_[nextSlot];
+        source_file_[nextSlot] = nullptr;
+        playNextInPlaylist(false);
+        return;
+    }
+    id3_filter_[nextSlot] = new AudioFileSourceID3(source_file_[nextSlot]);
+    
+    // The rest of the function remains the same, protected by the mutex logic
+    if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) != pdTRUE) {
+        LOG(LogLevel::ERROR, "PLAYER", "Could not take mutex in startPlayback!");
+        // Cleanup allocated files if we fail to get the lock
+        delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
+        delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
         return;
     }
 
     stub_[nextSlot] = mixer_->NewInput();
     stub_[nextSlot]->SetGain(currentGain_);
     mp3_[nextSlot] = new AudioGeneratorMP3();
-
-    // Set the current slot *before* calling begin() to prevent a race condition
-    // where the mixer task sees a running track in a non-current slot and stops it.
     currentSlot_ = nextSlot;
 
-    if (!mp3_[nextSlot]->begin(file_[nextSlot], stub_[nextSlot])) {
+    xSemaphoreGive(audioSlotMutex_);
+
+    if (!mp3_[nextSlot]->begin(id3_filter_[nextSlot], stub_[nextSlot])) {
         LOG(LogLevel::ERROR, "PLAYER", "MP3 begin failed for slot %d", nextSlot);
-        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
-        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
-        delete file_[nextSlot]; file_[nextSlot] = nullptr;
-        currentSlot_ = prevSlot; // Revert slot on failure
-        playNextInPlaylist(false); // Try next song
+        if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) == pdTRUE) {
+            delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
+            delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
+            delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
+            delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
+            currentSlot_ = prevSlot;
+            xSemaphoreGive(audioSlotMutex_);
+        }
+        playNextInPlaylist(false);
         return;
     }
 
     LOG(LogLevel::INFO, "PLAYER", "Playback started successfully in slot %d", nextSlot);
-
-    // --- Update track metadata ---
     currentTrackPath_ = path;
     size_t last_slash = path.find_last_of('/');
     currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
@@ -306,28 +317,22 @@ void MusicPlayer::serviceRequest() {
     }
 
     if (requestedAction_ == PlaybackAction::NEXT) {
-        // This logic is taken from the original playNextInPlaylist
-        // No changes needed here.
+        // Handled by playNextInPlaylist
     } else if (requestedAction_ == PlaybackAction::PREV) {
-        // This logic is taken from the original prevTrack()
         playlistTrackIndex_ -= 2;
         if (playlistTrackIndex_ < -1) {
-            // Wrap around to the end of the playlist
             playlistTrackIndex_ = currentPlaylist_.size() - 2;
         }
     }
 
-    // Reset the action now that we're handling it
     requestedAction_ = PlaybackAction::NONE;
-
-    // Call the actual playback function
     playNextInPlaylist(false);
 }
 
 float MusicPlayer::getPlaybackProgress() const {
-    if (currentSlot_ != -1 && file_[currentSlot_] && file_[currentSlot_]->isOpen()) {
-        uint32_t pos = file_[currentSlot_]->getPos();
-        uint32_t size = file_[currentSlot_]->getSize();
+    if (currentSlot_ != -1 && source_file_[currentSlot_] && source_file_[currentSlot_]->isOpen()) {
+        uint32_t pos = source_file_[currentSlot_]->getPos();
+        uint32_t size = source_file_[currentSlot_]->getSize();
         if (size > 0) {
             return (float)pos / (float)size;
         }

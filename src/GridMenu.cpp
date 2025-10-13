@@ -229,7 +229,7 @@ void GridMenu::draw(App* app, U8G2& display) {
             if (isSelected) {
                 updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                               marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                              marqueeText_, marqueeTextLenPx_, menuItems_[i].label, innerW, display);
+                              marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, menuItems_[i].label, innerW, display);
                 
                 if (marqueeActive_) {
                     display.drawStr(box_x + text_padding + (int)marqueeOffset_, text_y, marqueeText_);

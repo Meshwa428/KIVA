@@ -176,7 +176,7 @@ void SplitSelectionMenu::draw(App* app, U8G2& display) {
                 // BEHAVIOR: SELECTED & OVERFLOWING -> MARQUEE
                 updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                               marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                              marqueeText_, marqueeTextLenPx_, label, textAreaW, display);
+                              marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, label, textAreaW, display);
                 
                 display.setClipWindow(x + textPaddingX, y, x + w - textPaddingX, y + h);
                 display.drawStr(x + textPaddingX + (int)marqueeOffset_, text_y_baseline, marqueeText_);

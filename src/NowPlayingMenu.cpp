@@ -1,7 +1,5 @@
 #include "Event.h"
 #include "EventDispatcher.h"
-#include "Event.h"
-#include "EventDispatcher.h"
 #include "NowPlayingMenu.h"
 #include "App.h"
 #include "ConfigManager.h"
@@ -14,14 +12,12 @@ NowPlayingMenu::NowPlayingMenu() :
     marqueeScrollLeft_(true),
     entryTime_(0),
     playbackTriggered_(false),
-    _serviceRequestPending(false),
     volumeDisplayUntil_(0),
     _songFinished(false)
 {}
 
 void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
-    // Allocate resources when entering the player screen
     if (!app->getMusicPlayer().allocateResources()) {
         app->showPopUp("Error", "Could not init audio.", [app](App* app_cb){
             EventDispatcher::getInstance().publish(NavigateBackEvent());
@@ -33,38 +29,27 @@ void NowPlayingMenu::onEnter(App* app, bool isForwardNav) {
     marqueeScrollLeft_ = true;
     entryTime_ = millis();
     playbackTriggered_ = false;
-    _serviceRequestPending = false;
     volumeDisplayUntil_ = 0;
     _songFinished = false;
 
-    // Register callback to know when a song finishes
     app->getMusicPlayer().setSongFinishedCallback([this](){
         this->_songFinished = true;
     });
 }
 
 void NowPlayingMenu::onUpdate(App* app) {
-    // We give a tiny delay before starting playback to ensure the UI has drawn its first frame.
     if (!playbackTriggered_ && (millis() - entryTime_ > 50)) {
         app->getMusicPlayer().startQueuedPlayback();
         playbackTriggered_ = true;
     }
 
-    // --- Deferred track change logic ---
     auto& player = app->getMusicPlayer();
-    bool requestIsPending = player.getRequestedAction() != MusicPlayer::PlaybackAction::NONE;
 
-    // If we have a pending request to service, do it now.
-    if (_serviceRequestPending) {
+    // MODIFICATION: Logic simplified. The one-frame delay is no longer needed.
+    if (player.getRequestedAction() != MusicPlayer::PlaybackAction::NONE) {
         player.serviceRequest();
-        _serviceRequestPending = false; // Reset the flag
-    }
-    // If a new request was just made, set the flag to service it on the *next* update cycle.
-    else if (requestIsPending) {
-        _serviceRequestPending = true;
     }
 
-    // --- Auto-play next song (via callback) ---
     if (_songFinished) {
         _songFinished = false;
         player.songFinished();
@@ -73,11 +58,8 @@ void NowPlayingMenu::onUpdate(App* app) {
 
 void NowPlayingMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
-    // When leaving the "Now Playing" screen, stop the current song.
     app->getMusicPlayer().stop();
-    // Release resources when leaving the player screen entirely.
     app->getMusicPlayer().releaseResources();
-    // Un-register the callback
     app->getMusicPlayer().setSongFinishedCallback(nullptr);
 }
 
@@ -114,8 +96,8 @@ void NowPlayingMenu::handleInput(InputEvent event, App* app) {
                 if (newVolume > 200) newVolume = 200;
                 
                 settings.volume = newVolume;
-                app->getConfigManager().saveSettings(); // This also calls applySettings() which calls player.setVolume()
-                volumeDisplayUntil_ = millis() + 2000; // Show volume for 2 seconds
+                app->getConfigManager().saveSettings();
+                volumeDisplayUntil_ = millis() + 2000;
             }
             break;
         case InputEvent::BTN_A_PRESS:
@@ -138,25 +120,22 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
     const int topY = STATUS_BAR_H;
     const int DISP_W = 128;
 
-    // --- Playlist Name ---
     display.setFont(u8g2_font_5x7_tf);
     std::string playlistName = player.getPlaylistName();
     char* truncatedPlaylist = truncateText(playlistName.c_str(), 124, display);
     display.drawStr((DISP_W - display.getStrWidth(truncatedPlaylist)) / 2, topY + 7, truncatedPlaylist);
     display.drawHLine(0, topY + 9, DISP_W);
 
-    // --- Track Title (Marquee) ---
     display.setFont(u8g2_font_6x10_tf);
     std::string trackName = player.isLoadingTrack() ? "Loading..." : player.getCurrentTrackName();
     if (trackName.empty()) trackName = "Stopped";
 
-    // The marquee should not run when "Loading..." is displayed
     if (!player.isLoadingTrack()) {
         updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_,
                       marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_,
-                      marqueeText_, marqueeTextLenPx_, trackName.c_str(), 120, display);
+                      marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, trackName.c_str(), 120, display);
     } else {
-        marqueeActive_ = false; // Stop marquee if it was running
+        marqueeActive_ = false; 
     }
     display.setClipWindow(4, topY + 12, 124, topY + 26);
     if (marqueeActive_) {
@@ -167,7 +146,6 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
     }
     display.setMaxClipWindow();
 
-    // --- Progress Bar ---
     int barX = 14, barW = 100, barH = 5, barY = topY + 28;
     drawRndBox(display, barX, barY, barW, barH, 2, false);
     int fillW = (int)(player.getPlaybackProgress() * (barW - 2));
@@ -175,22 +153,18 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
         drawRndBox(display, barX + 1, barY + 1, fillW, barH - 2, 2, true);
     }
 
-    // --- Playback Controls + Shuffle/Repeat on same row (no overlap) ---
-    int controlsY = topY + 38; // row dedicated to 15x15 icons
+    int controlsY = topY + 38;
     const int ICON_W = 15;
 
-    // Shuffle (left-most)
     if (player.isShuffle()) {
         drawCustomIcon(display, 4, controlsY, IconType::SHUFFLE);
     }
 
-    // Prev / Play / Next (centered-ish)
     drawCustomIcon(display, 20, controlsY, IconType::PREV_TRACK);
     IconType playPauseIcon = (state == MusicPlayer::State::PLAYING) ? IconType::PAUSE : IconType::PLAY;
     drawCustomIcon(display, 56, controlsY, playPauseIcon);
     drawCustomIcon(display, 92, controlsY, IconType::NEXT_TRACK);
 
-    // Repeat (right-most)
     auto repeatMode = player.getRepeatMode();
     if (repeatMode == MusicPlayer::RepeatMode::REPEAT_ALL) {
         drawCustomIcon(display, DISP_W - ICON_W - 4, controlsY, IconType::REPEAT);
@@ -198,31 +172,25 @@ void NowPlayingMenu::draw(App* app, U8G2& display) {
         drawCustomIcon(display, DISP_W - ICON_W - 4, controlsY, IconType::REPEAT_ONE);
     }
 
-    // --- Volume Overlay (white fill + 1px black rounded border) ---
     if (millis() < volumeDisplayUntil_) {
         uint8_t volume = app->getConfigManager().getSettings().volume;
         int volBarW = 60, volBarH = 16;
         int volBarX = (DISP_W - volBarW) / 2;
-        int volBarY = topY + 12; // near the marquee area like in your original aesthetic
+        int volBarY = topY + 12;
 
-        // White filled rounded box
         display.setDrawColor(1);
         drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 3, true);
 
-        // Black 1px rounded border
         display.setDrawColor(0);
         drawRndBox(display, volBarX, volBarY, volBarW, volBarH, 3, false);
 
-        // Volume text in black
         char volStr[8];
         snprintf(volStr, sizeof(volStr), "%d%%", volume);
         display.setFont(u8g2_font_6x10_tf);
         int tx = volBarX + (volBarW - display.getStrWidth(volStr)) / 2;
-        int ty = volBarY + 12; // matches previous alignment
+        int ty = volBarY + 12; 
         display.drawStr(tx, ty, volStr);
 
-        // restore draw color
         display.setDrawColor(1);
     }
 }
-

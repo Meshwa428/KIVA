@@ -132,7 +132,7 @@ void FirmwareListMenu::draw(App* app, U8G2& display) {
         if (isSelected) {
             updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                           marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                          marqueeText_, marqueeTextLenPx_, textToDisplay, text_available_width, display);
+                          marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, textToDisplay, text_available_width, display);
 
             // Set clip window with padding
             int clip_window_right_edge = 2 + 124 - right_padding;

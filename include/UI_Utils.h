@@ -15,10 +15,13 @@ void drawCustomIcon(U8G2 &display, int x, int y, IconType iconType, IconRenderSi
 void drawRndBox(U8G2 &display, int x, int y, int w, int h, int r, bool fill);
 
 char *truncateText(const char *text, int maxWidth, U8G2 &display);
+
+// MODIFICATION: Add the 'marqueeTextSize' parameter to the function declaration
 void updateMarquee(bool &marqueeActive, bool &marqueePaused, bool &marqueeScrollLeft,
                    unsigned long &marqueePauseStartTime, unsigned long &lastMarqueeTime,
-                   float &marqueeOffset, char *marqueeText, int &marqueeTextLenPx,
+                   float &marqueeOffset, char *marqueeText, size_t marqueeTextSize, int &marqueeTextLenPx,
                    const char *textToDisplay, int availableWidth, U8G2 &display);
+
 void drawBatIcon(U8G2 &display, int x, int y, uint8_t percentage);
 
 void drawWrappedText(U8G2 &display, const char* text, int x, int y, int w, int h, const std::vector<const uint8_t*>& fonts);

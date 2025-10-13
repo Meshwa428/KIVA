@@ -1367,7 +1367,7 @@ void App::drawStatusBar()
 
     updateMarquee(statusBarMarqueeActive_, statusBarMarqueePaused_, statusBarMarqueeScrollLeft_, 
                   statusBarMarqueePauseStartTime_, lastStatusBarMarqueeTime_, statusBarMarqueeOffset_, 
-                  statusBarMarqueeText_, statusBarMarqueeTextLenPx_, title, title_available_width, display);
+                  statusBarMarqueeText_, sizeof(statusBarMarqueeText_), statusBarMarqueeTextLenPx_, title, title_available_width, display);
 
     // Clip the drawing area to prevent text from overflowing into the battery info
     display.setClipWindow(title_x, 0, title_x + title_available_width, STATUS_BAR_H);

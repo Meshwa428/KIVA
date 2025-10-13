@@ -160,7 +160,7 @@ void ListMenu::updateAndDrawText(U8G2& display, const char* text, int x, int y, 
     if (isSelected) {
         updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                       marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                      marqueeText_, marqueeTextLenPx_, text, availableWidth, display);
+                      marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, text, availableWidth, display);
 
         display.setClipWindow(x, y - 8, x + availableWidth, y + 8);
         

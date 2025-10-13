@@ -106,20 +106,31 @@ namespace SdCardManager {
     SdCardManagerAPI::SdCardManagerAPI() {}
     
     bool SdCardManagerAPI::setup() {
-        if (!SD.begin(Pins::SD_CS_PIN)) {
+        // MODIFICATION: Use the high-speed begin() overload.
+        if (!SD.begin(Pins::SD_CS_PIN, SPI, 40000000)) {
             LOG(LogLevel::ERROR, "SD_MGR", "SD Card Mount Failed.");
             sdCardInitialized_ = false;
             return false;
         }
         sdCardInitialized_ = true;
-        LOG(LogLevel::INFO, "SD_MGR", "SD Card Mounted.");
+        LOG(LogLevel::INFO, "SD_MGR", "SD Card Mounted at 40MHz.");
         ensureStandardDirs();
         return true;
     }
 
     bool SdCardManagerAPI::isAvailable() const { return sdCardInitialized_; }
     bool SdCardManagerAPI::exists(const char* path) { return sdCardInitialized_ && SD.exists(path); }
-    File SdCardManagerAPI::openFileUncached(const char* path, const char* mode) { return sdCardInitialized_ ? SD.open(path, mode) : File(); }
+
+    File SdCardManagerAPI::openFileUncached(const char* path, const char* mode) {
+        if (!sdCardInitialized_) return File();
+        File f = SD.open(path, mode);
+        // MODIFICATION: Set the larger buffer size on the newly opened file.
+        if (f) {
+            f.setBufferSize(8192);
+        }
+        return f;
+    }
+
 
     std::unique_ptr<ICachedFileReader> SdCardManagerAPI::open(const char* path) {
         if (!sdCardInitialized_) return nullptr;
@@ -154,8 +165,9 @@ namespace SdCardManager {
             }
         }
         
-        // File is too large or caching failed, return direct SD reader
+        // File is too large or caching failed, return direct SD reader with large buffer
         LOG(LogLevel::DEBUG, "SD_CACHE", false, "CACHE SKIP (too large) for: %s", path);
+        f.setBufferSize(8192); // Also set buffer for direct reads
         return std::make_unique<SdFileReader>(f);
     }
 

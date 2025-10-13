@@ -130,7 +130,7 @@ void CarouselMenu::draw(App* app, U8G2& display) {
             
             updateMarquee(marqueeActive_, marqueePaused_, marqueeScrollLeft_, 
                           marqueePauseStartTime_, lastMarqueeTime_, marqueeOffset_, 
-                          marqueeText_, marqueeTextLenPx_, itemTextToDisplay, inner_w, display);
+                          marqueeText_, sizeof(marqueeText_), marqueeTextLenPx_, itemTextToDisplay, inner_w, display);
 
             display.setClipWindow(card_x + card_padding, text_area_y, card_x + card_w - card_padding, card_y + card_h - card_padding);
             if (marqueeActive_) {

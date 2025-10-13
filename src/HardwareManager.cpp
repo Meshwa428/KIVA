@@ -665,8 +665,23 @@ void HardwareManager::processButtonRepeats()
             if (currentTime - btnHoldStartT1_[pin] > REPEAT_INIT_DELAY_MS &&
                 currentTime - lastRepeatT1_[pin] > REPEAT_INTERVAL_MS)
             {
-                EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
-                lastRepeatT1_[pin] = currentTime;
+                // --- MODIFICATION START ---
+                // Before firing a repeat, re-check the physical button state.
+                // This prevents firing a repeat if the button was released during a main loop stall.
+                selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
+                uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
+                bool rawState = (pcf1State & (1 << pin));
+
+                if (rawState == false) { // If the button is STILL physically pressed...
+                    // Fire the repeat event
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
+                    lastRepeatT1_[pin] = currentTime;
+                } else {
+                    // The button was released while the loop was blocked.
+                    // Correct the internal state and do not fire a repeat.
+                    isBtnHeld1_[pin] = false;
+                }
+                // --- MODIFICATION END ---
             }
         }
     }
