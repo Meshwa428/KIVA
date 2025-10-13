@@ -28,6 +28,7 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DEAUTH_MODE_GRID: return "DEAUTH_MODE_GRID";
         case MenuType::PROBE_FLOOD_MODE_GRID: return "PROBE_FLOOD_MODE_GRID";
         case MenuType::ASSOCIATION_SLEEP_MODES_GRID: return "ASSOCIATION_SLEEP_MODES_GRID";
+        case MenuType::BAD_MSG_MODES_GRID: return "BAD_MSG_MODES_GRID";
 
         // --- Core Attack/Tool Screens ---
         case MenuType::WIFI_LIST: return "WIFI_LIST";
@@ -49,7 +50,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::BLE_SPAM_ACTIVE: return "BLE_SPAM_ACTIVE";
         case MenuType::DUCKY_SCRIPT_ACTIVE: return "DUCKY_SCRIPT_ACTIVE";
         case MenuType::JAMMING_ACTIVE: return "JAMMING_ACTIVE";
-        case MenuType::ASSOCIATION_SLEEP_ACTIVE: return "ASSOCIATION_SLEEP_ACTIVE"; // <-- NEW
+        case MenuType::ASSOCIATION_SLEEP_ACTIVE: return "ASSOCIATION_SLEEP_ACTIVE";
+        case MenuType::BAD_MSG_ACTIVE: return "BAD_MSG_ACTIVE";
 
         // --- Settings Sub-menus ---
         case MenuType::SETTINGS_GRID: return "SETTINGS_GRID";

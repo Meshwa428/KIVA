@@ -944,6 +944,7 @@ void App::loop()
             currentType == MenuType::TEXT_INPUT ||
             currentType == MenuType::WIFI_CONNECTION_STATUS ||
             currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE ||
+            currentType == MenuType::BAD_MSG_ACTIVE ||
             currentType == MenuType::STATION_LIST)
         {
             wifiIsRequired = true;
