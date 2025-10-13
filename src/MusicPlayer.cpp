@@ -88,9 +88,7 @@ void MusicPlayer::mixerTaskLoop() {
     while (true) {
         bool any_running = false;
         
-        // --- MODIFICATION: The loop itself is NOT locked ---
         for (int i = 0; i < 2; i++) {
-            // A local, volatile-safe copy of the current slot is crucial for thread safety.
             int activeSlot = currentSlot_;
             
             if (mp3_[i] == nullptr) continue;
@@ -99,7 +97,6 @@ void MusicPlayer::mixerTaskLoop() {
             
             if (isCurrent) {
                 if (currentState_ == State::PLAYING && mp3_[i]->isRunning()) {
-                    // Process audio OUTSIDE of a lock. This is the key fix.
                     if (!mp3_[i]->loop()) {
                         mp3_[i]->stop();
                         if (songFinishedCallback_) {
@@ -108,14 +105,12 @@ void MusicPlayer::mixerTaskLoop() {
                     }
                     any_running = true;
                 }
-            } else { // This is an old, non-active slot
+            } else { 
                 if (mp3_[i]->isRunning()) {
                     mp3_[i]->stop();
                     any_running = true; 
                 } else {
-                    // It's old and stopped. Time to clean up. THIS is now a critical section.
                     if (xSemaphoreTake(audioSlotMutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
-                        // Double-check the state AFTER acquiring the lock to prevent race conditions.
                         if (i != currentSlot_ && mp3_[i] != nullptr) {
                             LOG(LogLevel::INFO, "PLAYER_TASK", "Cleaning up old slot %d", i);
                             delete mp3_[i]; mp3_[i] = nullptr;
@@ -217,41 +212,53 @@ void MusicPlayer::setVolume(uint8_t volumePercent) {
     }
 }
 
-void MusicPlayer::startPlayback(const std::string& path) {
-    int prevSlot = currentSlot_;
-    int nextSlot = (currentSlot_ == -1) ? 0 : (currentSlot_ + 1) % 2;
-
-    LOG(LogLevel::INFO, "PLAYER", "Attempting to start '%s' in slot %d", path.c_str(), nextSlot);
-
-    // This block is now protected by the mutex and cleans up the target slot
+// --- MODIFICATION: The missing function is re-inserted here ---
+void MusicPlayer::stopPlayback() {
+    LOG(LogLevel::INFO, "PLAYER", "Stopping all playback and cleaning up both slots.");
     if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) == pdTRUE) {
-        delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
-        delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
-        delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
-        delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
+        for (int i = 0; i < 2; ++i) {
+            if (mp3_[i] && mp3_[i]->isRunning()) {
+                mp3_[i]->stop();
+            }
+            delete mp3_[i]; mp3_[i] = nullptr;
+            delete stub_[i]; stub_[i] = nullptr;
+            delete id3_filter_[i]; id3_filter_[i] = nullptr;
+            delete source_file_[i]; source_file_[i] = nullptr;
+        }
+        currentSlot_ = -1;
         xSemaphoreGive(audioSlotMutex_);
     }
+}
 
-    // MODIFICATION: Use our new Kiva-specific class here
+void MusicPlayer::startPlayback(const std::string& path) {
+    int prevSlot;
+    int nextSlot;
+
+    if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) != pdTRUE) {
+        LOG(LogLevel::ERROR, "PLAYER", "Could not take mutex in startPlayback!");
+        return;
+    }
+    
+    prevSlot = currentSlot_;
+    nextSlot = (currentSlot_ == -1) ? 0 : (currentSlot_ + 1) % 2;
+    LOG(LogLevel::INFO, "PLAYER", "Preparing to start '%s' in slot %d", path.c_str(), nextSlot);
+
+    delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
+    delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
+    delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
+    delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
+    
     source_file_[nextSlot] = new AudioFileSourceKivaSD(path.c_str());
     if (!source_file_[nextSlot]->isOpen()) {
         LOG(LogLevel::ERROR, "PLAYER", "Failed to open file for slot %d", nextSlot);
         delete source_file_[nextSlot];
         source_file_[nextSlot] = nullptr;
-        playNextInPlaylist(false);
+        xSemaphoreGive(audioSlotMutex_);
+        playNextInPlaylist(false); 
         return;
     }
     id3_filter_[nextSlot] = new AudioFileSourceID3(source_file_[nextSlot]);
     
-    // The rest of the function remains the same, protected by the mutex logic
-    if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) != pdTRUE) {
-        LOG(LogLevel::ERROR, "PLAYER", "Could not take mutex in startPlayback!");
-        // Cleanup allocated files if we fail to get the lock
-        delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
-        delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
-        return;
-    }
-
     stub_[nextSlot] = mixer_->NewInput();
     stub_[nextSlot]->SetGain(currentGain_);
     mp3_[nextSlot] = new AudioGeneratorMP3();
