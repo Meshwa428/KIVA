@@ -6,6 +6,7 @@
 #include "EventDispatcher.h"
 #include "Config.h"
 #include "WifiManager.h" // Added for WifiState enum
+#include "Logger.h"
 
 // The bypass function for broadcast deauth
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
@@ -94,7 +95,7 @@ bool Deauther::startBroadcast() {
 void Deauther::stop() {
     if (!isActive_ && !isAttackPending_) return;
     
-    Serial.println("[DEAUTHER] Stopping attack.");
+    LOG(LogLevel::INFO, "DEAUTHER", "Stopping attack.");
     isActive_ = false;
     isAttackPending_ = false;
     rfLock_.reset(); 
@@ -216,10 +217,10 @@ void Deauther::executeAttackForCurrentTarget() {
     if (currentConfig_.type == DeauthAttackType::EVIL_TWIN || currentConfig_.type == DeauthAttackType::BROADCAST_EVIL_TWIN) {
         rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::ROGUE_AP);
         if (!rfLock_ || !rfLock_->isValid()) {
-            Serial.printf("[DEAUTHER] Failed to acquire ROGUE_AP lock for %s.\n", newTarget.ssid);
+            LOG(LogLevel::ERROR, "DEAUTHER", "Failed to acquire ROGUE_AP lock for %s.", newTarget.ssid);
             return;
         }
-        Serial.printf("[DEAUTHER] Starting Rogue AP for %s on channel %d\n", newTarget.ssid, newTarget.channel);
+        LOG(LogLevel::INFO, "DEAUTHER", "Starting Rogue AP for %s on channel %d", newTarget.ssid, newTarget.channel);
         esp_wifi_set_mac(WIFI_IF_AP, (uint8_t*)newTarget.bssid);
         WiFi.softAP(newTarget.ssid, "dummypassword", newTarget.channel);
 
@@ -228,7 +229,7 @@ void Deauther::executeAttackForCurrentTarget() {
         if (!rfLock_ || !rfLock_->isValid()) {
             rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
              if (!rfLock_ || !rfLock_->isValid()) {
-                Serial.printf("[DEAUTHER] Failed to acquire WIFI_PROMISCUOUS lock for %s.\n", newTarget.ssid);
+                LOG(LogLevel::ERROR, "DEAUTHER", "Failed to acquire WIFI_PROMISCUOUS lock for %s.", newTarget.ssid);
                 return;
             }
         }

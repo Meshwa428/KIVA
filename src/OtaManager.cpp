@@ -8,6 +8,7 @@
 #include "Config.h"
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include "Logger.h"
 
 OtaManager::OtaManager() :
     app_(nullptr),
@@ -79,7 +80,7 @@ const std::vector<FirmwareInfo>& OtaManager::getAvailableFirmwares() const { ret
 
 void OtaManager::stop() {
     if (state_ == OtaState::IDLE) return;
-    Serial.println("[OTA-LOG] Stopping active OTA process.");
+    LOG(LogLevel::INFO, "OTA", "Stopping active OTA process.");
 
     if (state_ == OtaState::WEB_ACTIVE) {
         webServer_.end();
@@ -130,9 +131,9 @@ void OtaManager::enterTerminalState() {
 
 void OtaManager::loadCurrentFirmware() {
     if (FirmwareUtils::parseMetadataFile(SD_ROOT::CONFIG_CURRENT_FIRMWARE, currentFirmware_)) {
-        Serial.printf("[OTA-LOG] Loaded current firmware: %s\n", currentFirmware_.version);
+        LOG(LogLevel::INFO, "OTA", "Loaded current firmware: %s", currentFirmware_.version);
     } else {
-        Serial.println("[OTA-LOG] Could not load current firmware info.");
+        LOG(LogLevel::WARN, "OTA", "Could not load current firmware info.");
         strcpy(currentFirmware_.version, "Unknown");
         currentFirmware_.isValid = false;
     }
@@ -140,10 +141,10 @@ void OtaManager::loadCurrentFirmware() {
 
 void OtaManager::saveCurrentFirmware(const FirmwareInfo& info) {
     if (FirmwareUtils::saveMetadataFile(SD_ROOT::CONFIG_CURRENT_FIRMWARE, info)) {
-        Serial.printf("[OTA-LOG] Saved current firmware info: %s\n", info.version);
+        LOG(LogLevel::INFO, "OTA", "Saved current firmware info: %s", info.version);
         currentFirmware_ = info;
     } else {
-        Serial.println("[OTA-LOG] Failed to save current firmware info.");
+        LOG(LogLevel::ERROR, "OTA", "Failed to save current firmware info.");
     }
 }
 
@@ -244,7 +245,7 @@ void OtaManager::startBasicOta() {
     
     displayIpAddress_ = WiFi.localIP().toString();
     ArduinoOTA.begin();
-    Serial.println("[OTA-LOG] Basic OTA (IDE) started.");
+    LOG(LogLevel::INFO, "OTA", "Basic OTA (IDE) started.");
     
     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::OTA_STATUS));
 }
@@ -316,7 +317,7 @@ bool OtaManager::startWebUpdate() {
 
     setupWebServer();
     webServer_.begin();
-    Serial.println("[OTA-LOG] Web OTA update server started.");
+    LOG(LogLevel::INFO, "OTA", "Web OTA update server started.");
     return true;
 }
 
@@ -338,7 +339,7 @@ void OtaManager::setupWebServer() {
 
 void OtaManager::onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     if (index == 0) {
-        Serial.printf("[OTA-WEB] Upload Start: %s\n", filename.c_str());
+        LOG(LogLevel::INFO, "OTA", "Web Upload Start: %s", filename.c_str());
         statusMessage_ = "Receiving File...";
         progress_.totalBytes = request->contentLength();
         progress_.receivedBytes = 0;
@@ -363,7 +364,7 @@ void OtaManager::onUpload(AsyncWebServerRequest *request, String filename, size_
 
     if (final) {
         if (uploadFile_) uploadFile_.close();
-        Serial.println("[OTA-WEB] Upload finished.");
+        LOG(LogLevel::INFO, "OTA", "Web Upload finished.");
     }
 }
 
@@ -402,7 +403,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
     String permanentBinPath = String(SD_ROOT::FIRMWARE) + "/" + permanentBinFilename;
 
     if (SdCardManager::getInstance().renameFile(tempPath.c_str(), permanentBinPath.c_str())) {
-        Serial.printf("[OTA-WEB] Saved new firmware as %s\n", permanentBinPath.c_str());
+        LOG(LogLevel::INFO, "OTA", "Saved new firmware as %s", permanentBinPath.c_str());
         
         FirmwareInfo newFwInfo;
         snprintf(newFwInfo.version, FW_VERSION_MAX_LEN, "Web Upload %lu", timestamp);
@@ -417,7 +418,7 @@ void OtaManager::onUpdateEnd(AsyncWebServerRequest *request) {
         
         pathToFlash = permanentBinPath;
     } else {
-        Serial.println("[OTA-WEB] ERROR: Failed to rename temp file. Will flash from temp path without saving.");
+        LOG(LogLevel::ERROR, "OTA", "Failed to rename temp file. Will flash from temp path without saving.");
     }
 
     uploadFile_ = SD.open(pathToFlash, FILE_READ);

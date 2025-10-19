@@ -3,6 +3,7 @@
 #include "RtcManager.h"
 #include <algorithm>
 #include <ESPmDNS.h>
+#include "Logger.h"
 
 // Non-member callback function required by the WiFi event system
 static void WiFiEventCallback(WiFiEvent_t event, WiFiEventInfo_t info);
@@ -32,13 +33,13 @@ void WifiManager::setup(App* app) {
 
 void WifiManager::loop() {
     if (state_ == WifiState::CONNECTING && (millis() - connectionStartTime_) > WIFI_CONNECTION_TIMEOUT_MS) {
-        Serial.println("[WIFI-LOG] Connection definitively timed out.");
+        LOG(LogLevel::WARN, "WIFI", "Connection definitively timed out.");
         state_ = WifiState::CONNECTION_FAILED; // Set the final state here.
 
         KnownWifiNetwork* known = findKnownNetwork(ssidToConnect_);
         if (known) {
             known->failureCount++;
-            Serial.printf("[WIFI-LOG] Connection to '%s' failed on timeout. Count is now %d.\n", known->ssid, known->failureCount);
+            LOG(LogLevel::WARN, "WIFI", "Connection to '%s' failed on timeout. Count is now %d.", known->ssid, known->failureCount);
             saveKnownNetworks();
         }
         
@@ -54,12 +55,12 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
              return;
         }
 
-        Serial.println("[WIFI-LOG] Re-configuring WiFi hardware...");
+        LOG(LogLevel::INFO, "WIFI", "Re-configuring WiFi hardware...");
         setHardwareState(false);
         delay(200);
 
         if(mode == WifiMode::STA) {
-            Serial.println("[WIFI-LOG] Enabling WiFi hardware (STA mode).");
+            LOG(LogLevel::INFO, "WIFI", "Enabling WiFi hardware (STA mode).");
             if (WiFi.mode(WIFI_STA)) {
                 hardwareEnabled_ = true;
                 state_ = WifiState::IDLE;
@@ -68,7 +69,7 @@ void WifiManager::setHardwareState(bool enable, WifiMode mode, const char* ap_ss
                  hardwareEnabled_ = false; state_ = WifiState::OFF; statusMessage_ = "Enable Fail";
             }
         } else if (mode == WifiMode::AP) {
-            Serial.println("[WIFI-LOG] Enabling WiFi hardware (AP mode).");
+            LOG(LogLevel::INFO, "WIFI", "Enabling WiFi hardware (AP mode).");
             if (WiFi.mode(WIFI_AP)) {
                 IPAddress apIP(192, 168, 4, 1);
                 WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -138,15 +139,15 @@ bool WifiManager::tryConnectKnown(const char* ssid) {
     const int MAX_FAILURES = 3;
 
     if (known && known->failureCount < MAX_FAILURES) {
-        Serial.printf("[WIFI-LOG] Found known network '%s' (Failures: %d). Trying to auto-connect.\n", ssid, known->failureCount);
+        LOG(LogLevel::INFO, "WIFI", "Found known network '%s' (Failures: %d). Trying to auto-connect.", ssid, known->failureCount);
         connectWithPassword(known->password);
         return true;
     }
     
     if (known) {
-        Serial.printf("[WIFI-LOG] Known network '%s' has too many failures (%d). Forcing password entry.\n", ssid, known->failureCount);
+        LOG(LogLevel::WARN, "WIFI", "Known network '%s' has too many failures (%d). Forcing password entry.", ssid, known->failureCount);
     } else {
-        Serial.printf("[WIFI-LOG] Network '%s' is not known. Forcing password entry.\n", ssid);
+        LOG(LogLevel::INFO, "WIFI", "Network '%s' is not known. Forcing password entry.", ssid);
     }
     return false;
 }

@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "Config.h"
+#include "Logger.h"
 
 // --- Beacon Packet Templates ---
 // Based on your provided code, which is excellent.
@@ -35,12 +36,12 @@ void BeaconSpammer::setup(App* app) {
 bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, BeaconSsidMode mode, const std::string& ssidFilePath) {
     if (isActive_) return false;
     if (!rfLock || !rfLock->isValid()) {
-        Serial.println("[BEACON] CRITICAL: Failed to acquire RF hardware lock. Aborting.");
+        LOG(LogLevel::ERROR, "BEACON", "CRITICAL: Failed to acquire RF hardware lock. Aborting.");
         return false;
     }
     rfLock_ = std::move(rfLock);
     
-    Serial.printf("[BEACON] Starting Beacon Spam. Mode: %d\n", (int)mode);
+    LOG(LogLevel::INFO, "BEACON", "Starting Beacon Spam. Mode: %d", (int)mode);
     currentMode_ = mode;
     
     if (currentMode_ == BeaconSsidMode::FILE_BASED) {
@@ -49,7 +50,7 @@ bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, Beaco
         // Try to read one line. If it's empty, our new readLine() implementation
         // has determined the file has no valid content.
         if (!ssidReader_.isOpen() || ssidReader_.readLine().isEmpty()) {
-            Serial.printf("[BEACON] SSID file is invalid or contains no valid SSIDs: %s\n", ssidFilePath.c_str());
+            LOG(LogLevel::WARN, "BEACON", "SSID file is invalid or contains no valid SSIDs: %s", ssidFilePath.c_str());
             if (ssidReader_.isOpen()) ssidReader_.close(); // Clean up the reader.
             rfLock_.reset(); // Release the hardware lock since we are failing.
             return false;    // Signal the failure to the caller menu.
@@ -69,17 +70,17 @@ bool BeaconSpammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, Beaco
     lastChannelHopTime_ = millis();
     isActive_ = true;
     
-    Serial.printf("[BEACON] Attack started on Channel %d.\n", currentChannel_);
+    LOG(LogLevel::INFO, "BEACON", "Attack started on Channel %d.", currentChannel_);
     return true;
 }
 
 void BeaconSpammer::stop() {
     if (!isActive_) return;
-    Serial.println("[BEACON] Stopping beacon spam attack.");
+    LOG(LogLevel::INFO, "BEACON", "Stopping beacon spam attack.");
     isActive_ = false;
     ssidReader_.close(); // Explicitly close the reader
     rfLock_.reset();
-    Serial.println("[BEACON] Attack stopped and RF lock released.");
+    LOG(LogLevel::INFO, "BEACON", "Attack stopped and RF lock released.");
 }
 
 void BeaconSpammer::loop() {

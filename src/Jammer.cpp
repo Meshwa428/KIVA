@@ -1,6 +1,7 @@
 #include "Jammer.h"
 #include "App.h"
 #include "Config.h"
+#include "Logger.h"
 
 // Pre-defined channel lists (no longer need reversed versions)
 const int Jammer::ble_adv_nrf_channels_[] = {2, 26, 80};
@@ -24,7 +25,7 @@ Jammer::Jammer() :
 
 void Jammer::setup(App* app) {
     app_ = app;
-    Serial.println("[JAMMER-LOG] Jammer Manager initialized.");
+    LOG(LogLevel::INFO, "JAMMER", "Jammer Manager initialized.");
 }
 
 bool Jammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode mode, JammerConfig config) {
@@ -32,7 +33,7 @@ bool Jammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode 
     if (!rfLock || !rfLock->isValid()) return false;
     
     rfLock_ = std::move(rfLock);
-    Serial.printf("[JAMMER-LOG] Starting JammingMode %d with technique %d\n", (int)mode, (int)config.technique);
+    LOG(LogLevel::INFO, "JAMMER", "Starting JammingMode %d with technique %d", (int)mode, (int)config.technique);
     
     isActive_ = true;
     currentMode_ = mode;
@@ -64,13 +65,13 @@ bool Jammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode 
         targetWifiChannel_ = config.customChannels[0];
     }
 
-    Serial.printf("[JAMMER-LOG] Jammer started. Mode: %s\n", getModeString());
+    LOG(LogLevel::INFO, "JAMMER", "Jammer started. Mode: %s", getModeString());
     return true;
 }
 
 void Jammer::stop() {
     if (!isActive_) return;
-    Serial.println("[JAMMER-LOG] Stopping active jamming...");
+    LOG(LogLevel::INFO, "JAMMER", "Stopping active jamming...");
     
     if (rfLock_) {
         if (currentConfig_.technique == JammingTechnique::CONSTANT_CARRIER) {
@@ -82,7 +83,7 @@ void Jammer::stop() {
     
     isActive_ = false;
     currentMode_ = JammingMode::IDLE;
-    Serial.println("[JAMMER-LOG] Jammer stopped and RF lock released.");
+    LOG(LogLevel::INFO, "JAMMER", "Jammer stopped and RF lock released.");
 }
 
 void Jammer::loop() {
