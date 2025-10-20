@@ -18,11 +18,11 @@ enum class RfClient {
     NONE,
     NRF_JAMMER,
     WIFI,
-    WIFI_PROMISCUOUS,
+    WIFI_PROMISCUOUS, // for sniffing only
+    WIFI_RAW_TX, // for transmitting raw frames
     ROGUE_AP
 };
 
-// --- NEW ENUM FOR HOST PERIPHERALS ---
 enum class HostClient {
     NONE,
     USB_HID,

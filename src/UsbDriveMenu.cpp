@@ -15,10 +15,6 @@ void UsbDriveMenu::onEnter(App* app, bool isForwardNav) {
     isEjected = false; // Reset the flag on entry
     LOG(LogLevel::INFO, "USB_DRIVE", "Entering USB Mass Storage Mode.");
 
-    // app->getProbeSniffer().stop();
-    // app->getEvilTwin().stop();
-    // app->getMusicPlayer().stop();
-
     card_ = std::make_unique<SDCardArduino>(Serial, "/sd", static_cast<gpio_num_t>(Pins::SD_CS_PIN));
     
     if (card_ == nullptr || card_->getSectorCount() == 0) {
@@ -52,7 +48,6 @@ void UsbDriveMenu::onExit(App* app) {
     storage_.reset();
     card_.reset();
 
-    USB.begin();
     Serial.end();
     Serial.begin(115200);
 

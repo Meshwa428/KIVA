@@ -231,7 +231,19 @@ std::unique_ptr<HardwareManager::RfLock> HardwareManager::requestRfControl(RfCli
         } else {
             return std::unique_ptr<RfLock>(new RfLock(*this, false));
         }
-    
+
+    } else if (client == RfClient::WIFI_RAW_TX) {
+        WiFi.softAPdisconnect(true);
+        WiFi.disconnect(true, true);
+        delay(100);
+
+        if (WiFi.mode(WIFI_AP)) {
+            currentRfClient_ = RfClient::WIFI_RAW_TX;
+            return std::unique_ptr<RfLock>(new RfLock(*this, true));
+        } else {
+            return std::unique_ptr<RfLock>(new RfLock(*this, false));
+        }
+
     } else if (client == RfClient::ROGUE_AP) {
         WiFi.disconnect(true, true);
         delay(100);

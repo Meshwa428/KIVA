@@ -72,7 +72,7 @@ bool Deauther::start(const StationInfo& targetClient) {
     
     currentTargetSsid_ = currentConfig_.specific_ap_info.ssid;
     
-    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+    rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_RAW_TX);
     if (!rfLock_ || !rfLock_->isValid()) return false;
 
     isActive_ = true;
@@ -227,9 +227,9 @@ void Deauther::executeAttackForCurrentTarget() {
     } else if (currentConfig_.type == DeauthAttackType::NORMAL || currentConfig_.type == DeauthAttackType::BROADCAST_NORMAL) {
         // For broadcast, we only need to set up the hardware once.
         if (!rfLock_ || !rfLock_->isValid()) {
-            rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_PROMISCUOUS);
+            rfLock_ = app_->getHardwareManager().requestRfControl(RfClient::WIFI_RAW_TX);
              if (!rfLock_ || !rfLock_->isValid()) {
-                LOG(LogLevel::ERROR, "DEAUTHER", "Failed to acquire WIFI_PROMISCUOUS lock for %s.", newTarget.ssid);
+                LOG(LogLevel::ERROR, "DEAUTHER", "Failed to acquire WIFI_RAW_TX lock for %s.", newTarget.ssid);
                 return;
             }
         }
