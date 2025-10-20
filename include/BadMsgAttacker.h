@@ -13,6 +13,12 @@ class App;
 class BadMsgAttacker : public Service {
 public:
     enum class AttackType { TARGET_AP, PINPOINT_CLIENT };
+    
+    // NEW: State machine for the attack cycle
+    enum class AttackPhase {
+        SNIFFING,
+        ATTACKING
+    };
 
     struct AttackConfig {
         AttackType type;
@@ -33,13 +39,22 @@ public:
     const AttackConfig& getConfig() const;
     uint32_t getPacketCount() const;
     int getClientCount() const;
-    bool isSniffing() const;
+    bool isSniffing() const; // This will now represent the SNIFFING phase
 
 private:
     void sendBadMsgPacket(const StationInfo& client, uint8_t securityType);
+    
+    // NEW: Helper functions for the state machine
+    void switchToSniffPhase();
+    void switchToAttackPhase();
+    void attackNextClient();
+
+    // NEW: Packet handler is now internal to this class for TARGET_AP mode
+    static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);
+    void handlePacket(wifi_promiscuous_pkt_t *packet);
 
     App* app_;
-    StationSniffer* stationSniffer_;
+    StationSniffer* stationSniffer_; // Still needed for the initial pinpoint scan
     std::unique_ptr<HardwareManager::RfLock> rfLock_;
 
     bool isActive_;
@@ -48,9 +63,15 @@ private:
     uint32_t packetCounter_;
     unsigned long lastPacketTime_;
 
-    // For TARGET_AP mode
-    bool isSniffing_;
+    // MODIFICATION: Replaced `isSniffing_` with a full state machine
+    AttackPhase currentPhase_;
+    unsigned long lastPhaseSwitchTime_;
+
+    // MODIFICATION: This class now maintains its own growing list of clients
+    std::vector<StationInfo> knownClients_;
     int currentClientIndex_;
+
+    static BadMsgAttacker* instance_; // Static instance for the callback
 };
 
 #endif // BAD_MSG_ATTACKER_H

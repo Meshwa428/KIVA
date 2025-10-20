@@ -48,7 +48,7 @@ void BadMsgActiveMenu::draw(App* app, U8G2& display) {
     char statusStr[32];
     if (attacker.getConfig().type == BadMsgAttacker::AttackType::TARGET_AP) {
         if (attacker.isSniffing()) {
-            snprintf(statusStr, sizeof(statusStr), "Sniffing for clients...");
+            snprintf(statusStr, sizeof(statusStr), "Sniffing clients...");
         } else {
             snprintf(statusStr, sizeof(statusStr), "Attacking %d clients", attacker.getClientCount());
         }
