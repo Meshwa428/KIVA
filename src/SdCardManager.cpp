@@ -269,6 +269,7 @@ namespace SdCardManager {
             SD_ROOT::DATA_LOGS, 
             SD_ROOT::DATA_CAPTURES,
             SD_ROOT::DATA_PROBES,
+            SD_ROOT::DATA_CAPTURES_STATION_LISTS,
             SD_ROOT::USER_BEACON_LISTS,
             SD_ROOT::USER_PORTALS,
             SD_ROOT::USER_DUCKY,

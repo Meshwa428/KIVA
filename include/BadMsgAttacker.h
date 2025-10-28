@@ -12,18 +12,20 @@ class App;
 
 class BadMsgAttacker : public Service {
 public:
-    enum class AttackType { TARGET_AP, PINPOINT_CLIENT };
+    enum class AttackType { TARGET_AP, PINPOINT_CLIENT, FROM_FILE };
     
-    // NEW: State machine for the attack cycle
+    // State machine for the attack cycle
     enum class AttackPhase {
         SNIFFING,
-        ATTACKING
+        ATTACKING,
+        ATTACK_ONLY
     };
 
     struct AttackConfig {
         AttackType type;
         WifiNetworkInfo targetAp;
         StationInfo targetClient;
+        std::string filePath;
     };
 
     BadMsgAttacker();
@@ -33,6 +35,7 @@ public:
     void prepareAttack(AttackType type);
     bool start(const WifiNetworkInfo& targetAp);
     bool start(const StationInfo& targetClient);
+    bool start(const std::string& filePath, const WifiNetworkInfo& targetAp);
     void stop();
 
     bool isActive() const;
@@ -44,12 +47,13 @@ public:
 private:
     void sendBadMsgPacket(const StationInfo& client, uint8_t securityType);
     
-    // NEW: Helper functions for the state machine
+    // Helper functions for the state machine
     void switchToSniffPhase();
     void switchToAttackPhase();
+    void switchToAttackOnlyPhase();
     void attackNextClient();
 
-    // NEW: Packet handler is now internal to this class for TARGET_AP mode
+    // Packet handler is now internal to this class for TARGET_AP mode
     static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);
     void handlePacket(wifi_promiscuous_pkt_t *packet);
 
@@ -63,13 +67,12 @@ private:
     uint32_t packetCounter_;
     unsigned long lastPacketTime_;
 
-    // MODIFICATION: Replaced `isSniffing_` with a full state machine
     AttackPhase currentPhase_;
     unsigned long lastPhaseSwitchTime_;
 
-    // MODIFICATION: This class now maintains its own growing list of clients
     std::vector<StationInfo> knownClients_;
     int currentClientIndex_;
+    int cyclesWithoutDiscovery_;
 
     static BadMsgAttacker* instance_; // Static instance for the callback
 };

@@ -38,6 +38,8 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::DUCKY_SCRIPT_LIST: return "DUCKY_SCRIPT_LIST";
         case MenuType::CHANNEL_SELECTION: return "CHANNEL_SELECTION";
         case MenuType::HANDSHAKE_CAPTURE_MENU: return "HANDSHAKE_CAPTURE_MENU";
+        case MenuType::STATION_SNIFF_SAVE_ACTIVE: return "STATION_SNIFF_SAVE_ACTIVE";
+        case MenuType::STATION_FILE_LIST: return "STATION_FILE_LIST";
 
         // --- Active Screens ---
         case MenuType::BEACON_SPAM_ACTIVE: return "BEACON_SPAM_ACTIVE";
