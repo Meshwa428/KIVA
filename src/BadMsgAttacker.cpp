@@ -323,3 +323,6 @@ int BadMsgAttacker::getClientCount() const {
 bool BadMsgAttacker::isSniffing() const { 
     return (isActive_ && currentConfig_.type == AttackType::TARGET_AP && currentPhase_ == AttackPhase::SNIFFING);
 }
+uint32_t BadMsgAttacker::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

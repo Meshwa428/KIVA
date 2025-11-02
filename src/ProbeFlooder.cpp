@@ -269,3 +269,6 @@ const std::string ProbeFlooder::getCurrentTargetSsid() const {
     }
     return "N/A";
 }
+uint32_t ProbeFlooder::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

@@ -36,6 +36,8 @@ public:
     const std::vector<SniffedNetworkInfo>& getSniffedNetworks() const;
     const std::string& getCurrentTargetSsid() const;
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);
     void handlePacket(const wifi_promiscuous_pkt_t *packet);

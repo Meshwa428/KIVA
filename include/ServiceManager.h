@@ -25,6 +25,8 @@ public:
     void loop();
     void destroyAllServices();
 
+    uint32_t getTotalResourceRequirements() const;
+
 private:
     App* app_;
     std::map<size_t, std::unique_ptr<Service>> services_;

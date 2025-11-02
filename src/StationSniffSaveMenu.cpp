@@ -65,8 +65,7 @@ void StationSniffSaveMenu::onExit(App* app) {
 
 void StationSniffSaveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        // onExit will handle the saving logic before navigating.
-        EventDispatcher::getInstance().publish(NavigateBackEvent());
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_SNIFF_LIST));
     }
 }
 

@@ -44,6 +44,8 @@ public:
     int getClientCount() const;
     bool isSniffing() const; // This will now represent the SNIFFING phase
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     void sendBadMsgPacket(const StationInfo& client, uint8_t securityType);
     

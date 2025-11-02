@@ -19,6 +19,8 @@ public:
     const char* getTitle() const override { return "Sniff & Save"; }
     MenuType getMenuType() const override { return MenuType::STATION_SNIFF_SAVE_ACTIVE; }
 
+    uint32_t getResourceRequirements() const override { return (uint32_t)ResourceRequirement::WIFI; }
+
 private:
     WifiNetworkInfo target_;
     size_t lastClientCount_;

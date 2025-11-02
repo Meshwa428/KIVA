@@ -940,53 +940,52 @@ void App::loop()
 
         mainDisplay.sendBuffer();
         drawSecondaryDisplay();
-        // --- End Drawing Logic ---
-
     } else {
         // --- Idle State ---
         delay(10); // Yield CPU time
     }
 
-    // 5. Handle WiFi hardware state based on current needs
-    bool wifiIsRequired = false; 
+    // 5. Handle hardware state based on resource requirements
+    uint32_t requirements = (uint32_t)ResourceRequirement::NONE;
+
+    // --- A. Get UI requirements ---
     if (currentMenu_)
     {
+        requirements |= currentMenu_->getResourceRequirements();
+        
+        // Handle popup case
+        if (currentMenu_->getMenuType() == MenuType::POPUP) {
+            IMenu* underlyingMenu = getMenu(getPreviousMenuType());
+            if (underlyingMenu) {
+                requirements |= underlyingMenu->getResourceRequirements();
+            }
+        }
+        
+        // Handle special cases for generic menus
         MenuType currentType = currentMenu_->getMenuType();
-        if (currentType == MenuType::WIFI_LIST ||
-            currentType == MenuType::TEXT_INPUT ||
-            currentType == MenuType::WIFI_CONNECTION_STATUS ||
-            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE ||
-            currentType == MenuType::BAD_MSG_ACTIVE ||
-            currentType == MenuType::STATION_LIST)
-        {
-            wifiIsRequired = true;
+        if (currentType == MenuType::WIFI_LIST || currentType == MenuType::STATION_LIST) {
+            requirements |= (uint32_t)ResourceRequirement::WIFI;
         }
-        else if (currentType == MenuType::OTA_STATUS && getOtaManager().getState() != OtaState::IDLE)
-        {
-            wifiIsRequired = true;
+
+        // Handle special case for OTA which is state-dependent
+        if (currentType == MenuType::OTA_STATUS) {
+            OtaState otaState = getOtaManager().getState();
+            if (otaState == OtaState::WEB_ACTIVE || otaState == OtaState::BASIC_ACTIVE) {
+                 requirements |= (uint32_t)ResourceRequirement::WIFI;
+            }
         }
     }
-    
-    if (getWifiManager().getState() == WifiState::CONNECTED || 
-        getBeaconSpammer().isActive() ||
-        getDeauther().isActive() || 
-        getEvilPortal().isActive() || 
-        getKarmaAttacker().isAttacking() || 
-        getKarmaAttacker().isSniffing() ||
-        getProbeFlooder().isActive() ||
-        getProbeSniffer().isActive() ||
-        getHandshakeCapture().isActive() ||
-        getStationSniffer().isActive() ||
-        getAssociationSleeper().isActive())
-    {
-        wifiIsRequired = true;
-    }
 
-    bool hostIsActive = getDuckyRunner().isActive();
+    // --- B. Get background service requirements ---
+    requirements |= serviceManager_->getTotalResourceRequirements();
 
-    if (!wifiIsRequired && !hostIsActive && getWifiManager().isHardwareEnabled())
+    // --- C. Evaluate requirements and manage hardware ---
+    bool wifiIsRequired = (requirements & (uint32_t)ResourceRequirement::WIFI) || (getWifiManager().getState() == WifiState::CONNECTED);
+    bool hostIsRequired = (requirements & (uint32_t)ResourceRequirement::HOST_PERIPHERAL);
+
+    if (!wifiIsRequired && !hostIsRequired && getWifiManager().isHardwareEnabled())
     {
-        LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
+        LOG(LogLevel::INFO, "App", "WiFi/Host no longer required by any process. Disabling.");
         getWifiManager().setHardwareState(false);
     }
 }

@@ -8,6 +8,7 @@
 #include "WifiManager.h"
 #include <memory>
 #include "HardwareManager.h"
+#include "Service.h"
 
 class App;
 
@@ -22,8 +23,6 @@ struct StationInfo {
     }
 };
 
-#include "Service.h"
-
 class StationSniffer : public Service {
 public:
     StationSniffer();
@@ -35,6 +34,8 @@ public:
 
     bool isActive() const;
     const std::vector<StationInfo>& getFoundStations() const;
+
+    uint32_t getResourceRequirements() const override;
 
 private:
     static void packetHandlerCallback(void* buf, wifi_promiscuous_pkt_type_t type);

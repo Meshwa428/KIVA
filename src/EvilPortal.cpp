@@ -204,3 +204,6 @@ bool EvilPortal::isAttackPending() const { return isAttackPending_; }
 const WifiNetworkInfo& EvilPortal::getTargetNetwork() const { return targetNetwork_; }
 int EvilPortal::getVictimCount() const { return capturedCredentials_.size(); }
 const std::vector<VictimCredentials>& EvilPortal::getCapturedCredentials() const { return capturedCredentials_; }
+uint32_t EvilPortal::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

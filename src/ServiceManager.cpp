@@ -7,6 +7,14 @@ ServiceManager::~ServiceManager() {
     destroyAllServices();
 }
 
+uint32_t ServiceManager::getTotalResourceRequirements() const {
+    uint32_t totalRequirements = (uint32_t)ResourceRequirement::NONE;
+    for (auto const& [typeIndex, service] : services_) {
+        totalRequirements |= service->getResourceRequirements();
+    }
+    return totalRequirements;
+}
+
 void ServiceManager::loop() {
     for (auto const& [typeIndex, service] : services_) {
         service->loop();

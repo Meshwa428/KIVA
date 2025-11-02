@@ -30,8 +30,9 @@ public:
     int getCurrentChannel() const;
 
     static bool isSsidFileValid(const std::string& ssidFilePath);
+    uint32_t getResourceRequirements() const override;
 
-private:
+    private:
     struct FakeAP {
         std::string ssid;
         uint8_t bssid[6];

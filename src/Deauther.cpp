@@ -242,3 +242,6 @@ bool Deauther::isActive() const { return isActive_; }
 bool Deauther::isAttackPending() const { return isAttackPending_; }
 const DeauthConfig& Deauther::getPendingConfig() const { return currentConfig_; }
 const std::string& Deauther::getCurrentTargetSsid() const { return currentTargetSsid_; }
+uint32_t Deauther::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

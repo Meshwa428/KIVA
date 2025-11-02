@@ -104,3 +104,6 @@ void StationSniffer::handlePacket(wifi_promiscuous_pkt_t *packet) {
 
 bool StationSniffer::isActive() const { return isActive_; }
 const std::vector<StationInfo>& StationSniffer::getFoundStations() const { return foundStations_; }
+uint32_t StationSniffer::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

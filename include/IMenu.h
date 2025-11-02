@@ -3,10 +3,11 @@
 
 #include "Config.h"
 #include "Icons.h"
-#include "EventDispatcher.h" // Include the dispatcher
+#include "EventDispatcher.h" 
+#include "Resource.h" // <-- NEW: Include the resource header
 #include <vector>
 #include <string>
-#include <functional> // For std::function
+#include <functional> 
 
 // Forward declarations to prevent circular dependencies
 class App;
@@ -44,7 +45,15 @@ public:
      * @return true if a custom status bar was drawn, false to use the default one from App.
      */
     virtual bool drawCustomStatusBar(App* app, U8G2& display) { return false; }
-
+    
+    // --- NEW VIRTUAL FUNCTION ---
+    /**
+     * @brief Declares the hardware resources this menu requires to be active.
+     * @return A bitmask of ResourceRequirement flags.
+     * @note The default implementation requires no special resources.
+     */
+    virtual uint32_t getResourceRequirements() const { return (uint32_t)ResourceRequirement::NONE; }
+    
     virtual const char* getTitle() const = 0;
     virtual MenuType getMenuType() const = 0;
 
