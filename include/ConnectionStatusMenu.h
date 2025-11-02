@@ -15,6 +15,8 @@ public:
     const char* getTitle() const override { return "Connection Status"; }
     MenuType getMenuType() const override { return MenuType::WIFI_CONNECTION_STATUS; }
 
+    uint32_t getResourceRequirements() const override { return (uint32_t)ResourceRequirement::WIFI; }
+
 private:
     unsigned long successTime_; // Will be 0 until a connection is made
     unsigned long failTime_; 

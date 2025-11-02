@@ -341,6 +341,16 @@ App::App() :
             wifiDS.setScanOnEnter(true);
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
         }},
+        {"From File", IconType::SD_CARD, MenuType::NONE, [](App* app){
+            auto& wifiDS = app->getWifiListDataSource();
+            wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
+                auto& stationFileDS = static_cast<StationFileListDataSource&>(app_cb->stationFileListDataSource_);
+                stationFileDS.setTargetAp(net);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_FILE_LIST));
+            });
+            wifiDS.setScanOnEnter(true);
+            EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
+        }},
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
     settingsGridMenu_("Settings", MenuType::SETTINGS_GRID, {
@@ -390,6 +400,7 @@ App::App() :
     nowPlayingMenu_(),
     associationSleepActiveMenu_(),
     badMsgActiveMenu_(),
+    stationSniffSaveMenu_(),
 
     // --- Data Sources ---
     wifiListDataSource_(),
@@ -400,6 +411,7 @@ App::App() :
     musicLibraryDataSource_(),
     songListDataSource_(),
     stationListDataSource_(),
+    stationFileListDataSource_(),
     wifiAttacksDataSource_({
         {"Beacon Spam", IconType::BEACON, MenuType::BEACON_MODE_GRID},
         {"Deauth", IconType::DISCONNECT, MenuType::DEAUTH_MODE_GRID},
@@ -413,17 +425,14 @@ App::App() :
     wifiSniffDataSource_({
         {"Handshake Sniffer", IconType::WIFI_LOCK, MenuType::HANDSHAKE_CAPTURE_MENU},
         {"Probe Sniffer", IconType::TOOL_PROBE, MenuType::PROBE_ACTIVE},
-        {"Station Sniffer", IconType::TARGET, MenuType::NONE, [](App* app){
-            // This is for the "Sniff & Save" feature
-            // For now, it just goes to the WifiList to select an AP to sniff
+        {"Sniff Stations", IconType::TARGET, MenuType::NONE, [](App* app){
             auto& wifiDS = app->getWifiListDataSource();
             wifiDS.setSelectionCallback([](App* app_cb, const WifiNetworkInfo& net){
-                // TODO: Implement the file saving logic here.
-                // For now, it will just open the live station list.
-                auto& stationDS = app_cb->getStationListDataSource();
-                stationDS.setMode(true, net); // Live scan mode
-                stationDS.setAttackCallback(nullptr); // No attack, just viewing
-                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_LIST));
+                auto* sniffSaveMenu = static_cast<StationSniffSaveMenu*>(app_cb->getMenu(MenuType::STATION_SNIFF_SAVE_ACTIVE));
+                if (sniffSaveMenu) {
+                    sniffSaveMenu->setTarget(net);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::STATION_SNIFF_SAVE_ACTIVE));
+                }
             });
             wifiDS.setScanOnEnter(true);
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::WIFI_LIST));
@@ -679,6 +688,7 @@ App::App() :
     duckyScriptListMenu_("Ducky Scripts", MenuType::DUCKY_SCRIPT_LIST, &duckyScriptListDataSource_),
     musicLibraryMenu_("Music Library", MenuType::MUSIC_LIBRARY, &musicLibraryDataSource_),
     songListMenu_("Songs", MenuType::SONG_LIST, &songListDataSource_),
+    stationFileListMenu_("Select Station List", MenuType::STATION_FILE_LIST, &stationFileListDataSource_),
     
     // New ListMenus using the generic source
     wifiAttacksMenu_("WiFi Attacks", MenuType::WIFI_ATTACKS_LIST, &wifiAttacksDataSource_),
@@ -808,6 +818,8 @@ void App::setup()
     menuRegistry_[MenuType::CHANNEL_SELECTION] = &channelSelectionMenu_;
     menuRegistry_[MenuType::HANDSHAKE_CAPTURE_MENU] = &handshakeCaptureMenu_;
     menuRegistry_[MenuType::FIRMWARE_LIST_SD] = &firmwareListMenu_;
+    menuRegistry_[MenuType::STATION_SNIFF_SAVE_ACTIVE] = &stationSniffSaveMenu_;
+    menuRegistry_[MenuType::STATION_FILE_LIST] = &stationFileListMenu_;
     
     // Active Screens
     menuRegistry_[MenuType::BEACON_SPAM_ACTIVE] = &beaconSpamActiveMenu_;
@@ -928,53 +940,52 @@ void App::loop()
 
         mainDisplay.sendBuffer();
         drawSecondaryDisplay();
-        // --- End Drawing Logic ---
-
     } else {
         // --- Idle State ---
         delay(10); // Yield CPU time
     }
 
-    // 5. Handle WiFi hardware state based on current needs
-    bool wifiIsRequired = false; 
+    // 5. Handle hardware state based on resource requirements
+    uint32_t requirements = (uint32_t)ResourceRequirement::NONE;
+
+    // --- A. Get UI requirements ---
     if (currentMenu_)
     {
+        requirements |= currentMenu_->getResourceRequirements();
+        
+        // Handle popup case
+        if (currentMenu_->getMenuType() == MenuType::POPUP) {
+            IMenu* underlyingMenu = getMenu(getPreviousMenuType());
+            if (underlyingMenu) {
+                requirements |= underlyingMenu->getResourceRequirements();
+            }
+        }
+        
+        // Handle special cases for generic menus
         MenuType currentType = currentMenu_->getMenuType();
-        if (currentType == MenuType::WIFI_LIST ||
-            currentType == MenuType::TEXT_INPUT ||
-            currentType == MenuType::WIFI_CONNECTION_STATUS ||
-            currentType == MenuType::ASSOCIATION_SLEEP_ACTIVE ||
-            currentType == MenuType::BAD_MSG_ACTIVE ||
-            currentType == MenuType::STATION_LIST)
-        {
-            wifiIsRequired = true;
+        if (currentType == MenuType::WIFI_LIST || currentType == MenuType::STATION_LIST) {
+            requirements |= (uint32_t)ResourceRequirement::WIFI;
         }
-        else if (currentType == MenuType::OTA_STATUS && getOtaManager().getState() != OtaState::IDLE)
-        {
-            wifiIsRequired = true;
+
+        // Handle special case for OTA which is state-dependent
+        if (currentType == MenuType::OTA_STATUS) {
+            OtaState otaState = getOtaManager().getState();
+            if (otaState == OtaState::WEB_ACTIVE || otaState == OtaState::BASIC_ACTIVE) {
+                 requirements |= (uint32_t)ResourceRequirement::WIFI;
+            }
         }
     }
-    
-    if (getWifiManager().getState() == WifiState::CONNECTED || 
-        getBeaconSpammer().isActive() ||
-        getDeauther().isActive() || 
-        getEvilPortal().isActive() || 
-        getKarmaAttacker().isAttacking() || 
-        getKarmaAttacker().isSniffing() ||
-        getProbeFlooder().isActive() ||
-        getProbeSniffer().isActive() ||
-        getHandshakeCapture().isActive() ||
-        getStationSniffer().isActive() ||
-        getAssociationSleeper().isActive())
-    {
-        wifiIsRequired = true;
-    }
 
-    bool hostIsActive = getDuckyRunner().isActive();
+    // --- B. Get background service requirements ---
+    requirements |= serviceManager_->getTotalResourceRequirements();
 
-    if (!wifiIsRequired && !hostIsActive && getWifiManager().isHardwareEnabled())
+    // --- C. Evaluate requirements and manage hardware ---
+    bool wifiIsRequired = (requirements & (uint32_t)ResourceRequirement::WIFI) || (getWifiManager().getState() == WifiState::CONNECTED);
+    bool hostIsRequired = (requirements & (uint32_t)ResourceRequirement::HOST_PERIPHERAL);
+
+    if (!wifiIsRequired && !hostIsRequired && getWifiManager().isHardwareEnabled())
     {
-        LOG(LogLevel::INFO, "App", "WiFi no longer required by any process. Disabling.");
+        LOG(LogLevel::INFO, "App", "WiFi/Host no longer required by any process. Disabling.");
         getWifiManager().setHardwareState(false);
     }
 }
@@ -1180,7 +1191,8 @@ void App::showPopUp(std::string title, std::string message, PopUpMenu::OnConfirm
                     const std::string &confirmText, const std::string &cancelText, bool executeOnConfirmBeforeExit)
 {
     popUpMenu_.configure(title, message, onConfirm, confirmText, cancelText, executeOnConfirmBeforeExit);
-    changeMenu(MenuType::POPUP);
+    pendingMenuChange_ = MenuType::POPUP;
+    isForwardNavPending_ = true;
 }
 
 MenuType App::getPreviousMenuType() const

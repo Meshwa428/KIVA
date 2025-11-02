@@ -48,6 +48,8 @@
 #include "ServiceManager.h"
 #include "MyBleManagerService.h"
 #include <memory>
+#include "StationSniffSaveMenu.h"
+#include "StationFileListDataSource.h"
 
 class HardwareManager;
 class WifiManager;
@@ -191,6 +193,7 @@ private:
     UsbDriveMenu usbDriveMenu_;
     InfoMenu infoMenu_;
     SnakeGameMenu snakeGameMenu_;
+    StationSniffSaveMenu stationSniffSaveMenu_;
 
     // New Menu Structure
     GridMenu wifiToolsMenu_;
@@ -238,6 +241,7 @@ private:
     MusicLibraryDataSource musicLibraryDataSource_;
     SongListDataSource songListDataSource_;
     TimezoneListDataSource timezoneDataSource_;
+    StationFileListDataSource stationFileListDataSource_;
     
     // New Generic DataSources
     ActionListDataSource wifiAttacksDataSource_;
@@ -257,6 +261,7 @@ private:
     ListMenu duckyScriptListMenu_;
     ListMenu musicLibraryMenu_;
     ListMenu songListMenu_;
+    ListMenu stationFileListMenu_;
     
     // New ListMenus using the generic source
     ListMenu wifiAttacksMenu_;

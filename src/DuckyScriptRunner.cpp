@@ -253,3 +253,6 @@ bool DuckyScriptRunner::isActive() const { return state_ != State::IDLE; }
 const std::string& DuckyScriptRunner::getCurrentLine() const { return currentLine_; }
 const std::string& DuckyScriptRunner::getScriptName() const { return scriptName_; }
 uint32_t DuckyScriptRunner::getLinesExecuted() const { return linesExecuted_; }
+uint32_t DuckyScriptRunner::getResourceRequirements() const {
+    return isActive() ? (uint32_t)ResourceRequirement::HOST_PERIPHERAL : (uint32_t)ResourceRequirement::NONE;
+}

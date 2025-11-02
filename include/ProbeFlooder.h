@@ -46,6 +46,8 @@ public:
     ProbeFloodMode getMode() const;
     AutoPinpointState getAutoPinpointState() const;
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     std::string getNextSsid();
     void sendProbePacket(const std::string& ssid);

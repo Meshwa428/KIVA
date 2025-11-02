@@ -33,7 +33,7 @@ enum class MenuType
     DEAUTH_MODE_GRID,
     PROBE_FLOOD_MODE_GRID,
     ASSOCIATION_SLEEP_MODES_GRID,
-    BAD_MSG_MODES_GRID, // <-- ADD THIS
+    BAD_MSG_MODES_GRID,
 
     // --- Core Attack/Tool Screens ---
     WIFI_LIST, // Re-used for multiple purposes
@@ -42,7 +42,9 @@ enum class MenuType
     STATION_LIST,
     DUCKY_SCRIPT_LIST,
     CHANNEL_SELECTION,
-    HANDSHAKE_CAPTURE_MENU, // This is a GridMenu
+    HANDSHAKE_CAPTURE_MENU,
+    STATION_SNIFF_SAVE_ACTIVE,
+    STATION_FILE_LIST,
 
     BEACON_SPAM_ACTIVE,
     DEAUTH_ACTIVE,
@@ -55,7 +57,7 @@ enum class MenuType
     DUCKY_SCRIPT_ACTIVE,
     JAMMING_ACTIVE,
     ASSOCIATION_SLEEP_ACTIVE,
-    BAD_MSG_ACTIVE, // <-- ADD THIS
+    BAD_MSG_ACTIVE,
 
     // --- Settings Sub-menus ---
     SETTINGS_GRID,
@@ -311,6 +313,7 @@ namespace SD_ROOT
     static constexpr const char *DATA_GAMES = "/data/games";
     static constexpr const char *DATA_LOGS = "/data/logs";
     static constexpr const char *DATA_CAPTURES = "/data/captures";
+    static constexpr const char *DATA_CAPTURES_STATION_LISTS = "/data/captures/station_lists"; 
     static constexpr const char *DATA_PROBES = "/data/captures/probes";
     static constexpr const char *DATA_PROBES_SSID_SESSION = "/data/captures/probes/probes_session.txt";
     static constexpr const char *DATA_PROBES_SSID_CUMULATIVE = "/data/captures/probes/probes_cumulative.txt";

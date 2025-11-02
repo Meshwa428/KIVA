@@ -332,3 +332,6 @@ uint32_t HandshakeCapture::getPacketCount() const { return packetCount_; }
 int HandshakeCapture::getHandshakeCount() const { return handshakeCount_; }
 int HandshakeCapture::getPmkidCount() const { return pmkidCount_; }
 TargetedAttackState HandshakeCapture::getTargetedState() const { return targetedState_; }
+uint32_t HandshakeCapture::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

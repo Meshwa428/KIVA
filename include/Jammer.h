@@ -49,6 +49,8 @@ public:
     JammingMode getCurrentMode() const;
     const char* getModeString() const;
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     void jamWithNoise(int channel1, int channel2);
     void jamWithConstantCarrier(int channel1, int channel2);

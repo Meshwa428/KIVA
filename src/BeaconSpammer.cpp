@@ -199,3 +199,7 @@ bool BeaconSpammer::isSsidFileValid(const std::string& ssidFilePath) {
 bool BeaconSpammer::isActive() const { return isActive_; }
 uint32_t BeaconSpammer::getSsidCounter() const { return ssidCounter_; }
 int BeaconSpammer::getCurrentChannel() const { return currentChannel_; }
+
+uint32_t BeaconSpammer::getResourceRequirements() const {
+        return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+    }

@@ -208,3 +208,6 @@ bool KarmaAttacker::isSniffing() const { return isSniffing_; }
 bool KarmaAttacker::isAttacking() const { return isAttacking_; }
 const std::vector<SniffedNetworkInfo>& KarmaAttacker::getSniffedNetworks() const { return sniffedNetworks_; }
 const std::string& KarmaAttacker::getCurrentTargetSsid() const { return currentTarget_.ssid; }
+uint32_t KarmaAttacker::getResourceRequirements() const {
+    return (isSniffing_ || isAttacking_) ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

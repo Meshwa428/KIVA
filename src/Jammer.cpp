@@ -191,3 +191,6 @@ const char* Jammer::getModeString() const {
         default: return "Idle";
     }
 }
+uint32_t Jammer::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::NRF24 : (uint32_t)ResourceRequirement::NONE;
+}

@@ -26,6 +26,8 @@ public:
     uint32_t getPacketCount() const;
     const std::vector<std::string>& getUniqueSsids() const; // For UI display
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     void openPcapFile();
     void closePcapFile();

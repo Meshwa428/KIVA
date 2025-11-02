@@ -49,6 +49,8 @@ public:
 
     static void sendPacket(const uint8_t* targetBssid, int channel, const uint8_t* clientMac = nullptr);
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     void hopToNextTarget();
     void executeAttackForCurrentTarget();

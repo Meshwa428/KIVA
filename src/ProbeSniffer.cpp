@@ -197,3 +197,6 @@ void ProbeSniffer::handlePacket(wifi_promiscuous_pkt_t *packet) {
 bool ProbeSniffer::isActive() const { return isActive_; }
 uint32_t ProbeSniffer::getPacketCount() const { return packetCount_; }
 const std::vector<std::string>& ProbeSniffer::getUniqueSsids() const { return uniqueSsids_; }
+uint32_t ProbeSniffer::getResourceRequirements() const {
+    return isActive_ ? (uint32_t)ResourceRequirement::WIFI : (uint32_t)ResourceRequirement::NONE;
+}

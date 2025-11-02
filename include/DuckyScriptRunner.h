@@ -5,7 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <HIDForge.h> // <-- ADD THIS
+#include <HIDForge.h>
 
 // Forward Declarations
 class App;
@@ -39,11 +39,13 @@ public:
     void stopScript();
 
     State getState() const;
-    Mode getMode() const; // <-- ADD THIS
+    Mode getMode() const;
     bool isActive() const;
     const std::string& getCurrentLine() const;
     const std::string& getScriptName() const;
     uint32_t getLinesExecuted() const;
+
+    uint32_t getResourceRequirements() const override;
     
 private:
     void parseAndExecute(const std::string& line);

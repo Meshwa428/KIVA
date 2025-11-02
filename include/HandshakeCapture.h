@@ -54,6 +54,8 @@ public:
     int getPmkidCount() const;
     TargetedAttackState getTargetedState() const;
 
+    uint32_t getResourceRequirements() const override;
+
 private:
     std::vector<std::string> savedHandshakes;
     std::map<std::string, std::string> bssid_to_ssid_map_;

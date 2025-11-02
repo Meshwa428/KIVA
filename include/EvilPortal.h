@@ -37,7 +37,9 @@ public:
     bool isAttackPending() const;
     const WifiNetworkInfo& getTargetNetwork() const;
     int getVictimCount() const;
-    const std::vector<VictimCredentials>& getCapturedCredentials() const; // <-- ADD THIS GETTER
+    const std::vector<VictimCredentials>& getCapturedCredentials() const;
+
+    uint32_t getResourceRequirements() const override;
 
 private:
     void deauthRoutine();
