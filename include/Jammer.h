@@ -19,7 +19,11 @@ enum class JammingMode {
     WIFI_NARROWBAND,
     WIDE_SPECTRUM,
     CHANNEL_FLOOD_CUSTOM,
-    ZIGBEE
+    ZIGBEE,
+    VIDEO_TX,               // 2.4GHz FPV Drones
+    RC_DRONES,              // 2.4GHz RC Controllers
+    USB_WIRELESS,           // Wireless Keyboards/Mice
+    NRF24_SNIFF,            // MouseJack / Sniffing frequencies
 };
 
 // Defines the underlying RF transmission technique
@@ -75,6 +79,11 @@ private:
     static const int ble_adv_nrf_channels_[];
     static const int bt_classic_nrf_channels_[];
     static const int wifi_narrow_nrf_channels_[];
+    // Channel lists from RfClown
+    static const int video_tx_nrf_channels_[];
+    static const int rc_nrf_channels_[];
+    static const int usb_wireless_nrf_channels_[];
+    static const int nrf24_sniff_channels_[];
 };
 
 #endif // JAMMER_H

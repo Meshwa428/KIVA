@@ -64,7 +64,7 @@ void AssociationSleepActiveMenu::onUpdate(App* app) {
 void AssociationSleepActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
         // onExit handles stopping the attack and un-pausing the UI.
-        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::ASSOCIATION_SLEEP_MODES_GRID));
     }
 }
 
