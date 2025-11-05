@@ -15,6 +15,8 @@ public:
     void draw(App* app, U8G2& display) override;
     void handleInput(InputEvent event, App* app) override;
 
+    bool drawCustomStatusBar(App* app, U8G2& display) override;
+
     const char* getTitle() const override { return "Now Playing"; }
     MenuType getMenuType() const override { return MenuType::NOW_PLAYING; }
 

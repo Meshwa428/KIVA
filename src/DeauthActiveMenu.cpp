@@ -58,7 +58,7 @@ void DeauthActiveMenu::onUpdate(App* app) {
 
 void DeauthActiveMenu::handleInput(InputEvent event, App* app) {
     if (event == InputEvent::BTN_BACK_PRESS || event == InputEvent::BTN_OK_PRESS) {
-        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::WIFI_ATTACKS_LIST));
+        EventDispatcher::getInstance().publish(ReturnToMenuEvent(MenuType::DEAUTH_MODE_GRID));
     }
 }
 

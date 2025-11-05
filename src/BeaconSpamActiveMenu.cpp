@@ -55,7 +55,7 @@ void BeaconSpamActiveMenu::draw(App* app, U8G2& display) {
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(startingMsg))/2, 38, startingMsg);
     } else {
-        const char* titleMsg = "Beacon Spam Active";
+        const char* titleMsg = "Beacon Spam";
         display.setFont(u8g2_font_7x13B_tr);
         display.drawStr((display.getDisplayWidth() - display.getStrWidth(titleMsg)) / 2, 28, titleMsg);
 

@@ -3,15 +3,15 @@
 #include "Config.h"
 #include "Logger.h"
 
-// Pre-defined channel lists (no longer need reversed versions)
+// Pre-defined channel lists
 const int Jammer::ble_adv_nrf_channels_[] = {2, 26, 80};
-const int Jammer::bt_classic_nrf_channels_[] = {
-    0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 32, 34, 46, 48, 50, 52, 74, 76, 78, 80
-};
-const int Jammer::wifi_narrow_nrf_channels_[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+const int Jammer::bt_classic_nrf_channels_[] = {32, 34, 46, 48, 50, 52, 0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 74, 76, 78, 80};
+const int Jammer::wifi_narrow_nrf_channels_[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+const int Jammer::video_tx_nrf_channels_[] = {70, 75, 80};
+const int Jammer::rc_nrf_channels_[] = {1, 3, 5, 7};
+const int Jammer::usb_wireless_nrf_channels_[] = {40, 50, 60};
+const int Jammer::nrf24_sniff_channels_[] = {76, 78, 79};
 
-// Garbage payload for Noise Injection
-static const char jam_text[] = "xxxxxxxxxxxxxxxx";
 
 Jammer::Jammer() :
     app_(nullptr),
@@ -50,11 +50,11 @@ bool Jammer::start(std::unique_ptr<HardwareManager::RfLock> rfLock, JammingMode 
         byte dummy_addr[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
         if (rfLock_->radio1) {
             rfLock_->radio1->openWritingPipe(dummy_addr);
-            rfLock_->radio1->setPayloadSize(sizeof(jam_text));
+            rfLock_->radio1->setPayloadSize(sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
         }
         if (rfLock_->radio2) {
             rfLock_->radio2->openWritingPipe(dummy_addr);
-            rfLock_->radio2->setPayloadSize(sizeof(jam_text));
+            rfLock_->radio2->setPayloadSize(sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
         }
     }
     
@@ -150,6 +150,34 @@ void Jammer::loop() {
             }
             break;
         }
+        case JammingMode::VIDEO_TX: {
+            size_t num_channels = sizeof(video_tx_nrf_channels_) / sizeof(int);
+            for (size_t i = 0; i < num_channels; ++i) {
+                jamWithConstantCarrier(video_tx_nrf_channels_[i], video_tx_nrf_channels_[num_channels - 1 - i]);
+            }
+            break;
+        }
+        case JammingMode::RC_DRONES: {
+            size_t num_channels = sizeof(rc_nrf_channels_) / sizeof(int);
+            for (size_t i = 0; i < num_channels; ++i) {
+                jamWithConstantCarrier(rc_nrf_channels_[i], rc_nrf_channels_[num_channels - 1 - i]);
+            }
+            break;
+        }
+        case JammingMode::USB_WIRELESS: {
+            size_t num_channels = sizeof(usb_wireless_nrf_channels_) / sizeof(int);
+            for (size_t i = 0; i < num_channels; ++i) {
+                jamWithNoise(usb_wireless_nrf_channels_[i], usb_wireless_nrf_channels_[num_channels - 1 - i]);
+            }
+            break;
+        }
+        case JammingMode::NRF24_SNIFF: {
+            size_t num_channels = sizeof(nrf24_sniff_channels_) / sizeof(int);
+            for (size_t i = 0; i < num_channels; ++i) {
+                jamWithNoise(nrf24_sniff_channels_[i], nrf24_sniff_channels_[num_channels - 1 - i]);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -158,12 +186,10 @@ void Jammer::loop() {
 void Jammer::jamWithNoise(int channel1, int channel2) {
     if (rfLock_->radio1 && channel1 >= 0 && channel1 <= 125) {
         rfLock_->radio1->setChannel(channel1);
-        // --- MODIFICATION: Use centralized payload ---
         rfLock_->radio1->writeFast(RawFrames::Jamming::NOISE_PAYLOAD, sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
     }
     if (rfLock_->radio2 && channel2 >= 0 && channel2 <= 125) {
         rfLock_->radio2->setChannel(channel2);
-        // --- MODIFICATION: Use centralized payload ---
         rfLock_->radio2->writeFast(RawFrames::Jamming::NOISE_PAYLOAD, sizeof(RawFrames::Jamming::NOISE_PAYLOAD));
     }
 }
@@ -188,6 +214,10 @@ const char* Jammer::getModeString() const {
         case JammingMode::WIDE_SPECTRUM: return "Wide Spectrum Barrage";
         case JammingMode::CHANNEL_FLOOD_CUSTOM: return "Custom Barrage";
         case JammingMode::ZIGBEE: return "Zigbee Barrage";
+        case JammingMode::VIDEO_TX: return "Video TX Barrage";
+        case JammingMode::RC_DRONES: return "RC Drone Barrage";
+        case JammingMode::USB_WIRELESS: return "USB Dongle Noise";
+        case JammingMode::NRF24_SNIFF: return "MouseJack Noise";
         default: return "Idle";
     }
 }

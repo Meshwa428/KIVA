@@ -96,17 +96,7 @@ App::App() :
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
-        {"BT Classic", IconType::NET_BLUETOOTH, MenuType::NONE,
-            [](App *app) {
-                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
-                if (jammerMenu) {
-                    jammerMenu->setJammingModeToStart(JammingMode::BT_CLASSIC);
-                    JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
-                    jammerMenu->setJammingConfig(cfg);
-                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
-                }
-            }},
-        {"WiFi Narrow", IconType::WIFI, MenuType::NONE,
+        {"WiFi Barrage", IconType::WIFI, MenuType::NONE,
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -116,17 +106,7 @@ App::App() :
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
-        {"Wide Spec", IconType::TOOL_JAMMING, MenuType::NONE,
-            [](App *app) {
-                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
-                if (jammerMenu) {
-                    jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
-                    JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
-                    jammerMenu->setJammingConfig(cfg);
-                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
-                }
-            }},
-        {"Zigbee", IconType::TOOL_INJECTION, MenuType::NONE, 
+        {"Zigbee Barrage", IconType::TOOL_INJECTION, MenuType::NONE, 
             [](App *app) {
                 auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
                 if (jammerMenu) {
@@ -136,8 +116,59 @@ App::App() :
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
                 }
             }},
+        {"Wide Spectrum", IconType::TOOL_JAMMING, MenuType::NONE,
+            [](App *app) {
+                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::WIDE_SPECTRUM);
+                    JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
+                    jammerMenu->setJammingConfig(cfg);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
+                }
+            }},
+        {"Video TX", IconType::SKULL, MenuType::NONE,
+            [](App *app) {
+                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::VIDEO_TX);
+                    JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
+                    jammerMenu->setJammingConfig(cfg);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
+                }
+            }},
+        {"RC Drones", IconType::TARGET, MenuType::NONE,
+            [](App *app) {
+                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::RC_DRONES);
+                    JammerConfig cfg; cfg.technique = JammingTechnique::CONSTANT_CARRIER;
+                    jammerMenu->setJammingConfig(cfg);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
+                }
+            }},
+        {"USB Dongles", IconType::USB, MenuType::NONE,
+            [](App *app) {
+                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::USB_WIRELESS);
+                    JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
+                    jammerMenu->setJammingConfig(cfg);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
+                }
+            }},
+        {"MouseJack", IconType::SKULL, MenuType::NONE,
+            [](App *app) {
+                auto *jammerMenu = static_cast<JammingActiveMenu *>(app->getMenu(MenuType::JAMMING_ACTIVE));
+                if (jammerMenu) {
+                    jammerMenu->setJammingModeToStart(JammingMode::NRF24_SNIFF);
+                    JammerConfig cfg; cfg.technique = JammingTechnique::NOISE_INJECTION;
+                    jammerMenu->setJammingConfig(cfg);
+                    EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::JAMMING_ACTIVE));
+                }
+            }},
         {"Custom Flood", IconType::TOOL_INJECTION, MenuType::CHANNEL_SELECTION},
-        {"Back", IconType::NAV_BACK, MenuType::BACK}}, 2),
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
     hostOtherMenu_("Host / Other Tools", MenuType::HOST_OTHER_GRID, {
         {"USB Ducky", IconType::USB, MenuType::NONE, 
             [](App* app){
