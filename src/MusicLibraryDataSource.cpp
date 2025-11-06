@@ -61,9 +61,42 @@ int MusicLibraryDataSource::getNumberOfItems(App* app) {
 
 bool MusicLibraryDataSource::drawCustomEmptyMessage(App* app, U8G2& display) {
     if (isReindexing_) {
-        const char* msg = "Re-indexing Library...";
+        // Use the original, non-bold font for a cleaner look
         display.setFont(u8g2_font_6x10_tf);
-        display.drawStr((display.getDisplayWidth() - display.getStrWidth(msg)) / 2, 38, msg);
+
+        const char* line1 = "Re-indexing";
+        const char* line2 = "Library...";
+        const char* line3 = "Please wait";
+        
+        // Define layout constants
+        const int fontHeight = 10;
+        const int lineSpacing = 2;
+        const int totalLines = 3;
+        
+        // Calculate the total height of the entire text block
+        const int totalBlockHeight = (totalLines * fontHeight) + ((totalLines - 1) * lineSpacing);
+        
+        // Calculate the dimensions of the area *below* the status bar
+        const int drawableAreaY = STATUS_BAR_H;
+        const int drawableAreaHeight = display.getDisplayHeight() - drawableAreaY;
+
+        // Calculate the starting Y position to perfectly center the block within the drawable area
+        const int startY = drawableAreaY + (drawableAreaHeight - totalBlockHeight) / 2;
+
+        // Calculate the baseline Y position for the first line
+        // The baseline is where the bottom of the characters sit. For u8g2, it's relative to the top.
+        int baselineY = startY + display.getAscent();
+
+        // Calculate X positions for each line to center them horizontally
+        int x1 = (display.getDisplayWidth() - display.getStrWidth(line1)) / 2;
+        int x2 = (display.getDisplayWidth() - display.getStrWidth(line2)) / 2;
+        int x3 = (display.getDisplayWidth() - display.getStrWidth(line3)) / 2;
+
+        // Draw the three centered lines at their calculated positions
+        display.drawStr(x1, baselineY, line1);
+        display.drawStr(x2, baselineY + fontHeight + lineSpacing, line2);
+        display.drawStr(x3, baselineY + 2 * (fontHeight + lineSpacing), line3);
+
         return true;
     }
     return false;
@@ -72,38 +105,28 @@ bool MusicLibraryDataSource::drawCustomEmptyMessage(App* app, U8G2& display) {
 void MusicLibraryDataSource::onItemSelected(App* app, ListMenu* menu, int index) {
     if (index >= items_.size()) return;
     
-    // --- THE CRITICAL FIX ---
-    // Make a full copy of the item data immediately.
-    // This makes the rest of the function immune to the `items_.clear()`
-    // call that happens mid-execution during the event dispatch.
     PlaylistItem item_copy = items_[index];
 
-    switch(item_copy.type) { // Use the safe copy from this point on
+    switch(item_copy.type) {
         case ItemType::PLAYLIST: {
-            // 1. Get the new song list data source instance from the App
             auto& songListDataSource = app->getSongListDataSource();
-            
-            // 2. Configure it with the path from our safe, local copy
             songListDataSource.setPlaylistPath(item_copy.path);
-            
-            // 3. Now it is safe to publish the navigation event.
             EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::SONG_LIST));
             break;
         }
         case ItemType::REINDEX: {
-            // This case was already safe, but for consistency, we'll leave the pattern.
             isReindexing_ = true;
             menu->reloadData(app, true);
-            // Redraw the "re-indexing" message before the blocking call
+            
             U8G2& display = app->getHardwareManager().getMainDisplay();
             display.clearBuffer();
             app->drawStatusBar();
             menu->draw(app, display); 
             display.sendBuffer();
-            // Blocking call
+            
             app->getMusicLibraryManager().buildIndex();
             isReindexing_ = false;
-            // Show popup and reload data on confirm
+            
             app->showPopUp("Success", "Library re-indexed.", 
                 [this](App* cb_app) {
                     this->loadPlaylists();
@@ -135,4 +158,3 @@ void MusicLibraryDataSource::drawItem(App* app, U8G2& display, ListMenu* menu, i
     
     menu->updateAndDrawText(display, item.name.c_str(), text_x, text_y, text_w, isSelected);
 }
-

@@ -973,7 +973,7 @@ void App::loop()
         drawSecondaryDisplay();
     } else {
         // --- Idle State ---
-        delay(10); // Yield CPU time
+        // delay(10); // Yield CPU time
     }
 
     // 5. Handle hardware state based on resource requirements

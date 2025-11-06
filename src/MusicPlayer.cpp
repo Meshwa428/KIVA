@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <algorithm> // For std::min
 
 #include "AudioFileSourceKivaSD.h"
 #include "AudioFileSourceID3.h"
@@ -14,7 +15,8 @@ MusicPlayer::MusicPlayer() :
     out_(nullptr), mixer_(nullptr), currentSlot_(-1),
     currentState_(State::STOPPED), repeatMode_(RepeatMode::REPEAT_OFF), requestedAction_(PlaybackAction::NONE), isShuffle_(false),
     _isLoadingTrack(false), currentGain_(1.75f),
-    playlistTrackIndex_(-1),
+    playlistTrackIndex_(-1), currentTrackDuration_(0),
+    playbackStartTimeMs_(0), accumulatedPlayedTimeMs_(0),
     mixerTaskHandle_(nullptr)
 {
     for (int i = 0; i < 2; ++i) {
@@ -35,6 +37,27 @@ void MusicPlayer::setup(App* app) {
     app_ = app;
 }
 
+int MusicPlayer::getTotalDuration() const {
+    return currentTrackDuration_;
+}
+
+int MusicPlayer::getCurrentTime() const {
+    if (currentState_ == State::STOPPED || currentState_ == State::LOADING) {
+        return 0;
+    }
+
+    unsigned long totalPlayedMs = accumulatedPlayedTimeMs_;
+
+    if (currentState_ == State::PLAYING) {
+        totalPlayedMs += (millis() - playbackStartTimeMs_);
+    }
+
+    int seconds = totalPlayedMs / 1000;
+    
+    return std::min(seconds, currentTrackDuration_);
+}
+
+
 void MusicPlayer::setSongFinishedCallback(SongFinishedCallback cb) {
     songFinishedCallback_ = cb;
 }
@@ -50,7 +73,7 @@ bool MusicPlayer::allocateResources() {
     out_ = new AudioOutputPDM(Pins::AMPLIFIER_PIN);
     mixer_ = new AudioOutputMixer(32, out_);
     BaseType_t result = xTaskCreatePinnedToCore(
-        mixerTaskWrapper, "AudioMixerTask", 4096, this, 5, &mixerTaskHandle_, 1
+        mixerTaskWrapper, "AudioMixerTask", 8192, this, 5, &mixerTaskHandle_, 1
     );
     if (result != pdPASS) {
         LOG(LogLevel::ERROR, "PLAYER", "FATAL: Failed to create mixer task!");
@@ -132,6 +155,7 @@ void MusicPlayer::mixerTaskLoop() {
 
 void MusicPlayer::pause() {
     if (currentState_ == State::PLAYING) {
+        accumulatedPlayedTimeMs_ += (millis() - playbackStartTimeMs_);
         currentState_ = State::PAUSED;
         if (out_) out_->stop();
         LOG(LogLevel::INFO, "PLAYER", "Playback paused.");
@@ -140,6 +164,7 @@ void MusicPlayer::pause() {
 
 void MusicPlayer::resume() {
     if (currentState_ == State::PAUSED) {
+        playbackStartTimeMs_ = millis();
         currentState_ = State::PLAYING;
         if (out_) out_->begin();
         LOG(LogLevel::INFO, "PLAYER", "Playback resumed.");
@@ -154,9 +179,12 @@ void MusicPlayer::stop() {
     currentState_ = State::STOPPED;
     currentTrackPath_ = "";
     currentTrackName_ = "";
+    currentTrackDuration_ = 0;
+    accumulatedPlayedTimeMs_ = 0;
+    playbackStartTimeMs_ = 0;
 }
 
-void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex) {
+void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<PlaylistTrack>& tracks, int startIndex) {
     if (tracks.empty() || startIndex >= (int)tracks.size()) return;
     _isLoadingTrack = true;
     currentState_ = State::LOADING;
@@ -166,9 +194,9 @@ void MusicPlayer::queuePlaylist(const std::string& name, const std::vector<std::
 
     if (isShuffle_) {
         generateShuffledIndices();
-        std::string targetPath = currentPlaylist_[startIndex];
+        std::string targetPath = currentPlaylist_[startIndex].path;
         for(size_t i = 0; i < shuffledIndices_.size(); ++i) {
-            if (currentPlaylist_[shuffledIndices_[i]] == targetPath) {
+            if (currentPlaylist_[shuffledIndices_[i]].path == targetPath) {
                 playlistTrackIndex_ = i - 1;
                 break;
             }
@@ -212,7 +240,6 @@ void MusicPlayer::setVolume(uint8_t volumePercent) {
     }
 }
 
-// --- MODIFICATION: The missing function is re-inserted here ---
 void MusicPlayer::stopPlayback() {
     LOG(LogLevel::INFO, "PLAYER", "Stopping all playback and cleaning up both slots.");
     if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) == pdTRUE) {
@@ -230,7 +257,12 @@ void MusicPlayer::stopPlayback() {
     }
 }
 
-void MusicPlayer::startPlayback(const std::string& path) {
+void MusicPlayer::startPlayback(const PlaylistTrack& track) {
+    currentState_ = State::LOADING;
+    
+    accumulatedPlayedTimeMs_ = 0;
+    playbackStartTimeMs_ = 0;
+    
     int prevSlot;
     int nextSlot;
 
@@ -241,14 +273,14 @@ void MusicPlayer::startPlayback(const std::string& path) {
     
     prevSlot = currentSlot_;
     nextSlot = (currentSlot_ == -1) ? 0 : (currentSlot_ + 1) % 2;
-    LOG(LogLevel::INFO, "PLAYER", "Preparing to start '%s' in slot %d", path.c_str(), nextSlot);
+    LOG(LogLevel::INFO, "PLAYER", "Preparing to start '%s' in slot %d", track.path.c_str(), nextSlot);
 
     delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
     delete stub_[nextSlot]; stub_[nextSlot] = nullptr;
     delete id3_filter_[nextSlot]; id3_filter_[nextSlot] = nullptr;
     delete source_file_[nextSlot]; source_file_[nextSlot] = nullptr;
     
-    source_file_[nextSlot] = new AudioFileSourceKivaSD(path.c_str());
+    source_file_[nextSlot] = new AudioFileSourceKivaSD(track.path.c_str());
     if (!source_file_[nextSlot]->isOpen()) {
         LOG(LogLevel::ERROR, "PLAYER", "Failed to open file for slot %d", nextSlot);
         delete source_file_[nextSlot];
@@ -266,7 +298,20 @@ void MusicPlayer::startPlayback(const std::string& path) {
 
     xSemaphoreGive(audioSlotMutex_);
 
-    if (!mp3_[nextSlot]->begin(id3_filter_[nextSlot], stub_[nextSlot])) {
+    bool success = mp3_[nextSlot]->begin(id3_filter_[nextSlot], stub_[nextSlot]);
+    
+    if (success) {
+        uint32_t audioStartPos = id3_filter_[nextSlot]->getPos();
+        LOG(LogLevel::DEBUG, "PLAYER", "Audio data starts at position: %u", audioStartPos);
+        
+        if (id3_filter_[nextSlot]->seek(audioStartPos, SEEK_SET)) {
+            LOG(LogLevel::DEBUG, "PLAYER", "Rewinding to audio start position: %u", audioStartPos);
+        } else {
+            LOG(LogLevel::ERROR, "PLAYER", "Failed to rewind to audio start position!");
+        }
+    }
+    
+    if (!success) {
         LOG(LogLevel::ERROR, "PLAYER", "MP3 begin failed for slot %d", nextSlot);
         if (xSemaphoreTake(audioSlotMutex_, portMAX_DELAY) == pdTRUE) {
             delete mp3_[nextSlot]; mp3_[nextSlot] = nullptr;
@@ -280,12 +325,24 @@ void MusicPlayer::startPlayback(const std::string& path) {
         return;
     }
 
-    LOG(LogLevel::INFO, "PLAYER", "Playback started successfully in slot %d", nextSlot);
-    currentTrackPath_ = path;
-    size_t last_slash = path.find_last_of('/');
-    currentTrackName_ = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
-    currentState_ = State::PLAYING;
+    currentTrackPath_ = track.path;
+    currentTrackDuration_ = track.duration;
+    size_t last_slash = track.path.find_last_of('/');
+    currentTrackName_ = (last_slash == std::string::npos) ? track.path : track.path.substr(last_slash + 1);
+    
     _isLoadingTrack = false;
+
+    // This happens *after* all blocking setup calls are finished.
+    currentState_ = State::PLAYING;
+    playbackStartTimeMs_ = millis();
+    
+    int startTimeSeconds = getCurrentTime();
+    char timeStr[8];
+    snprintf(timeStr, sizeof(timeStr), "%d:%02d", startTimeSeconds / 60, startTimeSeconds % 60);
+
+    LOG(LogLevel::INFO, "PLAYER", "Playback initiated for '%s'. Initial calculated time: %s (%d seconds).", 
+        currentTrackName_.c_str(), timeStr, startTimeSeconds);
+
 }
 
 void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
@@ -294,7 +351,7 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
         return;
     }
     if (songFinishedNaturally && repeatMode_ == RepeatMode::REPEAT_ONE) {
-        startPlayback(currentTrackPath_);
+        startPlayback({currentTrackPath_, currentTrackDuration_});
         return;
     }
     
@@ -310,8 +367,8 @@ void MusicPlayer::playNextInPlaylist(bool songFinishedNaturally) {
         }
     }
     
-    const std::string& path = isShuffle_ ? currentPlaylist_[shuffledIndices_[playlistTrackIndex_]] : currentPlaylist_[playlistTrackIndex_];
-    startPlayback(path);
+    const auto& track = isShuffle_ ? currentPlaylist_[shuffledIndices_[playlistTrackIndex_]] : currentPlaylist_[playlistTrackIndex_];
+    startPlayback(track);
 }
 
 void MusicPlayer::songFinished() {
@@ -337,12 +394,9 @@ void MusicPlayer::serviceRequest() {
 }
 
 float MusicPlayer::getPlaybackProgress() const {
-    if (currentSlot_ != -1 && source_file_[currentSlot_] && source_file_[currentSlot_]->isOpen()) {
-        uint32_t pos = source_file_[currentSlot_]->getPos();
-        uint32_t size = source_file_[currentSlot_]->getSize();
-        if (size > 0) {
-            return (float)pos / (float)size;
-        }
+    if (currentTrackDuration_ > 0) {
+        float progress = (float)getCurrentTime() / (float)currentTrackDuration_;
+        return std::min(progress, 1.0f);
     }
     return 0.0f;
 }
@@ -352,7 +406,7 @@ void MusicPlayer::toggleShuffle() {
     if (isShuffle_ && !currentPlaylist_.empty()) {
         generateShuffledIndices();
         for(size_t i = 0; i < shuffledIndices_.size(); ++i) {
-            if (currentPlaylist_[shuffledIndices_[i]] == currentTrackPath_) {
+            if (currentPlaylist_[shuffledIndices_[i]].path == currentTrackPath_) {
                 playlistTrackIndex_ = i;
                 break;
             }

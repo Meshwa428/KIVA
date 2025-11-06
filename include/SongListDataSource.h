@@ -16,15 +16,16 @@ public:
     void onExit(App* app, ListMenu* menu) override;
 
     void setPlaylistPath(const std::string& path);
-    const std::string& getPlaylistName() const { return playlistName_; } // Getter for the name
+    const std::string& getPlaylistName() const { return playlistName_; }
 
 private:
     struct TrackItem {
         std::string name;
         std::string path;
+        int duration;
     };
 
-    void loadTracksFromIndex(); // Renamed to be specific
+    void loadTracksFromIndex();
 
     std::vector<TrackItem> tracks_;
     std::string playlistPath_;
