@@ -4,6 +4,7 @@
 #include <HIDForge.h>
 
 class App;
+class BleMouse; // Forward declare BleMouse
 
 class MyBleManagerService : public Service {
 public:
@@ -13,6 +14,10 @@ public:
 
     BleKeyboard* startKeyboard();
     void stopKeyboard();
+
+    // --- NEW METHODS ---
+    BleMouse* startMouse();
+    void stopMouse();
 
 private:
     BleManager bleManager_;

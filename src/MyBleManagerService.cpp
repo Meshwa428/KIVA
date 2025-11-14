@@ -5,15 +5,11 @@
 MyBleManagerService::MyBleManagerService() : bleManager_() {}
 
 void MyBleManagerService::setup(App* app) {
-    // The BleManager setup method doesn't take an App* parameter.
-    // It's likely that it initializes the BLE stack or similar.
     bleManager_.setup();
     LOG(LogLevel::INFO, "MyBleManagerService", "BLE Manager Service initialized.");
 }
 
-void MyBleManagerService::loop() {
-    // BleManager doesn't have a loop method, so nothing to do here.
-}
+void MyBleManagerService::loop() {}
 
 BleKeyboard* MyBleManagerService::startKeyboard() {
     return bleManager_.startKeyboard();
@@ -21,4 +17,12 @@ BleKeyboard* MyBleManagerService::startKeyboard() {
 
 void MyBleManagerService::stopKeyboard() {
     bleManager_.stopKeyboard();
+}
+
+BleMouse* MyBleManagerService::startMouse() {
+    return bleManager_.startMouse();
+}
+
+void MyBleManagerService::stopMouse() {
+    bleManager_.stopMouse();
 }

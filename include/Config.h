@@ -80,7 +80,10 @@ enum class MenuType
     MUSIC_LIBRARY,
     SONG_LIST,
     NOW_PLAYING,
-    INFO_MENU
+    INFO_MENU,
+
+    AIR_MOUSE_MODE_GRID,
+    AIR_MOUSE_ACTIVE
 };
 
 enum class SecondaryWidgetType {

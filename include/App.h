@@ -50,6 +50,7 @@
 #include <memory>
 #include "StationSniffSaveMenu.h"
 #include "StationFileListDataSource.h"
+#include "AirMouseActiveMenu.h"
 
 class HardwareManager;
 class WifiManager;
@@ -74,6 +75,9 @@ class AssociationSleeper;
 class BadMsgAttacker;
 class RtcManager;
 class SystemDataProvider;
+
+class MPUManager;
+class AirMouseService;
 
 class App : public ISubscriber
 {
@@ -133,6 +137,9 @@ public:
     IMenu *getMenu(MenuType type);
     WifiListDataSource &getWifiListDataSource() { return wifiListDataSource_; }
     StationListDataSource &getStationListDataSource() { return stationListDataSource_; }
+
+    MPUManager& getMPUManager();
+    AirMouseService& getAirMouseService();
 
     MenuType getPreviousMenuType() const;
 
@@ -207,6 +214,7 @@ private:
     GridMenu badMsgModesMenu_;
     GridMenu settingsGridMenu_;
     GridMenu firmwareUpdateGrid_;
+    GridMenu airMouseModeMenu_;
 
     BrightnessMenu brightnessMenu_;
     TextInputMenu textInputMenu_;
@@ -230,6 +238,7 @@ private:
     NowPlayingMenu nowPlayingMenu_;
     AssociationSleepActiveMenu associationSleepActiveMenu_;
     BadMsgActiveMenu badMsgActiveMenu_;
+    AirMouseActiveMenu airMouseActiveMenu_;
 
     // DataSources
     WifiListDataSource wifiListDataSource_;
