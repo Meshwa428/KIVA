@@ -1,3 +1,5 @@
+// KIVA/src/AirMouseService.cpp
+
 #include "AirMouseService.h"
 #include "App.h"
 #include "MPUManager.h"
@@ -7,6 +9,7 @@
 
 AirMouseService::AirMouseService() 
     : app_(nullptr), mpuManager_(nullptr), isActive_(false),
+      activeMouse_(nullptr), // Initialize raw pointer to null
       lastUpdateTime_(0), anglePitch_(0), angleRoll_(0), pitchAccel_(0), rollAccel_(0),
       velocityX_(0.0f), velocityY_(0.0f)
 {}
@@ -26,16 +29,19 @@ bool AirMouseService::start(Mode mode) {
 
     currentMode_ = mode;
     if (mode == Mode::BLE) {
-        BleMouse* mouse = app_->getBleManager().startMouse();
+        // --- FIX: Get the generic MouseInterface* and assign it to our raw pointer ---
+        MouseInterface* mouse = app_->getBleManager().startMouse();
         if (!mouse) { 
             LOG(LogLevel::ERROR, "AIRMOUSE", "Failed to start BLE mouse HID.");
             mpuManager_->stop(); 
             return false; 
         }
-        activeMouse_.reset(mouse);
-    } else {
-        activeMouse_ = std::make_unique<UsbMouse>();
-        activeMouse_->begin();
+        activeMouse_ = mouse; // Correctly assign the borrowed pointer
+    } else { // USB Mode
+        // --- FIX: Create the object, give ownership to the unique_ptr, and borrow the raw pointer ---
+        usbMouse_ = std::make_unique<UsbMouse>();
+        activeMouse_ = usbMouse_.get();
+        activeMouse_->begin(); // Call begin on the active interface
         USB.begin();
     }
 
@@ -54,8 +60,17 @@ bool AirMouseService::start(Mode mode) {
 void AirMouseService::stop() {
     if (!isActive_) return;
     LOG(LogLevel::INFO, "AIRMOUSE", "Stopping Air Mouse.");
-    if (currentMode_ == Mode::BLE) app_->getBleManager().stopMouse();
-    activeMouse_.reset();
+    
+    if (currentMode_ == Mode::BLE) {
+        app_->getBleManager().stopMouse();
+    } else {
+        // --- FIX: This correctly destroys the UsbMouse object ---
+        usbMouse_.reset();
+    }
+    
+    // --- FIX: The non-owning pointer is now invalid, so set it to null ---
+    activeMouse_ = nullptr;
+    
     mpuManager_->stop();
     isActive_ = false;
 }
@@ -69,37 +84,28 @@ void AirMouseService::loop() {
 
     MPUData data = mpuManager_->readData();
 
-    // --- TUNING PARAMETERS ---
     const float SENSITIVITY = 2.5f; 
     const float SMOOTHING_FACTOR = 0.15f; 
     const float DEADZONE = 1.5f;
 
-    // --- VELOCITY CALCULATION ---
-
-    // 1. Map raw gyro rotation to target velocities.
     float target_vx = (abs(data.gz) > DEADZONE) ? (data.gz * -SENSITIVITY) : 0.0f;
     float target_vy = (abs(data.gx) > DEADZONE) ? (data.gx * -SENSITIVITY) : 0.0f;
 
-    // 2. Apply the smoothing filter.
     velocityX_ = (SMOOTHING_FACTOR * target_vx) + ((1.0f - SMOOTHING_FACTOR) * velocityX_);
     velocityY_ = (SMOOTHING_FACTOR * target_vy) + ((1.0f - SMOOTHING_FACTOR) * velocityY_);
 
-    // 3. Prepare the final delta values for the HID report.
     int dx = static_cast<int>(velocityX_);
     int dy = static_cast<int>(velocityY_);
     
-    // --- CRITICAL FIX: CLAMP THE VALUES TO PREVENT OVERFLOW ---
     const int MOUSE_MOVE_MAX = 127;
     const int MOUSE_MOVE_MIN = -127;
     dx = std::max(MOUSE_MOVE_MIN, std::min(MOUSE_MOVE_MAX, dx));
     dy = std::max(MOUSE_MOVE_MIN, std::min(MOUSE_MOVE_MAX, dy));
 
-    // 4. Send the move command only if there is movement.
     if (dx != 0 || dy != 0) {
         activeMouse_->move(dx, dy);
     }
     
-    // --- UI Visualizer Update ---
     rollAccel_ = (atan2(data.ay, data.az) * 180.0) / PI;
     pitchAccel_ = (atan2(-data.ax, sqrt(data.ay * data.ay + data.az * data.az)) * 180.0) / PI;
     angleRoll_ = 0.98 * (angleRoll_ + data.gy * dt) + 0.02 * rollAccel_;
@@ -111,12 +117,24 @@ void AirMouseService::processClick(bool isPrimary) {
     activeMouse_->click(isPrimary ? MOUSE_LEFT : MOUSE_RIGHT);
 }
 
+void AirMouseService::processPress(uint8_t button) {
+    if (!isActive_ || !activeMouse_) return;
+    activeMouse_->press(button);
+}
+
+void AirMouseService::processRelease(uint8_t button) {
+    if (!isActive_ || !activeMouse_) return;
+    activeMouse_->release(button);
+}
+
 void AirMouseService::processScroll(int amount) {
     if (!isActive_ || !activeMouse_) return;
     activeMouse_->move(0, 0, amount);
 }
 
-bool AirMouseService::isConnected() const { return isActive_ && activeMouse_ && activeMouse_->isConnected(); }
+bool AirMouseService::isConnected() const { 
+    return isActive_ && activeMouse_ && activeMouse_->isConnected(); 
+}
 
 SensorAngles AirMouseService::getAngles() const {
     return {anglePitch_, angleRoll_};

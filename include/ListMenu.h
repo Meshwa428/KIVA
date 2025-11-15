@@ -45,6 +45,12 @@ private:
     bool marqueePaused_;
     unsigned long marqueePauseStartTime_;
     bool marqueeScrollLeft_;
+
+    // State for continuous scrolling
+    bool isScrolling_;
+    int scrollDirection_; // -1 for up, 1 for down
+    unsigned long pressStartTime_;
+    unsigned long lastScrollTime_;
 };
 
 #endif // LIST_MENU_H

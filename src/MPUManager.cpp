@@ -14,6 +14,7 @@ const uint8_t MPU_RA_ACCEL_XOUT_H = 0x3B;
 MPUManager::MPUManager() 
     : app_(nullptr), isReady_(false), 
       gyroXOffset_(0), gyroYOffset_(0), gyroZOffset_(0),
+      accelXOffset_(0), accelYOffset_(0), accelZOffset_(0),
       accelResolution_(0.0f), gyroResolution_(0.0f) {}
 
 void MPUManager::setup(App* app) {
@@ -52,10 +53,31 @@ bool MPUManager::begin() {
     }
     accelResolution_ = 8.0f / 32768.0f; // LSB sensitivity for +/- 8g is 4096
     
-    isReady_ = true;
-    LOG(LogLevel::INFO, "MPU_MGR", "MPU Initialized and configured successfully via custom driver.");
+    // --- THIS IS THE FIX ---
+    // 5. Apply the hard-coded offsets for THIS specific MPU chip.
+    // These are the raw integer offsets you provided.
+    const int16_t rawGyroOffsetX = 124;
+    const int16_t rawGyroOffsetY = -80;
+    const int16_t rawGyroOffsetZ = 150;
+    const int16_t rawAccelOffsetX = -132;
+    const int16_t rawAccelOffsetY = -47;
+    const int16_t rawAccelOffsetZ = -86;
+
+    // Convert the raw integer offsets into their floating-point equivalents
+    // in physical units (dps and G's) using the resolutions we just configured.
+    gyroXOffset_ = (float)rawGyroOffsetX * gyroResolution_;
+    gyroYOffset_ = (float)rawGyroOffsetY * gyroResolution_;
+    gyroZOffset_ = (float)rawGyroOffsetZ * gyroResolution_;
+    accelXOffset_ = (float)rawAccelOffsetX * accelResolution_;
+    accelYOffset_ = (float)rawAccelOffsetY * accelResolution_;
+    accelZOffset_ = (float)rawAccelOffsetZ * accelResolution_;
+    // NOTE: For accelerometers, a proper calibration also accounts for gravity (1G).
+    // The Z-axis offset is often used to ensure it reads 1.0 when flat and not 0.0.
+    // For an air mouse, primarily using gyro, this direct offset conversion is sufficient.
+
+    LOG(LogLevel::INFO, "MPU_MGR", "MPU Initialized and applied hard-coded offsets.");
     
-    calibrate();
+    isReady_ = true;
     return true;
 }
 
@@ -67,43 +89,6 @@ void MPUManager::stop() {
 }
 
 bool MPUManager::isReady() const { return isReady_; }
-
-bool MPUManager::testConnection() {
-    uint8_t whoami = readRegister(MPU_RA_WHO_AM_I);
-    LOG(LogLevel::INFO, "MPU_MGR", "WHO_AM_I register returned: 0x%02X", whoami);
-
-    if (whoami == 0x70 || whoami == 0x71 || whoami == 0x73) {
-        LOG(LogLevel::INFO, "MPU_MGR", "MPU connection successful.");
-        return true;
-    } else {
-        LOG(LogLevel::ERROR, "MPU_MGR", "MPU connection failed. Incorrect WHO_AM_I value.");
-        return false;
-    }
-}
-
-void MPUManager::calibrate() {
-    if (!isReady_) return;
-    LOG(LogLevel::INFO, "MPU_MGR", "Calibrating Gyro... Keep device still.");
-    // --- REMOVED --- app->showPopUp("Calibrating IMU", "Keep device still...", nullptr, "", "", true);
-    
-    const int num_samples = 1000;
-    float sumX = 0, sumY = 0, sumZ = 0;
-    
-    for (int i = 0; i < num_samples; ++i) {
-        MPUData raw = readData();
-        sumX += raw.gx;
-        sumY += raw.gy;
-        sumZ += raw.gz;
-        delay(1);
-    }
-    
-    gyroXOffset_ = sumX / num_samples;
-    gyroYOffset_ = sumY / num_samples;
-    gyroZOffset_ = sumZ / num_samples;
-
-    // --- REMOVED --- app->showPopUp("Calibration OK", "IMU calibration complete.", nullptr, "OK", "", true);
-    LOG(LogLevel::INFO, "MPU_MGR", "Calibration complete. Offsets: Gx=%.2f, Gy=%.2f, Gz=%.2f", gyroXOffset_, gyroYOffset_, gyroZOffset_);
-}
 
 MPUData MPUManager::readData() {
     MPUData data = {0};
@@ -124,19 +109,38 @@ MPUData MPUManager::readData() {
         int16_t gy_raw = (Wire.read() << 8) | Wire.read();
         int16_t gz_raw = (Wire.read() << 8) | Wire.read();
 
+        // Convert raw ADC values to physical units
         data.ax = (float)ax_raw * accelResolution_;
         data.ay = (float)ay_raw * accelResolution_;
         data.az = (float)az_raw * accelResolution_;
-        
-        // Apply software calibration offsets
-        data.gx = ((float)gx_raw * gyroResolution_) - gyroXOffset_;
-        data.gy = ((float)gy_raw * gyroResolution_) - gyroYOffset_;
-        data.gz = ((float)gz_raw * gyroResolution_) - gyroZOffset_;
+        data.gx = (float)gx_raw * gyroResolution_;
+        data.gy = (float)gy_raw * gyroResolution_;
+        data.gz = (float)gz_raw * gyroResolution_;
+
+        // Apply the pre-calculated floating-point offsets to the readings.
+        data.ax -= accelXOffset_;
+        data.ay -= accelYOffset_;
+        data.az -= accelZOffset_;
+        data.gx -= gyroXOffset_;
+        data.gy -= gyroYOffset_;
+        data.gz -= gyroZOffset_;
     }
     return data;
 }
 
-// Low-level I2C helpers
+bool MPUManager::testConnection() {
+    uint8_t whoami = readRegister(MPU_RA_WHO_AM_I);
+    LOG(LogLevel::INFO, "MPU_MGR", "WHO_AM_I register returned: 0x%02X", whoami);
+
+    if (whoami == 0x70 || whoami == 0x71 || whoami == 0x73) {
+        LOG(LogLevel::INFO, "MPU_MGR", "MPU connection successful.");
+        return true;
+    } else {
+        LOG(LogLevel::ERROR, "MPU_MGR", "MPU connection failed. Incorrect WHO_AM_I value.");
+        return false;
+    }
+}
+
 bool MPUManager::writeRegister(uint8_t regAddress, uint8_t value) {
     HardwareManager::I2CMuxLock lock(app_->getHardwareManager(), Pins::MUX_CHANNEL_MPU);
     Wire.beginTransmission(MPU_ADDRESS);

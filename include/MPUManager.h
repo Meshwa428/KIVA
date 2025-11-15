@@ -19,7 +19,6 @@ public:
     void stop();
     bool isReady() const;
     MPUData readData();
-    void calibrate();
 
 private:
     // Low-level I2C communication helpers
@@ -30,8 +29,9 @@ private:
     App* app_;
     bool isReady_;
     
-    // Calibration offsets for the gyroscope (software-based)
+    // --- NEW: Hard-coded calibration offsets ---
     float gyroXOffset_, gyroYOffset_, gyroZOffset_;
+    float accelXOffset_, accelYOffset_, accelZOffset_;
     
     // Resolution values for converting raw data
     float accelResolution_;

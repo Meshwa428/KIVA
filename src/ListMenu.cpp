@@ -11,7 +11,11 @@ ListMenu::ListMenu(std::string title, MenuType menuType, IListMenuDataSource* da
     selectedIndex_(0),
     totalItems_(0),
     marqueeActive_(false),
-    marqueeScrollLeft_(true)
+    marqueeScrollLeft_(true),
+    isScrolling_(false), // Initialize new members
+    scrollDirection_(0),
+    pressStartTime_(0),
+    lastScrollTime_(0)
 {}
 
 void ListMenu::reloadData(App* app, bool resetSelection) {
@@ -38,8 +42,9 @@ void ListMenu::reloadData(App* app, bool resetSelection) {
 void ListMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
     if (!dataSource_) return;
+    isScrolling_ = false; // Reset state on enter
     dataSource_->onEnter(app, this, isForwardNav);
-    reloadData(app, isForwardNav); // Pass the flag to reloadData
+    reloadData(app, isForwardNav);
 }
 
 void ListMenu::onUpdate(App* app) {
@@ -49,6 +54,19 @@ void ListMenu::onUpdate(App* app) {
     if (dataSource_) {
         dataSource_->onUpdate(app, this);
     }
+    
+    if (isScrolling_) {
+        unsigned long currentTime = millis();
+        unsigned long holdDuration = currentTime - pressStartTime_;
+        
+        // Use a simple, two-stage acceleration for lists
+        unsigned long repeatInterval = (holdDuration > 500) ? 100 : 200;
+
+        if (currentTime - lastScrollTime_ > repeatInterval) {
+            scroll(scrollDirection_);
+            lastScrollTime_ = currentTime;
+        }
+    }
 }
 
 void ListMenu::onExit(App* app) {
@@ -57,50 +75,80 @@ void ListMenu::onExit(App* app) {
         dataSource_->onExit(app, this);
     }
     marqueeActive_ = false;
+    isScrolling_ = false; // Reset state on exit
 }
 
 void ListMenu::handleInput(InputEvent event, App* app) {
     if (!dataSource_) return;
 
-    if (event == InputEvent::BTN_BACK_PRESS) {
-        if (!dataSource_->onBackPress(app, this)) {
-            EventDispatcher::getInstance().publish(NavigateBackEvent());
-        }
-        return;
-    }
-
-    if (totalItems_ == 0) {
-        return;
-    }
-    
-    // --- NEW: Handle slider adjustments ---
+    // Handle interactive items first, as they have special behavior for certain inputs.
     const MenuItem* item = dataSource_->getItem(selectedIndex_);
     if (item && item->isInteractive && item->adjustValue) {
         if (event == InputEvent::BTN_LEFT_PRESS || event == InputEvent::ENCODER_CCW) {
-            item->adjustValue(app, -1); // -1 for decrease
-            return; // Consume the event
+            item->adjustValue(app, -1);
+            return; // Consume event
         }
         if (event == InputEvent::BTN_RIGHT_PRESS || event == InputEvent::ENCODER_CW) {
-            item->adjustValue(app, 1); // 1 for increase
-            return; // Consume the event
+            item->adjustValue(app, 1);
+            return; // Consume event
         }
     }
-    // --- END NEW ---
 
+    // If there are no items, only allow the back button to work.
+    if (totalItems_ == 0 && event != InputEvent::BTN_BACK_PRESS) {
+        return;
+    }
+
+    // --- NEW: Consolidated switch statement ---
     switch(event) {
+        // Discrete Scrolling (Encoder)
         case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_DOWN_PRESS:
             scroll(1);
             break;
         case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_UP_PRESS:
             scroll(-1);
             break;
+        
+        // Continuous Scrolling (Buttons) - Start
+        case InputEvent::BTN_DOWN_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true;
+            scrollDirection_ = 1;
+            pressStartTime_ = millis();
+            lastScrollTime_ = millis();
+            scroll(1);
+            break;
+        case InputEvent::BTN_UP_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true;
+            scrollDirection_ = -1;
+            pressStartTime_ = millis();
+            lastScrollTime_ = millis();
+            scroll(-1);
+            break;
+        
+        // Continuous Scrolling (Buttons) - Stop
+        case InputEvent::BTN_DOWN_RELEASE:
+        case InputEvent::BTN_UP_RELEASE:
+            isScrolling_ = false;
+            break;
+
+        // Item Selection
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             dataSource_->onItemSelected(app, this, selectedIndex_);
             break;
-        default: break;
+
+        // Back Navigation
+        case InputEvent::BTN_BACK_PRESS:
+            if (!dataSource_->onBackPress(app, this)) {
+                EventDispatcher::getInstance().publish(NavigateBackEvent());
+            }
+            break;
+
+        default:
+            // Ignore other events like _RELEASE for non-scrolling buttons
+            break;
     }
 }
 

@@ -4,7 +4,8 @@
 #include "Event.h"
 #include "EventDispatcher.h"
 #include "HardwareManager.h"
-#include <algorithm> // for std::max/min
+#include "common/keys.h"
+#include <algorithm>
 
 AirMouseActiveMenu::AirMouseActiveMenu() 
     : modeToStart_(AirMouseService::Mode::USB), hapticFeedbackUntil_(0),
@@ -80,24 +81,47 @@ void AirMouseActiveMenu::handleInput(InputEvent event, App* app) {
     if (!airMouse.isActive()) return;
 
     switch(event) {
+        // Left Mouse Button
+        case InputEvent::BTN_LEFT_PRESS:
+            airMouse.processPress(MOUSE_LEFT);
+            break;
+        case InputEvent::BTN_LEFT_RELEASE:
+            airMouse.processRelease(MOUSE_LEFT);
+            break;
+
+        // Right Mouse Button
+        case InputEvent::BTN_RIGHT_PRESS:
+            airMouse.processPress(MOUSE_RIGHT);
+            break;
+        case InputEvent::BTN_RIGHT_RELEASE:
+            airMouse.processRelease(MOUSE_RIGHT);
+            break;
+
+        // Middle Mouse Button
         case InputEvent::BTN_ENCODER_PRESS:
-        case InputEvent::BTN_OK_PRESS:
             app->getHardwareManager().setVibration(true);
             hapticFeedbackUntil_ = millis() + 50;
-            airMouse.processClick(true);
+            airMouse.processPress(MOUSE_MIDDLE);
             break;
+        case InputEvent::BTN_ENCODER_RELEASE:
+            airMouse.processRelease(MOUSE_MIDDLE);
+            break;
+
+        // Scroll Wheel
         case InputEvent::ENCODER_CW:
             airMouse.processScroll(-1);
             break;
         case InputEvent::ENCODER_CCW:
             airMouse.processScroll(1);
             break;
+
+        // Exit
         case InputEvent::BTN_BACK_PRESS:
-            // Un-pause rendering BEFORE stopping the service and navigating away.
             app->getHardwareManager().setUiRenderingPaused(false);
             app->getAirMouseService().stop();
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
+            
         default:
             break;
     }

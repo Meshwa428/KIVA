@@ -46,9 +46,6 @@ HardwareManager::HardwareManager() :
         lastDbncT0_[i] = 0;
         prevDbncHState1_[i] = true; // true = released
         lastDbncT1_[i] = 0;
-        isBtnHeld1_[i] = false;
-        btnHoldStartT1_[i] = 0;
-        lastRepeatT1_[i] = 0;
     }
     // Initialize the smoothing buffer
     for (int i = 0; i < Battery::NUM_SAMPLES; ++i)
@@ -104,8 +101,6 @@ void HardwareManager::update()
     if (millis() - lastBatteryCheckTime_ >= Battery::CHECK_INTERVAL_MS) {
         updateBattery();
     }
-    // Button repeats must be checked continuously to handle the "hold" duration.
-    processButtonRepeats(); 
 
     while (buttonInterruptFired_) {
         LOG(LogLevel::DEBUG, "HW_MANAGER", false, "Interrupt Fired! Reading PCF states.");
@@ -607,99 +602,87 @@ void HardwareManager::processEncoder(uint8_t pcf0State)
     }
 }
 
-void HardwareManager::processButton_PCF0(uint8_t pcf0State)
-{
+void HardwareManager::processButton_PCF0(uint8_t pcf0State) {
     unsigned long currentTime = millis();
-
     if (millis() - setupTime_ < 300) return;
 
-    // This is the bit for the encoder button on PCF0
-    int pin = Pins::ENC_BTN; 
-    bool rawState = (pcf0State & (1 << pin));
+    const int pcf0Pins[] = {Pins::ENC_BTN, Pins::AI_BTN, Pins::RIGHT_UP, Pins::RIGHT_DOWN};
 
-    // Simple debouncing timer check
-    if (currentTime - lastDbncT0_[pin] > DEBOUNCE_DELAY_MS) {
-        // If the debounced state is different from the last stable state...
-        if (rawState != prevDbncHState0_[pin]) {
-            // Update the last stable state
-            prevDbncHState0_[pin] = rawState;
-            // If the new state is PRESSED (LOW, which is false)...
-            if (rawState == false) {
-                EventDispatcher::getInstance().publish(InputEventData(InputEvent::BTN_ENCODER_PRESS));
+    for (int pin : pcf0Pins) {
+        bool rawState = (pcf0State & (1 << pin)); // true is released/HIGH, false is pressed/LOW
+
+        if (currentTime - lastDbncT0_[pin] > DEBOUNCE_DELAY_MS) {
+            if (rawState != prevDbncHState0_[pin]) {
+                prevDbncHState0_[pin] = rawState;
+                if (rawState == false) { // PRESSED
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf0PinToPressEvent(pin)));
+                } else { // RELEASED
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf0PinToReleaseEvent(pin)));
+                }
             }
         }
     }
 }
+
 
 void HardwareManager::processButtons_PCF1(uint8_t pcf1State)
 {
     unsigned long currentTime = millis();
-
     if (millis() - setupTime_ < 300) return;
 
     const int pcf1Pins[] = {Pins::NAV_OK, Pins::NAV_BACK, Pins::NAV_A, Pins::NAV_B, Pins::NAV_UP, Pins::NAV_DOWN, Pins::NAV_LEFT, Pins::NAV_RIGHT};
 
-    for (size_t i = 0; i < sizeof(pcf1Pins) / sizeof(pcf1Pins[0]); ++i)
-    {
-        int pin = pcf1Pins[i];
+    for (int pin : pcf1Pins) {
         bool rawState = (pcf1State & (1 << pin));
 
-        // Simple debouncing timer check
         if (currentTime - lastDbncT1_[pin] > DEBOUNCE_DELAY_MS) {
-            // If the debounced state is different from the last stable state...
             if (rawState != prevDbncHState1_[pin]) {
-                // Update the last stable state
                 prevDbncHState1_[pin] = rawState;
-
                 if (rawState == false) { // PRESSED
-                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
-                    isBtnHeld1_[pin] = true;
-                    btnHoldStartT1_[pin] = currentTime;
-                    lastRepeatT1_[pin] = currentTime;
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToPressEvent(pin)));
                 } else { // RELEASED
-                    isBtnHeld1_[pin] = false;
+                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToReleaseEvent(pin)));
                 }
             }
         }
     }
 }
 
-
-void HardwareManager::processButtonRepeats()
-{
-    unsigned long currentTime = millis();
-    const int pcf1Pins[] = {Pins::NAV_UP, Pins::NAV_DOWN, Pins::NAV_LEFT, Pins::NAV_RIGHT};
-
-    for (int pin : pcf1Pins)
-    {
-        if (isBtnHeld1_[pin])
-        {
-            if (currentTime - btnHoldStartT1_[pin] > REPEAT_INIT_DELAY_MS &&
-                currentTime - lastRepeatT1_[pin] > REPEAT_INTERVAL_MS)
-            {
-                // --- MODIFICATION START ---
-                // Before firing a repeat, re-check the physical button state.
-                // This prevents firing a repeat if the button was released during a main loop stall.
-                selectMux(Pins::MUX_CHANNEL_PCF1_NAV);
-                uint8_t pcf1State = readPCF(Pins::PCF1_ADDR);
-                bool rawState = (pcf1State & (1 << pin));
-
-                if (rawState == false) { // If the button is STILL physically pressed...
-                    // Fire the repeat event
-                    EventDispatcher::getInstance().publish(InputEventData(mapPcf1PinToEvent(pin)));
-                    lastRepeatT1_[pin] = currentTime;
-                } else {
-                    // The button was released while the loop was blocked.
-                    // Correct the internal state and do not fire a repeat.
-                    isBtnHeld1_[pin] = false;
-                }
-                // --- MODIFICATION END ---
-            }
-        }
+InputEvent HardwareManager::mapPcf0PinToPressEvent(int pin) {
+    switch(pin) {
+        case Pins::ENC_BTN: return InputEvent::BTN_ENCODER_PRESS;
+        case Pins::AI_BTN: return InputEvent::BTN_AI_PRESS;
+        case Pins::RIGHT_UP: return InputEvent::BTN_RIGHT_UP_PRESS;
+        case Pins::RIGHT_DOWN: return InputEvent::BTN_RIGHT_DOWN_PRESS;
+        default: return InputEvent::NONE;
     }
 }
 
-InputEvent HardwareManager::mapPcf1PinToEvent(int pin)
+InputEvent HardwareManager::mapPcf0PinToReleaseEvent(int pin) {
+    switch(pin) {
+        case Pins::ENC_BTN: return InputEvent::BTN_ENCODER_RELEASE;
+        case Pins::AI_BTN: return InputEvent::BTN_AI_RELEASE;
+        case Pins::RIGHT_UP: return InputEvent::BTN_RIGHT_UP_RELEASE;
+        case Pins::RIGHT_DOWN: return InputEvent::BTN_RIGHT_DOWN_RELEASE;
+        default: return InputEvent::NONE;
+    }
+}
+
+InputEvent HardwareManager::mapPcf1PinToReleaseEvent(int pin) {
+    switch (pin) {
+        case Pins::NAV_OK: return InputEvent::BTN_OK_RELEASE;
+        case Pins::NAV_BACK: return InputEvent::BTN_BACK_RELEASE;
+        case Pins::NAV_A: return InputEvent::BTN_A_RELEASE;
+        case Pins::NAV_B: return InputEvent::BTN_B_RELEASE;
+        case Pins::NAV_UP: return InputEvent::BTN_UP_RELEASE;
+        case Pins::NAV_DOWN: return InputEvent::BTN_DOWN_RELEASE;
+        case Pins::NAV_LEFT: return InputEvent::BTN_LEFT_RELEASE;
+        case Pins::NAV_RIGHT: return InputEvent::BTN_RIGHT_RELEASE;
+        default: return InputEvent::NONE;
+    }
+}
+
+InputEvent HardwareManager::mapPcf1PinToPressEvent(int pin) 
 {
     switch (pin)
     {

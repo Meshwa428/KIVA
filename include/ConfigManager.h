@@ -39,8 +39,11 @@ public:
     const std::vector<std::pair<std::string, std::string>>& getKeyboardLayouts() const;
     const uint8_t* getSelectedKeyboardLayout() const;
 
-private:
+    void requestSave();
+
     void applySettings();
+
+private:
     void loadFromEEPROM();
     void saveToEEPROM();
     void loadFromSdCard();
@@ -51,9 +54,12 @@ private:
     DeviceSettings settings_;
     DeviceSettings lastAppliedSettings_;
     bool isEepromValid_;
+    
+    // --- NEW: Flag to track unsaved changes ---
+    bool saveRequired_; 
 
     std::vector<std::pair<std::string, std::string>> keyboardLayouts_;
-    static const uint32_t EEPROM_MAGIC_NUMBER = 0xDEADBEEF;
+    static constexpr uint32_t EEPROM_MAGIC_NUMBER = 0xDEADBEEF;
 };
 
 #endif // CONFIG_MANAGER_H

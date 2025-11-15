@@ -1,3 +1,5 @@
+// KIVA/include/DuckyScriptRunner.h
+
 #ifndef DUCKY_SCRIPT_RUNNER_H
 #define DUCKY_SCRIPT_RUNNER_H
 
@@ -9,8 +11,8 @@
 
 // Forward Declarations
 class App;
+class UsbHid;
 
-// --- Ducky Script Keywords ---
 struct DuckyCommand {
     const char* command;
     uint8_t key;
@@ -54,7 +56,10 @@ private:
     App* app_;
     SdCardManager::LineReader scriptReader_;
     
-    std::unique_ptr<HIDInterface> activeHid_;
+    // --- OWNERSHIP FIX ---
+    std::unique_ptr<UsbHid> usbHid_;
+    std::unique_ptr<BleHid> bleHidWrapper_;
+    HIDInterface* activeHid_; 
     
     State state_;
     Mode currentMode_;

@@ -1,3 +1,5 @@
+// KIVA/src/DuckyScriptRunner.cpp
+
 #include "DuckyScriptRunner.h"
 #include "App.h"
 #include "ConfigManager.h"
@@ -80,19 +82,24 @@ bool DuckyScriptRunner::startScript(const std::string& scriptPath, Mode mode) {
     const uint8_t* layout = app_->getConfigManager().getSelectedKeyboardLayout();
 
     if (mode == Mode::BLE) {
-        BleKeyboard* keyboard = app_->getBleManager().startKeyboard();
-        if (!keyboard) {
-            LOG(LogLevel::ERROR, "DuckyRunner", "MyBleManagerService failed to provide a keyboard instance.");
+        // --- FINAL FIX: Use the corrected service API ---
+        // This is safe because BleHid is owned by BleManager, so we just borrow the pointer.
+        activeHid_ = app_->getBleManager().startKeyboard();
+        if (!activeHid_) {
+            LOG(LogLevel::ERROR, "DuckyRunner", "BleManager failed to provide a keyboard interface.");
             return false;
         }
-        activeHid_.reset(new BleHid(keyboard));
     } else { // USB Mode
-        activeHid_.reset(new UsbHid());
+        // This is safe because we own the UsbHid object.
+        usbHid_ = std::make_unique<UsbHid>();
+        activeHid_ = usbHid_.get();
     }
     
     activeHid_->begin(layout);
+    if (mode == Mode::USB) {
+        USB.begin();
+    }
 
-    // --- THIS IS THE FIX ---
     scriptReader_ = SdCardManager::getInstance().openLineReader(scriptPath.c_str());
     if (!scriptReader_.isOpen()) {
         LOG(LogLevel::ERROR, "DuckyRunner", "Failed to open script file.");
@@ -119,20 +126,26 @@ void DuckyScriptRunner::stopScript() {
 
     if (activeHid_) {
         activeHid_->releaseAll();
+        // The end() method is safe to call on the interface
         activeHid_->end();
     }
     
     if (currentMode_ == Mode::BLE) {
+        // Tell the manager to clean up the BLE device
         app_->getBleManager().stopKeyboard();
+    } else {
+        // Let the unique_ptr handle deletion for the USB device
+        usbHid_.reset();
     }
 
-    activeHid_.reset();
+    activeHid_ = nullptr; // Clear the non-owning pointer
     scriptReader_.close();
     state_ = State::IDLE;
     currentLine_ = "";
     scriptName_ = "";
     LOG(LogLevel::INFO, "DuckyRunner", "Script stopped and resources released.");
 }
+
 
 DuckyScriptRunner::Mode DuckyScriptRunner::getMode() const { return currentMode_; }
 

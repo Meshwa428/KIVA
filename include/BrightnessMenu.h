@@ -1,3 +1,5 @@
+// KIVA/include/BrightnessMenu.h
+
 #ifndef BRIGHTNESS_MENU_H
 #define BRIGHTNESS_MENU_H
 
@@ -25,6 +27,12 @@ private:
 
     // --- Animation State ---
     VerticalListAnimation animation_;
+
+    // --- NEW: State for continuous adjustment ---
+    bool isAdjusting_;
+    int adjustDirection_; // -1 for decrease, 1 for increase
+    unsigned long pressStartTime_;
+    unsigned long lastAdjustTime_;
 };
 
 #endif // BRIGHTNESS_MENU_H

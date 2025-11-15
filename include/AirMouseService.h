@@ -1,3 +1,5 @@
+// KIVA/include/AirMouseService.h
+
 #ifndef AIR_MOUSE_SERVICE_H
 #define AIR_MOUSE_SERVICE_H
 
@@ -6,6 +8,7 @@
 #include <memory>
 
 class MPUManager;
+class UsbMouse; // Forward declare the concrete USB class we own
 
 struct SensorAngles {
     float pitch;
@@ -27,6 +30,9 @@ public:
     void processClick(bool isPrimary);
     void processScroll(int amount);
 
+    void processPress(uint8_t button);
+    void processRelease(uint8_t button);
+
     bool isConnected() const;
     SensorAngles getAngles() const;
 
@@ -35,17 +41,16 @@ public:
 private:
     App* app_;
     MPUManager* mpuManager_;
-    std::unique_ptr<MouseInterface> activeMouse_;
     bool isActive_;
     Mode currentMode_;
 
+    std::unique_ptr<UsbMouse> usbMouse_; 
+    MouseInterface* activeMouse_; 
+
     unsigned long lastUpdateTime_;
     
-    // Variables for the UI visualizer
     float anglePitch_, angleRoll_;
     float pitchAccel_, rollAccel_;
-
-    // --- NEW: Variables for smoothed velocity ---
     float velocityX_, velocityY_;
 };
 

@@ -41,6 +41,12 @@ private:
     bool marqueePaused_;
     unsigned long marqueePauseStartTime_;
     bool marqueeScrollLeft_;
+
+    // State for continuous scrolling
+    bool isScrolling_;
+    int scrollDirection_; // Corresponds to the 'direction' in scroll()
+    unsigned long pressStartTime_;
+    unsigned long lastScrollTime_;
 };
 
 #endif // GRID_MENU_H

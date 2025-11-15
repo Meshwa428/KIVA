@@ -1,10 +1,11 @@
+// KIVA/include/MyBleManagerService.h
+
 #pragma once
 
 #include "Service.h"
-#include <HIDForge.h>
+#include <HIDForge.h> // Includes HIDInterface and MouseInterface
 
 class App;
-class BleMouse; // Forward declare BleMouse
 
 class MyBleManagerService : public Service {
 public:
@@ -12,11 +13,11 @@ public:
     void setup(App* app) override;
     void loop() override;
 
-    BleKeyboard* startKeyboard();
-    void stopKeyboard();
+    // --- FIX: Return the generic interface pointers ---
+    HIDInterface* startKeyboard();
+    MouseInterface* startMouse();
 
-    // --- NEW METHODS ---
-    BleMouse* startMouse();
+    void stopKeyboard();
     void stopMouse();
 
 private:

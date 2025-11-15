@@ -1,3 +1,5 @@
+// KIVA/src/MyBleManagerService.cpp
+
 #include "MyBleManagerService.h"
 #include "App.h"
 #include "Logger.h"
@@ -11,7 +13,8 @@ void MyBleManagerService::setup(App* app) {
 
 void MyBleManagerService::loop() {}
 
-BleKeyboard* MyBleManagerService::startKeyboard() {
+// --- FIX: Return type now matches the new BleManager API ---
+HIDInterface* MyBleManagerService::startKeyboard() {
     return bleManager_.startKeyboard();
 }
 
@@ -19,7 +22,8 @@ void MyBleManagerService::stopKeyboard() {
     bleManager_.stopKeyboard();
 }
 
-BleMouse* MyBleManagerService::startMouse() {
+// --- FIX: Return type now matches the new BleManager API ---
+MouseInterface* MyBleManagerService::startMouse() {
     return bleManager_.startMouse();
 }
 
