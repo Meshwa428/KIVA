@@ -5,7 +5,13 @@
 #include "EventDispatcher.h" // For subscribing
 #include <algorithm> // For std::max
 
-MainMenu::MainMenu() : selectedIndex_(0) {
+MainMenu::MainMenu() : 
+    selectedIndex_(0),
+    isScrolling_(false), // Initialize new members
+    scrollDirection_(0),
+    pressStartTime_(0),
+    lastScrollTime_(0)
+{
     menuItems_.push_back(MenuItem{"Tools",     IconType::TOOLS,    MenuType::TOOLS_CAROUSEL});
     menuItems_.push_back(MenuItem{"Music",     IconType::MUSIC_PLAYER, MenuType::MUSIC_LIBRARY});
     menuItems_.push_back(MenuItem{"Games",     IconType::GAMES,    MenuType::GAMES_CAROUSEL});
@@ -13,8 +19,8 @@ MainMenu::MainMenu() : selectedIndex_(0) {
 }
 
 void MainMenu::onEnter(App* app, bool isForwardNav) {
-    // When the menu becomes active, it subscribes to input events.
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+    isScrolling_ = false; // Reset state
 
     if (isForwardNav) {
         selectedIndex_ = 0;
@@ -28,43 +34,75 @@ void MainMenu::onUpdate(App* app) {
     if (animation_.update()) {
         app->requestRedraw();
     }
+    
+    // Continuous scrolling
+    if (isScrolling_) {
+        unsigned long currentTime = millis();
+        unsigned long holdDuration = currentTime - pressStartTime_;
+        
+        unsigned long repeatInterval = (holdDuration > 500) ? 100 : 200;
+
+        if (currentTime - lastScrollTime_ > repeatInterval) {
+            scroll(scrollDirection_);
+            lastScrollTime_ = currentTime;
+        }
+    }
 }
 
 void MainMenu::onExit(App* app) {
-    // When the menu is no longer active, it unsubscribes.
-    // This is CRITICAL for preventing inactive menus from handling input.
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
+    isScrolling_ = false; // Reset state
 }
 
-// The old handleInput logic moves here, with the new signature.
 void MainMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
+        // Discrete Scrolling (Encoder)
         case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_DOWN_PRESS:
             scroll(1);
             break;
         case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_UP_PRESS:
             scroll(-1);
             break;
+
+        // Continuous Scrolling (Buttons) - Start
+        case InputEvent::BTN_DOWN_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true;
+            scrollDirection_ = 1;
+            pressStartTime_ = millis();
+            lastScrollTime_ = millis();
+            scroll(1);
+            break;
+        case InputEvent::BTN_UP_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true;
+            scrollDirection_ = -1;
+            pressStartTime_ = millis();
+            lastScrollTime_ = millis();
+            scroll(-1);
+            break;
+
+        // Continuous Scrolling (Buttons) - Stop
+        case InputEvent::BTN_DOWN_RELEASE:
+        case InputEvent::BTN_UP_RELEASE:
+            isScrolling_ = false;
+            break;
+
+        // Item Selection
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
-                if (selectedIndex_ >= menuItems_.size()) break;
+                if (selectedIndex_ >= (int)menuItems_.size()) break;
                 const auto& selected = menuItems_[selectedIndex_];
 
-                // Use the new generic logic for consistency
                 if (selected.action) {
                     selected.action(app);
                 } else {
-                    // NEW: Publish a navigation event. The App (acting as UI state machine) will catch it.
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;
-        case InputEvent::BTN_BACK_PRESS:
-            // No action
-            break;
+
         default:
             break;
     }

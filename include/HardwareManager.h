@@ -98,12 +98,16 @@ private:
     SemaphoreHandle_t i2c_mux_mutex_;
     void releaseRfControl(); // <-- NEW private helper
 
-    // --- MODIFIED: Input methods now take state as a parameter ---
+    InputEvent mapPcf0PinToPressEvent(int pin);
+    InputEvent mapPcf0PinToReleaseEvent(int pin);
+    InputEvent mapPcf1PinToPressEvent(int pin); // This was the one we renamed
+    InputEvent mapPcf1PinToReleaseEvent(int pin);
+
+    // Input methods now take state as a parameter
     void processEncoder(uint8_t pcf0State);
     void processButton_PCF0(uint8_t pcf0State);
     void processButtons_PCF1(uint8_t pcf1State);
     void processButtonRepeats(); 
-    InputEvent mapPcf1PinToEvent(int pin);
     
     // I2C methods
     void writePCF(uint8_t pcfAddress, uint8_t data);
@@ -141,12 +145,8 @@ private:
     int lastEncState_;
     int encConsecutiveValid_;
     
-    // --- Button Hold/Repeat State ---
-    bool isBtnHeld1_[8];
-    unsigned long btnHoldStartT1_[8];
-    unsigned long lastRepeatT1_[8];
 
-    // --- NEW: Input Grace Period ---
+    // Input Grace Period
     unsigned long setupTime_;
 
     bool uiRenderingPaused_; 

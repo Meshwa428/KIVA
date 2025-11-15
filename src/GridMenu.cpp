@@ -6,24 +6,26 @@
 #include <Arduino.h>
 #include <algorithm> // For std::min
 
-// --- CONSTRUCTOR MODIFIED ---
 GridMenu::GridMenu(std::string title, MenuType menuType, std::vector<MenuItem> items, int columns) : 
     title_(title),
     menuItems_(items),
     menuType_(menuType),
     columns_(columns),
     selectedIndex_(0),
-    animation_(), // Default constructed
+    animation_(),
     marqueeActive_(false),
-    marqueeScrollLeft_(true)
-{
-}
+    marqueeScrollLeft_(true),
+    isScrolling_(false),
+    scrollDirection_(0),
+    pressStartTime_(0),
+    lastScrollTime_(0)
+{}
 
 void GridMenu::onEnter(App *app, bool isForwardNav)
 {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+    isScrolling_ = false;
 
-    // --- THIS IS THE CORRECTED LOGIC ---
     animation_.resize(menuItems_.size()); // Always ensure vectors are sized correctly.
 
     if (isForwardNav) {
@@ -68,34 +70,74 @@ void GridMenu::onUpdate(App *app)
     if (animation_.update()) {
         app->requestRedraw();
     }
+    
+    // Continuous scrolling
+    if (isScrolling_) {
+        unsigned long currentTime = millis();
+        unsigned long holdDuration = currentTime - pressStartTime_;
+        
+        // Use a simple, two-stage acceleration
+        unsigned long repeatInterval = (holdDuration > 500) ? 100 : 200;
+
+        if (currentTime - lastScrollTime_ > repeatInterval) {
+            scroll(scrollDirection_);
+            lastScrollTime_ = currentTime;
+        }
+    }
 }
 
 void GridMenu::onExit(App *app)
 {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false;
+    isScrolling_ = false; // Reset state on exit
 }
 
 void GridMenu::handleInput(InputEvent event, App* app) {
-    switch(event) {
-        case InputEvent::BTN_DOWN_PRESS:
-            scroll(columns_); // Move down one row
-            break;
-        case InputEvent::BTN_UP_PRESS:
-            scroll(-columns_); // Move up one row
-            break;
+    switch (event) {
+        // Discrete Scrolling (Encoder)
         case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_RIGHT_PRESS:
-            scroll(1); // Move to next column
+            scroll(1);
             break;
         case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_LEFT_PRESS:
-            scroll(-1); // Move to previous column
+            scroll(-1);
             break;
+
+        // Continuous Scrolling (Buttons) - Start
+        case InputEvent::BTN_UP_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = -columns_; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(scrollDirection_);
+            break;
+        case InputEvent::BTN_DOWN_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = columns_; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(scrollDirection_);
+            break;
+        case InputEvent::BTN_RIGHT_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = 1; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(scrollDirection_);
+            break;
+        case InputEvent::BTN_LEFT_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = -1; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(scrollDirection_);
+            break;
+
+        // Continuous Scrolling (Buttons) - Stop
+        case InputEvent::BTN_UP_RELEASE:
+        case InputEvent::BTN_DOWN_RELEASE:
+        case InputEvent::BTN_RIGHT_RELEASE:
+        case InputEvent::BTN_LEFT_RELEASE:
+            isScrolling_ = false;
+            break;
+
+        // Item Selection
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
-                if (selectedIndex_ >= menuItems_.size()) break;
+                if (selectedIndex_ >= (int)menuItems_.size()) break;
                 const auto& selected = menuItems_[selectedIndex_];
 
                 if (selected.action) {
@@ -106,9 +148,11 @@ void GridMenu::handleInput(InputEvent event, App* app) {
             }
             break;
 
+        // Back Navigation
         case InputEvent::BTN_BACK_PRESS:
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
+            
         default:
             break;
     }

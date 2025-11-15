@@ -10,7 +10,6 @@ AudioOutputPDM::AudioOutputPDM(int pdm_pin, i2s_port_t i2s_port)
 }
 
 AudioOutputPDM::~AudioOutputPDM() {
-    // The destructor is now the only place that does a full, destructive stop.
     if (m_driver_installed) {
         i2s_driver_uninstall(m_i2s_port);
     }
@@ -21,14 +20,10 @@ AudioOutputPDM::~AudioOutputPDM() {
 }
 
 bool AudioOutputPDM::begin() {
-    if (m_driver_installed) {
-        // If driver is already installed, 'begin' means RESUME.
-        i2s_start(m_i2s_port);
-        LOG(LogLevel::DEBUG, "PDM", "I2S stream resumed via begin().");
-        return true;
-    }
-
-    // First-time initialization
+    // --- THIS IS THE FIX ---
+    // The begin() function should be lightweight. It only allocates the buffer
+    // and ensures the stream is started if it was previously stopped.
+    // It does NOT install the driver with a default rate anymore.
     if (m_buffer == nullptr) {
         m_buffer = (int16_t*)malloc(BUFFER_FRAMES * sizeof(int16_t) * 2);
     }
@@ -38,32 +33,35 @@ bool AudioOutputPDM::begin() {
     }
     m_buffer_ptr = 0;
 
-    // Install with a default rate. This will be immediately corrected by SetRate.
-    this->hertz = 44100;
-    install_i2s_driver();
-    return m_driver_installed;
+    if (m_driver_installed) {
+        i2s_start(m_i2s_port);
+    }
+    return true;
 }
 
 bool AudioOutputPDM::stop() {
-    // 'stop()' is now a lightweight PAUSE, as per your reference code.
     if (m_driver_installed) {
         i2s_stop(m_i2s_port);
-        LOG(LogLevel::DEBUG, "PDM", "I2S stream paused via stop().");
     }
     return true;
 }
 
 bool AudioOutputPDM::SetRate(int hz) {
-    if (this->hertz != hz) {
-        LOG(LogLevel::INFO, "PDM", "Sample rate changed to %d Hz. Re-installing I2S driver.", hz);
-        this->hertz = hz;
-        if (m_driver_installed) {
-            i2s_driver_uninstall(m_i2s_port);
-            m_driver_installed = false;
-        }
-        install_i2s_driver();
+    // --- THIS IS THE FIX ---
+    // SetRate is now the ONLY place where the I2S driver is installed or reconfigured.
+    if (m_driver_installed && this->hertz == hz) {
+        return true; // No change needed
     }
-    return true;
+
+    if (m_driver_installed) {
+        i2s_driver_uninstall(m_i2s_port);
+        m_driver_installed = false;
+    }
+
+    LOG(LogLevel::INFO, "PDM", "Configuring I2S driver for %d Hz.", hz);
+    this->hertz = hz;
+    install_i2s_driver();
+    return m_driver_installed;
 }
 
 void AudioOutputPDM::install_i2s_driver() {

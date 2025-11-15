@@ -80,7 +80,10 @@ enum class MenuType
     MUSIC_LIBRARY,
     SONG_LIST,
     NOW_PLAYING,
-    INFO_MENU
+    INFO_MENU,
+
+    AIR_MOUSE_MODE_GRID,
+    AIR_MOUSE_ACTIVE
 };
 
 enum class SecondaryWidgetType {
@@ -108,7 +111,21 @@ enum class InputEvent
     BTN_B_PRESS,
     BTN_AI_PRESS,
     BTN_RIGHT_UP_PRESS,
-    BTN_RIGHT_DOWN_PRESS
+    BTN_RIGHT_DOWN_PRESS,
+
+    // --- RELEASE events ---
+    BTN_ENCODER_RELEASE,
+    BTN_OK_RELEASE,
+    BTN_BACK_RELEASE,
+    BTN_UP_RELEASE,
+    BTN_DOWN_RELEASE,
+    BTN_LEFT_RELEASE,
+    BTN_RIGHT_RELEASE,
+    BTN_A_RELEASE,
+    BTN_B_RELEASE,
+    BTN_AI_RELEASE,
+    BTN_RIGHT_UP_RELEASE,
+    BTN_RIGHT_DOWN_RELEASE
 };
 
 // I2C & Hardware Pins

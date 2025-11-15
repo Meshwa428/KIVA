@@ -77,6 +77,9 @@ const char* menuTypeToString(MenuType type) {
         case MenuType::SONG_LIST: return "SONG_LIST";
         case MenuType::NOW_PLAYING: return "NOW_PLAYING";
         case MenuType::INFO_MENU: return "INFO_MENU";
+
+        case MenuType::AIR_MOUSE_MODE_GRID: return "AIR_MOUSE_MODE_GRID";
+        case MenuType::AIR_MOUSE_ACTIVE: return "AIR_MOUSE_ACTIVE";
         
         default: return "UNKNOWN_MENU";
     }
@@ -87,18 +90,31 @@ const char* inputEventToString(InputEvent event) {
         case InputEvent::NONE: return "NONE";
         case InputEvent::ENCODER_CW: return "ENCODER_CW";
         case InputEvent::ENCODER_CCW: return "ENCODER_CCW";
+        // --- MODIFIED: Group press and release events ---
         case InputEvent::BTN_ENCODER_PRESS: return "BTN_ENCODER_PRESS";
+        case InputEvent::BTN_ENCODER_RELEASE: return "BTN_ENCODER_RELEASE";
         case InputEvent::BTN_OK_PRESS: return "BTN_OK_PRESS";
+        case InputEvent::BTN_OK_RELEASE: return "BTN_OK_RELEASE";
         case InputEvent::BTN_BACK_PRESS: return "BTN_BACK_PRESS";
+        case InputEvent::BTN_BACK_RELEASE: return "BTN_BACK_RELEASE";
         case InputEvent::BTN_UP_PRESS: return "BTN_UP_PRESS";
+        case InputEvent::BTN_UP_RELEASE: return "BTN_UP_RELEASE";
         case InputEvent::BTN_DOWN_PRESS: return "BTN_DOWN_PRESS";
+        case InputEvent::BTN_DOWN_RELEASE: return "BTN_DOWN_RELEASE";
         case InputEvent::BTN_LEFT_PRESS: return "BTN_LEFT_PRESS";
+        case InputEvent::BTN_LEFT_RELEASE: return "BTN_LEFT_RELEASE";
         case InputEvent::BTN_RIGHT_PRESS: return "BTN_RIGHT_PRESS";
+        case InputEvent::BTN_RIGHT_RELEASE: return "BTN_RIGHT_RELEASE";
         case InputEvent::BTN_A_PRESS: return "BTN_A_PRESS";
+        case InputEvent::BTN_A_RELEASE: return "BTN_A_RELEASE";
         case InputEvent::BTN_B_PRESS: return "BTN_B_PRESS";
+        case InputEvent::BTN_B_RELEASE: return "BTN_B_RELEASE";
         case InputEvent::BTN_AI_PRESS: return "BTN_AI_PRESS";
+        case InputEvent::BTN_AI_RELEASE: return "BTN_AI_RELEASE";
         case InputEvent::BTN_RIGHT_UP_PRESS: return "BTN_RIGHT_UP_PRESS";
+        case InputEvent::BTN_RIGHT_UP_RELEASE: return "BTN_RIGHT_UP_RELEASE";
         case InputEvent::BTN_RIGHT_DOWN_PRESS: return "BTN_RIGHT_DOWN_PRESS";
+        case InputEvent::BTN_RIGHT_DOWN_RELEASE: return "BTN_RIGHT_DOWN_RELEASE";
         default: return "UNKNOWN_INPUT";
     }
 }

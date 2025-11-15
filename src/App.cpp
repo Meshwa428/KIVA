@@ -31,6 +31,8 @@
 #include "BadMsgAttacker.h"
 #include "RtcManager.h"
 #include "SystemDataProvider.h"
+#include "MPUManager.h"
+#include "AirMouseService.h"
 
 App& App::getInstance() {
     static App instance;
@@ -180,12 +182,29 @@ App::App() :
                 app->getDuckyScriptListDataSource().setExecutionMode(DuckyScriptRunner::Mode::BLE);
                 EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::DUCKY_SCRIPT_LIST));
             }},
+        {"Air Mouse", IconType::UI_LASER, MenuType::AIR_MOUSE_MODE_GRID},
         {"IR Blaster", IconType::UI_LASER, MenuType::NONE,
             [](App* app) { LOG(LogLevel::INFO, "HOST", "IR Blaster placeholder selected."); }
         },
         {"Back", IconType::NAV_BACK, MenuType::BACK}
     }, 2),
-    beaconModeMenu_("Beacon Spam Mode", MenuType::BEACON_MODE_GRID, {
+    airMouseModeMenu_("Air Mouse", MenuType::AIR_MOUSE_MODE_GRID, {
+        {"USB", IconType::USB, MenuType::NONE, 
+            [](App* app) {
+                // Correctly get the concrete menu object and configure it
+                auto* activeMenu = static_cast<AirMouseActiveMenu*>(app->getMenu(MenuType::AIR_MOUSE_ACTIVE));
+                activeMenu->setMode(AirMouseService::Mode::USB);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::AIR_MOUSE_ACTIVE));
+            }},
+        {"BLE", IconType::NET_BLUETOOTH, MenuType::NONE,
+            [](App* app) {
+                auto* activeMenu = static_cast<AirMouseActiveMenu*>(app->getMenu(MenuType::AIR_MOUSE_ACTIVE));
+                activeMenu->setMode(AirMouseService::Mode::BLE);
+                EventDispatcher::getInstance().publish(NavigateToMenuEvent(MenuType::AIR_MOUSE_ACTIVE));
+            }},
+        {"Back", IconType::NAV_BACK, MenuType::BACK}
+    }, 2),
+    beaconModeMenu_("Beacon Spam", MenuType::BEACON_MODE_GRID, {
         {"Random", IconType::BEACON, MenuType::NONE, 
             [](App *app) {
                 auto* menu = static_cast<BeaconSpamActiveMenu*>(app->getMenu(MenuType::BEACON_SPAM_ACTIVE));
@@ -432,6 +451,7 @@ App::App() :
     associationSleepActiveMenu_(),
     badMsgActiveMenu_(),
     stationSniffSaveMenu_(),
+    airMouseActiveMenu_(),
 
     // --- Data Sources ---
     wifiListDataSource_(),
@@ -831,6 +851,7 @@ void App::setup()
     menuRegistry_[MenuType::ASSOCIATION_SLEEP_MODES_GRID] = &associationSleepModeMenu_;
     menuRegistry_[MenuType::BAD_MSG_MODES_GRID] = &badMsgModesMenu_;
     menuRegistry_[MenuType::STATION_LIST] = &stationListMenu_;
+    menuRegistry_[MenuType::AIR_MOUSE_MODE_GRID] = &airMouseModeMenu_;
 
     // Settings Sub-menus
     menuRegistry_[MenuType::SETTINGS_GRID] = &settingsGridMenu_;
@@ -865,6 +886,7 @@ void App::setup()
     menuRegistry_[MenuType::JAMMING_ACTIVE] = &jammingActiveMenu_;
     menuRegistry_[MenuType::ASSOCIATION_SLEEP_ACTIVE] = &associationSleepActiveMenu_;
     menuRegistry_[MenuType::BAD_MSG_ACTIVE] = &badMsgActiveMenu_;
+    menuRegistry_[MenuType::AIR_MOUSE_ACTIVE] = &airMouseActiveMenu_;
 
     // Utilities / Misc
     menuRegistry_[MenuType::USB_DRIVE_MODE] = &usbDriveMenu_;
@@ -973,7 +995,7 @@ void App::loop()
         drawSecondaryDisplay();
     } else {
         // --- Idle State ---
-        delay(10); // Yield CPU time
+        // delay(10); // Yield CPU time
     }
 
     // 5. Handle hardware state based on resource requirements
@@ -1053,6 +1075,9 @@ const HardwareManager& App::getHardwareManager() const { return *serviceManager_
 const RtcManager& App::getRtcManager() const { return *serviceManager_->getService<RtcManager>(); }
 const SystemDataProvider& App::getSystemDataProvider() const { return *serviceManager_->getService<SystemDataProvider>(); }
 const WifiManager& App::getWifiManager() const { return *serviceManager_->getService<WifiManager>(); }
+
+MPUManager& App::getMPUManager() { return *serviceManager_->getService<MPUManager>(); }
+AirMouseService& App::getAirMouseService() { return *serviceManager_->getService<AirMouseService>(); }
 
 void App::onEvent(const Event& event) {
     switch (event.type) {

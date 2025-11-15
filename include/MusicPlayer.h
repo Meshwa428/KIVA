@@ -8,9 +8,8 @@
 #include "AudioOutputPDM.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h" // MODIFICATION: Include semaphore header
+#include "freertos/semphr.h"
 
-// --- ADD MIXER HEADERS ---
 #include "AudioOutputMixer.h"
 
 class AudioGeneratorMP3;
@@ -21,6 +20,11 @@ class App;
 
 class MusicPlayer : public Service {
 public:
+    struct PlaylistTrack {
+        std::string path;
+        int duration;
+    };
+
     using SongFinishedCallback = std::function<void()>;
     enum class State { STOPPED, LOADING, PLAYING, PAUSED };
     enum class RepeatMode { REPEAT_OFF, REPEAT_ALL, REPEAT_ONE };
@@ -34,7 +38,7 @@ public:
     bool allocateResources();
     void releaseResources();
 
-    void queuePlaylist(const std::string& name, const std::vector<std::string>& tracks, int startIndex);
+    void queuePlaylist(const std::string& name, const std::vector<PlaylistTrack>& tracks, int startIndex);
     void startQueuedPlayback();
     void pause();
     void resume();
@@ -56,13 +60,15 @@ public:
     std::string getCurrentTrackName() const;
     std::string getPlaylistName() const;
     float getPlaybackProgress() const;
+    int getTotalDuration() const;
+    int getCurrentTime() const;
     bool isServiceRunning() const;
 
 private:
     static void mixerTaskWrapper(void* param);
     void mixerTaskLoop();
 
-    void startPlayback(const std::string& path);
+    void startPlayback(const PlaylistTrack& track);
     void stopPlayback();
     void playNextInPlaylist(bool songFinishedNaturally = true);
     void generateShuffledIndices();
@@ -86,18 +92,22 @@ private:
     bool _isLoadingTrack;
     float currentGain_; 
     
-    std::vector<std::string> currentPlaylist_;
+    std::vector<PlaylistTrack> currentPlaylist_;
     std::vector<int> shuffledIndices_;
     int playlistTrackIndex_;
     
     std::string currentTrackPath_;
     std::string currentTrackName_;
     std::string playlistName_;
+    int currentTrackDuration_;
+    
+    // Timer-based progress tracking state
+    unsigned long playbackStartTimeMs_;
+    unsigned long accumulatedPlayedTimeMs_;
 
     TaskHandle_t mixerTaskHandle_; 
     SongFinishedCallback songFinishedCallback_;
 
-    // MODIFICATION: Add the mutex handle
     SemaphoreHandle_t audioSlotMutex_;
 };
 

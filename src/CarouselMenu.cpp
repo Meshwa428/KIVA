@@ -5,23 +5,27 @@
 #include "EventDispatcher.h"
 #include <Arduino.h>
 
-// --- CONSTRUCTOR MODIFIED ---
 CarouselMenu::CarouselMenu(std::string title, MenuType menuType, std::vector<MenuItem> items) :
     title_(title),
     menuItems_(items),
-    menuType_(menuType), // Set type from parameter
+    menuType_(menuType),
     selectedIndex_(0),
     marqueeActive_(false),
-    marqueeScrollLeft_(true)
+    marqueeScrollLeft_(true),
+    isScrolling_(false), // Initialize new members
+    scrollDirection_(0),
+    pressStartTime_(0),
+    lastScrollTime_(0)
 {
-    // REMOVED all the fragile "if (title == ...)" logic
 }
 
 void CarouselMenu::onEnter(App* app, bool isForwardNav) {
     EventDispatcher::getInstance().subscribe(EventType::APP_INPUT, this);
+    isScrolling_ = false; // Reset state
+
     if (isForwardNav) {
         selectedIndex_ = 0;
-        marqueeScrollLeft_ = true; // Reset marquee direction
+        marqueeScrollLeft_ = true;
     }
     animation_.resize(menuItems_.size());
     animation_.init();
@@ -32,40 +36,77 @@ void CarouselMenu::onUpdate(App* app) {
     if (animation_.update()) {
         app->requestRedraw();
     }
+
+    // Continuous scrolling
+    if (isScrolling_) {
+        unsigned long currentTime = millis();
+        unsigned long holdDuration = currentTime - pressStartTime_;
+        
+        unsigned long repeatInterval = (holdDuration > 500) ? 100 : 200;
+
+        if (currentTime - lastScrollTime_ > repeatInterval) {
+            scroll(scrollDirection_);
+            lastScrollTime_ = currentTime;
+        }
+    }
 }
 
 void CarouselMenu::onExit(App* app) {
     EventDispatcher::getInstance().unsubscribe(EventType::APP_INPUT, this);
     marqueeActive_ = false;
+    isScrolling_ = false; // Reset state
 }
 
 
 void CarouselMenu::handleInput(InputEvent event, App* app) {
     switch(event) {
+        // Discrete Scrolling
         case InputEvent::ENCODER_CW:
-        case InputEvent::BTN_RIGHT_PRESS:
             scroll(1);
             break;
         case InputEvent::ENCODER_CCW:
-        case InputEvent::BTN_LEFT_PRESS:
             scroll(-1);
             break;
+
+        // Continuous Scrolling - Start
+        case InputEvent::BTN_RIGHT_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = 1; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(1);
+            break;
+        case InputEvent::BTN_LEFT_PRESS:
+            if (isScrolling_) break;
+            isScrolling_ = true; scrollDirection_ = -1; pressStartTime_ = millis(); lastScrollTime_ = millis();
+            scroll(-1);
+            break;
+        
+        // Continuous Scrolling - Stop
+        case InputEvent::BTN_RIGHT_RELEASE:
+        case InputEvent::BTN_LEFT_RELEASE:
+            isScrolling_ = false;
+            break;
+
+        // Selection
         case InputEvent::BTN_ENCODER_PRESS:
         case InputEvent::BTN_OK_PRESS:
             {
-                if (selectedIndex_ >= menuItems_.size()) break;
+                if (selectedIndex_ >= (int)menuItems_.size()) break;
                 const MenuItem& selected = menuItems_[selectedIndex_];
 
                 if (selected.action) {
                     selected.action(app);
                 } else {
+                    // Navigate to the target menu, which could also be MenuType::BACK
                     EventDispatcher::getInstance().publish(NavigateToMenuEvent(selected.targetMenu));
                 }
             }
             break;
+
+        // Back
         case InputEvent::BTN_BACK_PRESS:
             EventDispatcher::getInstance().publish(NavigateBackEvent());
             break;
+            
         default:
             break;
     }

@@ -8,11 +8,10 @@
 
 #define EEPROM_SIZE 128 // Increase EEPROM size to accommodate the longer string
 
-const uint32_t ConfigManager::EEPROM_MAGIC_NUMBER;
-
 ConfigManager::ConfigManager() :
     app_(nullptr),
-    isEepromValid_(false)
+    isEepromValid_(false),
+    saveRequired_(false) // Initialize the new flag
 {
     // Initialize both structs to a known state
     memset(&settings_, 0, sizeof(DeviceSettings));
@@ -73,10 +72,22 @@ void ConfigManager::loadSettings() {
     saveSettings(); // Save defaults to both EEPROM and SD
 }
 
+void ConfigManager::requestSave() {
+    saveRequired_ = true;
+}
+
 void ConfigManager::saveSettings() {
-    applySettings(); // Apply changes first
-    saveToEEPROM();
-    saveToSdCard();
+    // Only apply settings if they have actually changed.
+    applySettings();
+
+    // Only save to storage if a save has been requested.
+    if (saveRequired_) {
+        LOG(LogLevel::INFO, "CONFIG", "Saving dirty settings to EEPROM and SD Card...");
+        saveToEEPROM();
+        saveToSdCard();
+        saveRequired_ = false; // Reset the flag after saving
+    }
+    
     // After saving and applying, update the shadow copy to the new state
     lastAppliedSettings_ = settings_;
 }

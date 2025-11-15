@@ -8,7 +8,6 @@
 
 class CarouselMenu : public IMenu {
 public:
-    // --- CONSTRUCTOR MODIFIED ---
     CarouselMenu(std::string title, MenuType menuType, std::vector<MenuItem> items);
 
     void onEnter(App* app, bool isForwardNav) override;
@@ -38,6 +37,12 @@ private:
     bool marqueePaused_;
     unsigned long marqueePauseStartTime_;
     bool marqueeScrollLeft_;
+    
+    // Continuous scrolling
+    bool isScrolling_;
+    int scrollDirection_; // -1 for left, 1 for right
+    unsigned long pressStartTime_;
+    unsigned long lastScrollTime_;
 };
 
 #endif // CAROUSEL_MENU_H
