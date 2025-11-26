@@ -162,7 +162,7 @@ namespace Pins
     static constexpr uint8_t ADC_PIN = 3;
 
     // --- NEW: Interrupt Pin for PCF Modules ---
-    static constexpr uint8_t BTN_INTERRUPT_PIN = 39;
+    static constexpr uint8_t BTN_INTERRUPT_PIN = 42;
 
     static constexpr uint8_t SD_CS_PIN = 21;
     static constexpr uint8_t AMPLIFIER_PIN = 4;
